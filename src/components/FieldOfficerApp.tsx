@@ -51,7 +51,7 @@ export function FieldOfficerApp() {
       <header className="bg-gradient-primary text-primary-foreground p-4 sticky top-0 z-50 shadow-card">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold">Field Officer</h1>
+            <h1 className="text-lg font-bold">LIFT Offline</h1>
             <p className="text-sm opacity-90">{activeTitle}</p>
           </div>
           <Button

@@ -196,53 +196,117 @@ export function CashCollectionForm() {
           <CardTitle className="text-lg">Member Allocations</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Add Allocation Buttons */}
-          <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => addAllocation('savings')}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Savings
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => addAllocation('loan')}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Loan Payment
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => addAllocation('advance')}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Advance Payment
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => addAllocation('advance-interest')}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Advance Interest
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => addAllocation('other')}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Other
-            </Button>
+          {/* Core Allocation Fields - Always Visible */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="savings-amount">Allocate to Savings (KES)</Label>
+              <Input
+                id="savings-amount"
+                type="number"
+                placeholder="0"
+                value={allocations.find(a => a.type === 'savings')?.amount || ''}
+                onChange={(e) => {
+                  const amount = parseFloat(e.target.value) || 0;
+                  const existing = allocations.find(a => a.type === 'savings');
+                  if (existing) {
+                    updateAllocation(existing.id, { amount });
+                  } else if (amount > 0) {
+                    addAllocation('savings');
+                    setTimeout(() => {
+                      const newAllocation = allocations.find(a => a.type === 'savings');
+                      if (newAllocation) updateAllocation(newAllocation.id, { amount });
+                    }, 0);
+                  }
+                }}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="loan-amount">Pay Loan Installments (KES)</Label>
+              <Input
+                id="loan-amount"
+                type="number"
+                placeholder="0"
+                value={allocations.find(a => a.type === 'loan')?.amount || ''}
+                onChange={(e) => {
+                  const amount = parseFloat(e.target.value) || 0;
+                  const existing = allocations.find(a => a.type === 'loan');
+                  if (existing) {
+                    updateAllocation(existing.id, { amount });
+                  } else if (amount > 0) {
+                    addAllocation('loan');
+                    setTimeout(() => {
+                      const newAllocation = allocations.find(a => a.type === 'loan');
+                      if (newAllocation) updateAllocation(newAllocation.id, { amount });
+                    }, 0);
+                  }
+                }}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="advance-amount">Pay Advance (KES)</Label>
+              <Input
+                id="advance-amount"
+                type="number"
+                placeholder="0"
+                value={allocations.find(a => a.type === 'advance')?.amount || ''}
+                onChange={(e) => {
+                  const amount = parseFloat(e.target.value) || 0;
+                  const existing = allocations.find(a => a.type === 'advance');
+                  if (existing) {
+                    updateAllocation(existing.id, { amount });
+                  } else if (amount > 0) {
+                    addAllocation('advance');
+                    setTimeout(() => {
+                      const newAllocation = allocations.find(a => a.type === 'advance');
+                      if (newAllocation) updateAllocation(newAllocation.id, { amount });
+                    }, 0);
+                  }
+                }}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="advance-interest-amount">Pay Advance Interest (KES)</Label>
+              <Input
+                id="advance-interest-amount"
+                type="number"
+                placeholder="0"
+                value={allocations.find(a => a.type === 'advance-interest')?.amount || ''}
+                onChange={(e) => {
+                  const amount = parseFloat(e.target.value) || 0;
+                  const existing = allocations.find(a => a.type === 'advance-interest');
+                  if (existing) {
+                    updateAllocation(existing.id, { amount });
+                  } else if (amount > 0) {
+                    addAllocation('advance-interest');
+                    setTimeout(() => {
+                      const newAllocation = allocations.find(a => a.type === 'advance-interest');
+                      if (newAllocation) updateAllocation(newAllocation.id, { amount });
+                    }, 0);
+                  }
+                }}
+              />
+            </div>
           </div>
 
-          {/* Allocation List */}
+          {/* Other Allocations - Add as needed */}
           <div className="space-y-3">
-            {allocations.map((allocation) => (
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Other Allocations</Label>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => addAllocation('other')}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Other
+              </Button>
+            </div>
+
+          <div className="space-y-3">
+            {allocations.filter(a => a.type === 'other').map((allocation) => (
               <div key={allocation.id} className="p-3 border rounded-lg bg-background/50">
                 <div className="flex items-center justify-between mb-2">
                   <Badge variant="secondary">
@@ -293,6 +357,7 @@ export function CashCollectionForm() {
                 </div>
               </div>
             ))}
+          </div>
           </div>
 
           {/* Summary */}
