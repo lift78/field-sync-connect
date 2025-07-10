@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { RecordsList } from "./RecordsList";
 import { 
   RefreshCw, 
   Wifi, 
@@ -20,11 +21,16 @@ interface SyncData {
   lastUpdated: string;
 }
 
-export function SyncManager() {
+interface SyncManagerProps {
+  onEditRecord?: (type: 'cash' | 'loan' | 'advance', recordData: any) => void;
+}
+
+export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | null>(null);
 
   // Mock offline data - in real app this would come from IndexedDB
   const offlineData: SyncData[] = [
@@ -104,9 +110,27 @@ export function SyncManager() {
     }
   };
 
+  const handleEditRecord = (record: any) => {
+    if (onEditRecord && viewingRecords) {
+      onEditRecord(viewingRecords, record.data);
+      setViewingRecords(null);
+    }
+  };
+
   // Listen for online/offline events
   window.addEventListener('online', () => setIsOnline(true));
   window.addEventListener('offline', () => setIsOnline(false));
+
+  // Show records view if selected
+  if (viewingRecords) {
+    return (
+      <RecordsList
+        type={viewingRecords}
+        onBack={() => setViewingRecords(null)}
+        onEditRecord={handleEditRecord}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -155,7 +179,11 @@ export function SyncManager() {
         </CardHeader>
         <CardContent className="space-y-4">
           {offlineData.map((data) => (
-            <div key={data.type} className="flex items-center justify-between p-3 bg-background/50 rounded-lg">
+            <div 
+              key={data.type} 
+              className="flex items-center justify-between p-3 bg-background/50 rounded-lg cursor-pointer hover:bg-background/70 transition-colors"
+              onClick={() => setViewingRecords(data.type)}
+            >
               <div className="flex items-center space-x-3">
                 <span className="text-2xl">{getTypeIcon(data.type)}</span>
                 <div>

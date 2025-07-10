@@ -30,6 +30,13 @@ export function FieldOfficerApp() {
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
 
+  const handleEditRecord = (type: 'cash' | 'loan' | 'advance', recordData: any) => {
+    // Switch to the appropriate form section with the record data
+    setActiveSection(type);
+    // In a real app, you'd pass the recordData to pre-populate the form
+    console.log('Editing record:', type, recordData);
+  };
+
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'cash':
@@ -39,7 +46,7 @@ export function FieldOfficerApp() {
       case 'advance':
         return <AdvanceLoanForm />;
       case 'sync':
-        return <SyncManager />;
+        return <SyncManager onEditRecord={handleEditRecord} />;
       default:
         return <CashCollectionForm />;
     }
