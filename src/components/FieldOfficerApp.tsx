@@ -59,7 +59,7 @@ export function FieldOfficerApp() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold">LIFT</h1>
+              <h1 className="text-lg font-bold">LIFT Offline</h1>
               <Badge variant="outline" className="bg-white/20 text-white border-white/30 text-xs">
                 Offline Mode
               </Badge>
