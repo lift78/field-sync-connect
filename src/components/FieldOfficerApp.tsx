@@ -24,8 +24,8 @@ export function FieldOfficerApp() {
   const sections = [
     { id: 'cash' as const, title: 'Cash Collection', icon: Wallet, color: 'bg-gradient-primary' },
     { id: 'loan' as const, title: 'Loan Application', icon: CreditCard, color: 'bg-gradient-success' },
-    { id: 'advance' as const, title: 'Advance Loan', icon: Zap, color: 'bg-accent' },
-    { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-warning' },
+    { id: 'advance' as const, title: 'Advance Loan', icon: Zap, color: 'bg-gradient-accent' },
+    { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-secondary' },
   ];
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
@@ -55,17 +55,22 @@ export function FieldOfficerApp() {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile Header */}
-      <header className="bg-gradient-primary text-primary-foreground p-4 sticky top-0 z-50 shadow-card">
+      <header className="bg-gradient-hero text-white p-4 sticky top-0 z-50 shadow-card">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold">LIFT Offline</h1>
-            <p className="text-sm opacity-90">{activeTitle}</p>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold">LIFT Offline</h1>
+              <Badge variant="outline" className="bg-white/20 text-white border-white/30 text-xs">
+                Offline Mode
+              </Badge>
+            </div>
+            <p className="text-sm opacity-90 hidden sm:block">{activeTitle}</p>
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setMenuOpen(!menuOpen)}
-            className="text-primary-foreground hover:bg-primary-foreground/20"
+            className="text-white hover:bg-white/20"
           >
             {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </Button>
@@ -129,12 +134,6 @@ export function FieldOfficerApp() {
         </div>
       </nav>
 
-      {/* Offline Indicator */}
-      <div className="fixed top-20 right-4 z-30">
-        <Badge variant="outline" className="bg-warning text-warning-foreground">
-          Offline Mode
-        </Badge>
-      </div>
     </div>
   );
 }
