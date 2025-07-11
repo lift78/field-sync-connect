@@ -118,7 +118,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
               variant="ghost"
               size="icon"
               onClick={onBack}
-              className="h-8 w-8"
+              className="h-8 w-8 cursor-pointer hover:bg-accent/50"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
