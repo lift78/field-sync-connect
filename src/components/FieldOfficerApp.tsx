@@ -55,7 +55,7 @@ export function FieldOfficerApp() {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile Header */}
-      <header className="bg-gradient-hero text-white p-4 sticky top-0 z-50 shadow-card">
+      <header className="bg-primary text-white p-4 sticky top-0 z-50 shadow-card">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
@@ -123,7 +123,7 @@ export function FieldOfficerApp() {
                 className={`flex-col h-16 p-2 ${
                   isActive 
                     ? 'text-primary bg-primary/10' 
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
                 }`}
               >
                 <section.icon className="h-5 w-5 mb-1" />
