@@ -3,21 +3,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CashCollectionForm } from "./CashCollectionForm";
-import { LoanApplicationForm } from "./LoanApplicationForm";
-import { LoanDisbursementForm } from "./LoanDisbursementForm";
+import { LoanSection } from "./LoanSection";
 import { AdvanceLoanForm } from "./AdvanceLoanForm";
 import { SyncManager } from "./SyncManager";
 import { 
   Wallet, 
   CreditCard, 
-  Banknote,
   Zap, 
   RefreshCw, 
   Menu,
   X 
 } from "lucide-react";
 
-type AppSection = 'cash' | 'loan' | 'disbursement' | 'advance' | 'sync';
+type AppSection = 'cash' | 'loan' | 'advance' | 'sync';
 
 export function FieldOfficerApp() {
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
@@ -25,15 +23,14 @@ export function FieldOfficerApp() {
 
   const sections = [
     { id: 'cash' as const, title: 'Cash Collection', icon: Wallet, color: 'bg-gradient-primary' },
-    { id: 'loan' as const, title: 'Loan Application', icon: CreditCard, color: 'bg-gradient-success' },
-    { id: 'disbursement' as const, title: 'Loan Disbursement', icon: Banknote, color: 'bg-gradient-accent' },
+    { id: 'loan' as const, title: 'Loan Management', icon: CreditCard, color: 'bg-gradient-success' },
     { id: 'advance' as const, title: 'Advance Loan', icon: Zap, color: 'bg-gradient-accent' },
     { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-secondary' },
   ];
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
 
-  const handleEditRecord = (type: 'cash' | 'loan' | 'disbursement' | 'advance', recordData: any) => {
+  const handleEditRecord = (type: 'cash' | 'loan' | 'advance', recordData: any) => {
     // Switch to the appropriate form section with the record data
     setActiveSection(type);
     // In a real app, you'd pass the recordData to pre-populate the form
@@ -45,9 +42,7 @@ export function FieldOfficerApp() {
       case 'cash':
         return <CashCollectionForm />;
       case 'loan':
-        return <LoanApplicationForm />;
-      case 'disbursement':
-        return <LoanDisbursementForm />;
+        return <LoanSection />;
       case 'advance':
         return <AdvanceLoanForm />;
       case 'sync':
@@ -116,7 +111,7 @@ export function FieldOfficerApp() {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 z-40">
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {sections.map((section) => {
             const isActive = activeSection === section.id;
             return (
