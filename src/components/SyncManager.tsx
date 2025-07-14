@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { RecordsList } from "./RecordsList";
 import { 
   RefreshCw, 
@@ -12,7 +13,8 @@ import {
   CheckCircle, 
   AlertCircle,
   Clock,
-  Upload
+  Upload,
+  Settings
 } from "lucide-react";
 
 interface SyncData {
@@ -31,6 +33,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [syncProgress, setSyncProgress] = useState(0);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | null>(null);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
 
   // Mock offline data - in real app this would come from IndexedDB
   const offlineData: SyncData[] = [
@@ -245,6 +248,42 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         </Card>
       )}
 
+      {/* Sync Configuration */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center">
+            <Settings className="h-5 w-5 mr-2" />
+            Sync Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Auto-sync when online</p>
+              <p className="text-sm text-muted-foreground">
+                Automatically sync data when internet connection is available
+              </p>
+            </div>
+            <Switch
+              checked={autoSyncEnabled}
+              onCheckedChange={setAutoSyncEnabled}
+            />
+          </div>
+          
+          <div className="border-t pt-4">
+            <Badge variant={autoSyncEnabled ? "default" : "secondary"} className="mb-2">
+              {autoSyncEnabled ? "Auto-sync enabled" : "Manual sync only"}
+            </Badge>
+            <p className="text-xs text-muted-foreground">
+              {autoSyncEnabled 
+                ? "Data will sync automatically when you come online"
+                : "You need to manually press the sync button to upload data"
+              }
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Sync Button */}
       <Card className="shadow-card">
         <CardContent className="pt-6">
@@ -275,7 +314,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
               ) : (
                 <>
                   <Upload className="h-5 w-5 mr-2" />
-                  Sync All Data
+                  {autoSyncEnabled ? "Manual Sync" : "Sync All Data"}
                 </>
               )}
             </Button>
