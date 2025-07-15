@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Save, Zap } from "lucide-react";
+import { dbOperations } from "@/lib/database";
+import { useToast } from "@/hooks/use-toast";
 
-// Mock member data
+// Mock member data - replace with actual member data from your system
 const mockMembers = Array.from({ length: 50 }, (_, i) => ({
   id: String(i + 1).padStart(4, '0'),
   name: `Member ${i + 1}`,
@@ -23,6 +25,7 @@ export function AdvanceLoanForm() {
   const [applications, setApplications] = useState<AdvanceLoanApplication[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState('');
+  const { toast } = useToast();
 
   // Filter members based on search query
   const filteredMembers = useMemo(() => {
@@ -67,17 +70,33 @@ export function AdvanceLoanForm() {
     setApplications(applications.filter(app => app.id !== id));
   };
 
-  const handleSave = () => {
-    // In real app, save to IndexedDB
-    console.log('Saving advance loan applications to local storage:', {
-      applications,
-      timestamp: new Date().toISOString(),
-    });
-    
-    // Reset form
-    setApplications([]);
-    setMemberQuery('');
-    setSelectedMemberId('');
+  const handleSave = async () => {
+    try {
+      for (const application of applications) {
+        await dbOperations.addAdvanceLoan({
+          memberId: application.memberId,
+          memberName: application.memberName,
+          amount: application.advanceAmount,
+          timestamp: new Date()
+        });
+      }
+      
+      toast({
+        title: "✅ Advance Loans Saved",
+        description: `${applications.length} application(s) saved successfully`,
+      });
+      
+      // Reset form
+      setApplications([]);
+      setMemberQuery('');
+      setSelectedMemberId('');
+    } catch (error) {
+      toast({
+        title: "❌ Save Failed",
+        description: "Failed to save advance loan applications",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -172,9 +191,12 @@ export function AdvanceLoanForm() {
                   type="number"
                   placeholder="0"
                   value={application.advanceAmount || ''}
-                  onChange={(e) => updateApplication(application.id, {
-                    advanceAmount: parseFloat(e.target.value) || 0
-                  })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    updateApplication(application.id, {
+                      advanceAmount: value === '' ? 0 : parseFloat(value)
+                    });
+                  }}
                 />
                 {application.advanceAmount > 0 && (
                   <p className="text-xs text-muted-foreground">

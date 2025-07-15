@@ -45,7 +45,8 @@ export function useSync() {
   }, [toast]);
 
   const checkConnectivity = useCallback(async () => {
-    return await syncService.isOnline();
+    const online = await syncService.isOnline();
+    return online;
   }, []);
 
   return {

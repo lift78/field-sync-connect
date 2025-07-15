@@ -7,8 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Save } from "lucide-react";
+import { dbOperations } from "@/lib/database";
+import { useToast } from "@/hooks/use-toast";
 
-// Mock member data - in real app this would come from offline storage
+// Mock member data - replace with actual member data from your system
 const mockMembers = Array.from({ length: 50 }, (_, i) => ({
   id: String(i + 1).padStart(4, '0'),
   name: `Member ${i + 1}`,
@@ -39,6 +41,7 @@ export function CashCollectionForm() {
   const [mpesaAmount, setMpesaAmount] = useState('');
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
+  const { toast } = useToast();
 
   // Filter members based on search query
   const filteredMembers = useMemo(() => {
@@ -83,22 +86,43 @@ export function CashCollectionForm() {
     setAllocations(allocations.filter(alloc => alloc.id !== id));
   };
 
-  const handleSave = () => {
-    // In real app, save to IndexedDB
-    console.log('Saving to local storage:', {
-      memberId,
-      cashAmount,
-      mpesaAmount,
-      allocations,
-      timestamp: new Date().toISOString(),
-    });
-    
-    // Reset form
-    setMemberId('');
-    setCashAmount('');
-    setMpesaAmount('');
-    setAllocations([]);
-    setMemberQuery('');
+  const handleSave = async () => {
+    try {
+      const selectedMemberData = mockMembers.find(m => m.id === memberId);
+      if (!selectedMemberData) {
+        toast({
+          title: "❌ Member Required",
+          description: "Please select a member first",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      await dbOperations.addCashCollection({
+        memberId,
+        memberName: selectedMemberData.name,
+        amount: totalCollected,
+        timestamp: new Date()
+      });
+      
+      toast({
+        title: "✅ Cash Collection Saved",
+        description: `${formatAmount(totalCollected)} saved for ${selectedMemberData.name}`,
+      });
+      
+      // Reset form
+      setMemberId('');
+      setCashAmount('');
+      setMpesaAmount('');
+      setAllocations([]);
+      setMemberQuery('');
+    } catch (error) {
+      toast({
+        title: "❌ Save Failed",
+        description: "Failed to save cash collection",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -205,19 +229,21 @@ export function CashCollectionForm() {
                 type="number"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'savings')?.amount || ''}
-                onChange={(e) => {
-                  const amount = parseFloat(e.target.value) || 0;
-                  const existing = allocations.find(a => a.type === 'savings');
-                  if (existing) {
-                    updateAllocation(existing.id, { amount });
-                  } else if (amount > 0) {
-                    addAllocation('savings');
-                    setTimeout(() => {
-                      const newAllocation = allocations.find(a => a.type === 'savings');
-                      if (newAllocation) updateAllocation(newAllocation.id, { amount });
-                    }, 0);
-                  }
-                }}
+                 onChange={(e) => {
+                   const value = e.target.value;
+                   const amount = value === '' ? 0 : parseFloat(value);
+                   const existing = allocations.find(a => a.type === 'savings');
+                   if (existing) {
+                     updateAllocation(existing.id, { amount });
+                   } else if (amount > 0) {
+                     const newAllocation: Allocation = {
+                       id: Date.now().toString(),
+                       type: 'savings',
+                       amount
+                     };
+                     setAllocations(prev => [...prev, newAllocation]);
+                   }
+                 }}
               />
             </div>
             
@@ -228,19 +254,21 @@ export function CashCollectionForm() {
                 type="number"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'loan')?.amount || ''}
-                onChange={(e) => {
-                  const amount = parseFloat(e.target.value) || 0;
-                  const existing = allocations.find(a => a.type === 'loan');
-                  if (existing) {
-                    updateAllocation(existing.id, { amount });
-                  } else if (amount > 0) {
-                    addAllocation('loan');
-                    setTimeout(() => {
-                      const newAllocation = allocations.find(a => a.type === 'loan');
-                      if (newAllocation) updateAllocation(newAllocation.id, { amount });
-                    }, 0);
-                  }
-                }}
+                 onChange={(e) => {
+                   const value = e.target.value;
+                   const amount = value === '' ? 0 : parseFloat(value);
+                   const existing = allocations.find(a => a.type === 'loan');
+                   if (existing) {
+                     updateAllocation(existing.id, { amount });
+                   } else if (amount > 0) {
+                     const newAllocation: Allocation = {
+                       id: Date.now().toString(),
+                       type: 'loan',
+                       amount
+                     };
+                     setAllocations(prev => [...prev, newAllocation]);
+                   }
+                 }}
               />
             </div>
             
@@ -251,19 +279,21 @@ export function CashCollectionForm() {
                 type="number"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'advance')?.amount || ''}
-                onChange={(e) => {
-                  const amount = parseFloat(e.target.value) || 0;
-                  const existing = allocations.find(a => a.type === 'advance');
-                  if (existing) {
-                    updateAllocation(existing.id, { amount });
-                  } else if (amount > 0) {
-                    addAllocation('advance');
-                    setTimeout(() => {
-                      const newAllocation = allocations.find(a => a.type === 'advance');
-                      if (newAllocation) updateAllocation(newAllocation.id, { amount });
-                    }, 0);
-                  }
-                }}
+                 onChange={(e) => {
+                   const value = e.target.value;
+                   const amount = value === '' ? 0 : parseFloat(value);
+                   const existing = allocations.find(a => a.type === 'advance');
+                   if (existing) {
+                     updateAllocation(existing.id, { amount });
+                   } else if (amount > 0) {
+                     const newAllocation: Allocation = {
+                       id: Date.now().toString(),
+                       type: 'advance',
+                       amount
+                     };
+                     setAllocations(prev => [...prev, newAllocation]);
+                   }
+                 }}
               />
             </div>
             
@@ -274,19 +304,21 @@ export function CashCollectionForm() {
                 type="number"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'advance-interest')?.amount || ''}
-                onChange={(e) => {
-                  const amount = parseFloat(e.target.value) || 0;
-                  const existing = allocations.find(a => a.type === 'advance-interest');
-                  if (existing) {
-                    updateAllocation(existing.id, { amount });
-                  } else if (amount > 0) {
-                    addAllocation('advance-interest');
-                    setTimeout(() => {
-                      const newAllocation = allocations.find(a => a.type === 'advance-interest');
-                      if (newAllocation) updateAllocation(newAllocation.id, { amount });
-                    }, 0);
-                  }
-                }}
+                 onChange={(e) => {
+                   const value = e.target.value;
+                   const amount = value === '' ? 0 : parseFloat(value);
+                   const existing = allocations.find(a => a.type === 'advance-interest');
+                   if (existing) {
+                     updateAllocation(existing.id, { amount });
+                   } else if (amount > 0) {
+                     const newAllocation: Allocation = {
+                       id: Date.now().toString(),
+                       type: 'advance-interest',
+                       amount
+                     };
+                     setAllocations(prev => [...prev, newAllocation]);
+                   }
+                 }}
               />
             </div>
           </div>
@@ -328,9 +360,12 @@ export function CashCollectionForm() {
                       type="number"
                       placeholder="0"
                       value={allocation.amount || ''}
-                      onChange={(e) => updateAllocation(allocation.id, {
-                        amount: parseFloat(e.target.value) || 0
-                      })}
+                       onChange={(e) => {
+                         const value = e.target.value;
+                         updateAllocation(allocation.id, {
+                           amount: value === '' ? 0 : parseFloat(value)
+                         });
+                       }}
                     />
                   </div>
                   

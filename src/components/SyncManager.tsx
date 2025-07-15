@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { RecordsList } from "./RecordsList";
+import { dbOperations } from "@/lib/database";
 import { 
   RefreshCw, 
   Wifi, 
@@ -35,13 +36,44 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | null>(null);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
+  const [offlineData, setOfflineData] = useState<SyncData[]>([]);
 
-  // Mock offline data - in real app this would come from IndexedDB
-  const offlineData: SyncData[] = [
-    { type: 'cash', count: 12, lastUpdated: '2024-01-15T10:30:00Z' },
-    { type: 'loan', count: 8, lastUpdated: '2024-01-15T11:15:00Z' },
-    { type: 'advance', count: 5, lastUpdated: '2024-01-15T12:00:00Z' },
-  ];
+  // Load actual data from IndexedDB
+  useEffect(() => {
+    const loadOfflineData = async () => {
+      try {
+        const [cash, loans, advances] = await Promise.all([
+          dbOperations.getUnsyncedCashCollections(),
+          dbOperations.getUnsyncedLoanApplications(),
+          dbOperations.getUnsyncedAdvanceLoans()
+        ]);
+
+        setOfflineData([
+          { 
+            type: 'cash', 
+            count: cash.length, 
+            lastUpdated: cash.length > 0 ? cash[0].timestamp.toISOString() : new Date().toISOString()
+          },
+          { 
+            type: 'loan', 
+            count: loans.length, 
+            lastUpdated: loans.length > 0 ? loans[0].timestamp.toISOString() : new Date().toISOString()
+          },
+          { 
+            type: 'advance', 
+            count: advances.length, 
+            lastUpdated: advances.length > 0 ? advances[0].timestamp.toISOString() : new Date().toISOString()
+          },
+        ]);
+      } catch (error) {
+        console.error('Failed to load offline data:', error);
+      }
+    };
+
+    loadOfflineData();
+    const interval = setInterval(loadOfflineData, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   const totalRecords = offlineData.reduce((sum, data) => sum + data.count, 0);
 
@@ -56,11 +88,18 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
   };
   const { performSync } = useSync();
   
+  const { checkConnectivity } = useSync();
+
   useEffect(() => {
+    const updateConnectionStatus = async () => {
+      const online = await checkConnectivity();
+      setIsOnline(online);
+    };
+
     const handleOnline = async () => {
-      setIsOnline(true);
-  
-      if (autoSyncEnabled) {
+      await updateConnectionStatus();
+      
+      if (isOnline && autoSyncEnabled) {
         try {
           await performSync();
           setLastSyncTime(new Date().toISOString());
@@ -69,19 +108,26 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         }
       }
     };
-  
+
     const handleOffline = () => {
       setIsOnline(false);
     };
-  
+
+    // Initial check
+    updateConnectionStatus();
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-  
+
+    // Check connectivity every 30 seconds
+    const interval = setInterval(updateConnectionStatus, 30000);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
     };
-  }, [autoSyncEnabled, performSync]);
+  }, [autoSyncEnabled, performSync, checkConnectivity, isOnline]);
 
   const handleSync = async () => {
     if (!isOnline) {

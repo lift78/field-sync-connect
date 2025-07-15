@@ -6,8 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Save, User } from "lucide-react";
+import { dbOperations } from "@/lib/database";
+import { useToast } from "@/hooks/use-toast";
 
-// Mock member data
+// Mock member data - replace with actual member data from your system
 const mockMembers = Array.from({ length: 50 }, (_, i) => ({
   id: String(i + 1).padStart(4, '0'),
   name: `Member ${i + 1}`,
@@ -26,6 +28,7 @@ export function LoanApplicationForm() {
   const [applications, setApplications] = useState<LoanApplication[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState('');
+  const { toast } = useToast();
 
   // Filter members based on search query
   const filteredMembers = useMemo(() => {
@@ -95,17 +98,35 @@ export function LoanApplicationForm() {
     }
   };
 
-  const handleSave = () => {
-    // In real app, save to IndexedDB
-    console.log('Saving loan applications to local storage:', {
-      applications,
-      timestamp: new Date().toISOString(),
-    });
-    
-    // Reset form
-    setApplications([]);
-    setMemberQuery('');
-    setSelectedMemberId('');
+  const handleSave = async () => {
+    try {
+      for (const application of applications) {
+        await dbOperations.addLoanApplication({
+          memberId: application.memberId,
+          memberName: application.memberName,
+          loanAmount: application.loanAmount,
+          installments: application.installments,
+          guarantors: application.guarantors,
+          timestamp: new Date()
+        });
+      }
+      
+      toast({
+        title: "✅ Loan Applications Saved",
+        description: `${applications.length} application(s) saved successfully`,
+      });
+      
+      // Reset form
+      setApplications([]);
+      setMemberQuery('');
+      setSelectedMemberId('');
+    } catch (error) {
+      toast({
+        title: "❌ Save Failed",
+        description: "Failed to save loan applications",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -197,9 +218,12 @@ export function LoanApplicationForm() {
                     type="number"
                     placeholder="0"
                     value={application.loanAmount || ''}
-                    onChange={(e) => updateApplication(application.id, {
-                      loanAmount: parseFloat(e.target.value) || 0
-                    })}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      updateApplication(application.id, {
+                        loanAmount: value === '' ? 0 : parseFloat(value)
+                      });
+                    }}
                   />
                   {application.loanAmount > 0 && (
                     <p className="text-xs text-muted-foreground">

@@ -22,10 +22,16 @@ export class SyncService {
   }
 
   async isOnline(): Promise<boolean> {
+    if (!navigator.onLine) {
+      return false;
+    }
+    
     try {
-      const response = await fetch(`${this.baseUrl}/api/health`, {
+      // Try to fetch a simple resource to verify real connectivity
+      const response = await fetch('https://httpbin.org/get', {
         method: 'GET',
-        cache: 'no-cache'
+        cache: 'no-cache',
+        signal: AbortSignal.timeout(5000) // 5 second timeout
       });
       return response.ok;
     } catch {

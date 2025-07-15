@@ -6,13 +6,16 @@ import { CashCollectionForm } from "./CashCollectionForm";
 import { LoanSection } from "./LoanSection";
 import { AdvanceLoanForm } from "./AdvanceLoanForm";
 import { SyncManager } from "./SyncManager";
+import { useTheme } from "next-themes";
 import { 
   Wallet, 
   CreditCard, 
   Zap, 
   RefreshCw, 
   Menu,
-  X 
+  X,
+  Moon,
+  Sun
 } from "lucide-react";
 
 type AppSection = 'cash' | 'loan' | 'advance' | 'sync';
@@ -20,6 +23,7 @@ type AppSection = 'cash' | 'loan' | 'advance' | 'sync';
 export function FieldOfficerApp() {
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
   const [menuOpen, setMenuOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   const sections = [
     { id: 'cash' as const, title: 'Cash Collection', icon: Wallet, color: 'bg-gradient-primary' },
@@ -66,14 +70,24 @@ export function FieldOfficerApp() {
             </div>
             <p className="text-sm opacity-90 hidden sm:block">{activeTitle}</p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="text-white hover:bg-white/20"
-          >
-            {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="text-white hover:bg-white/20"
+            >
+              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="text-white hover:bg-white/20"
+            >
+              {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </Button>
+          </div>
         </div>
       </header>
 
