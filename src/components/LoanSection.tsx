@@ -11,8 +11,8 @@ export function LoanSection() {
   const [activeSubSection, setActiveSubSection] = useState<LoanSubSection>('application');
 
   const subSections = [
-    { id: 'application' as const, title: 'Loan Application', icon: CreditCard },
-    { id: 'disbursement' as const, title: 'Loan Disbursement', icon: Banknote },
+    { id: 'application' as const, title: 'Application', icon: CreditCard },
+    { id: 'disbursement' as const, title: 'Disbursement', icon: Banknote },
   ];
 
   const renderActiveSubSection = () => {

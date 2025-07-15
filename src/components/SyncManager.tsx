@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSync } from '@/hooks/useSync';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -53,39 +54,70 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
       minute: '2-digit',
     }).format(new Date(isoString));
   };
+  const { performSync } = useSync();
+  
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+  
+      if (autoSyncEnabled) {
+        try {
+          await performSync();
+          setLastSyncTime(new Date().toISOString());
+        } catch (err) {
+          console.error('Auto-sync failed:', err);
+        }
+      }
+    };
+  
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+  
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+  
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [autoSyncEnabled, performSync]);
 
   const handleSync = async () => {
     if (!isOnline) {
       alert('No internet connection. Please check your connection and try again.');
       return;
     }
-
+  
     setIsSyncing(true);
     setSyncProgress(0);
-
+  
     try {
-      // Simulate sync process
-      for (let i = 0; i <= 100; i += 10) {
+      const result = await performSync();
+  
+      // Optional: simulate progress visually
+      for (let i = 0; i <= 100; i += 25) {
         setSyncProgress(i);
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
-
-      // In real app: send data to server, clear local storage on success
-      console.log('Syncing data to server:', offlineData);
-      
+  
       setLastSyncTime(new Date().toISOString());
-      
-      // Show success message
-      alert('All data synced successfully!');
-      
+  
+      if (result.success) {
+        alert('✅ All data synced successfully!');
+      } else {
+        alert('⚠️ Some records failed to sync. Check server.');
+      }
+  
     } catch (error) {
       console.error('Sync failed:', error);
-      alert('Sync failed. Please try again.');
+      alert('❌ Sync failed. Please try again.');
     } finally {
       setIsSyncing(false);
       setSyncProgress(0);
     }
   };
+  
 
   const getTypeIcon = (type: SyncData['type']) => {
     switch (type) {

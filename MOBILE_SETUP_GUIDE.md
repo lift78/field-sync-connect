@@ -1,86 +1,5 @@
 # Field Officer Mobile App - Complete Setup Guide
 
-## Version Requirements & Environment Setup
-
-**⚠️ CRITICAL: Use these exact versions to avoid compatibility issues when building APKs**
-
-### Java Development Kit (JDK)
-- **Java 17 LTS** (Required for Android builds)
-- Download: https://adoptium.net/temurin/releases/
-- Verify: `java -version` and `javac -version`
-- Set JAVA_HOME environment variable
-
-### Android SDK (Command Line Tools - No Android Studio Required)
-- **Android SDK Command Line Tools**: 9.0+ (Latest)
-- **Android SDK Build Tools**: 34.0.0
-- **Android Platform**: API Level 34 (Android 14)
-- **Gradle**: 8.0+ (auto-managed by Capacitor)
-
-### Capacitor Versions
-- **@capacitor/core**: ^5.7.0
-- **@capacitor/cli**: ^5.7.0
-- **@capacitor/android**: ^5.7.0
-- **@capacitor/ios**: ^5.7.0
-
-### Node.js
-- **Node.js**: 18.x or 20.x LTS
-- **npm**: 9.x or 10.x
-
-## Android Environment Setup (No Android Studio)
-
-### 1. Install Java 17
-```bash
-# Verify Java installation
-java -version
-# Should show: openjdk version "17.x.x"
-
-# Set JAVA_HOME (add to ~/.bashrc, ~/.zshrc, or system env vars)
-export JAVA_HOME=/path/to/java17
-```
-
-### 2. Download Android Command Line Tools
-1. Go to: https://developer.android.com/studio#command-tools
-2. Download "Command line tools only" for your OS
-3. Extract to: `~/android-sdk` (Linux/Mac) or `C:\android-sdk` (Windows)
-
-### 3. Set Environment Variables
-```bash
-# Add to ~/.bashrc, ~/.zshrc, or system environment variables
-export ANDROID_HOME=~/android-sdk  # or your chosen path
-export ANDROID_SDK_ROOT=$ANDROID_HOME
-export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-export PATH=$PATH:$ANDROID_HOME/platform-tools
-export PATH=$PATH:$ANDROID_HOME/build-tools/34.0.0
-```
-
-### 4. Install Required SDK Components
-```bash
-# Navigate to cmdline-tools/bin directory first
-cd $ANDROID_HOME/cmdline-tools/latest/bin
-
-# Accept licenses first
-yes | ./sdkmanager --licenses
-
-# Install required components with exact versions
-./sdkmanager "platform-tools"
-./sdkmanager "platforms;android-34"
-./sdkmanager "build-tools;34.0.0"
-./sdkmanager "cmdline-tools;latest"
-
-# Verify installation
-./sdkmanager --list_installed
-```
-
-### 5. Verify Environment Setup
-```bash
-# Check all required tools are accessible
-java -version          # Should show Java 17
-adb version           # Should show Android Debug Bridge
-gradle --version      # Should show Gradle 8.0+
-```
-
----
-
 ## 1. Converting to Mobile App with Capacitor
 
 ### Why Capacitor over Expo?
@@ -88,14 +7,12 @@ gradle --version      # Should show Gradle 8.0+
 - Seamless web-to-mobile transition
 - Direct access to device features
 - Hot-reload support in development
-- No version conflicts with specific Android SDK versions
 
 ### Step 1: Install Capacitor Dependencies
 
 ```bash
-# Install exact versions to avoid compatibility issues
-npm install @capacitor/core@^5.7.0 @capacitor/cli@^5.7.0 @capacitor/ios@^5.7.0 @capacitor/android@^5.7.0
-npm install -D @capacitor/cli@^5.7.0
+npm install @capacitor/core @capacitor/cli @capacitor/ios @capacitor/android
+npm install -D @capacitor/cli
 ```
 
 ### Step 2: Initialize Capacitor Project
