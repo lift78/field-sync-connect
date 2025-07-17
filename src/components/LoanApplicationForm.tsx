@@ -35,8 +35,8 @@ export function LoanApplicationForm() {
     if (!memberQuery) return [];
     
     // If input is numeric, pad with zeros and find exact match
-    if (/^\d+$/.test(memberQuery)) {
-      const paddedId = memberQuery.padStart(4, '0');
+    if (/^\d+$/.test(memberQuery.trim())) {
+      const paddedId = memberQuery.trim().padStart(4, '0');
       const exactMatch = mockMembers.find(member => member.id === paddedId);
       return exactMatch ? [exactMatch] : [];
     }
@@ -264,23 +264,16 @@ export function LoanApplicationForm() {
                 
                 <div className="space-y-2">
                   <Label>Number of Installments</Label>
-                  <Select
-                    value={application.installments.toString()}
-                    onValueChange={(value) => updateApplication(application.id, {
-                      installments: parseInt(value)
+                  <Input
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={application.installments}
+                    onChange={(e) => updateApplication(application.id, {
+                      installments: parseInt(e.target.value) || 1
                     })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[6, 12, 18, 24, 36].map((months) => (
-                        <SelectItem key={months} value={months.toString()}>
-                          {months} months
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Enter number of installments"
+                  />
                 </div>
               </div>
 

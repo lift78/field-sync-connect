@@ -32,8 +32,8 @@ export function AdvanceLoanForm() {
     if (!memberQuery) return [];
     
     // If input is numeric, pad with zeros and find exact match
-    if (/^\d+$/.test(memberQuery)) {
-      const paddedId = memberQuery.padStart(4, '0');
+    if (/^\d+$/.test(memberQuery.trim())) {
+      const paddedId = memberQuery.trim().padStart(4, '0');
       const exactMatch = mockMembers.find(member => member.id === paddedId);
       return exactMatch ? [exactMatch] : [];
     }
