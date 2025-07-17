@@ -43,13 +43,21 @@ export function CashCollectionForm() {
   const [memberQuery, setMemberQuery] = useState('');
   const { toast } = useToast();
 
-  // Filter members based on search query
+  // Filter members based on search query - exact padded match only
   const filteredMembers = useMemo(() => {
-    if (!memberQuery) return mockMembers.slice(0, 10);
+    if (!memberQuery) return [];
+    
+    // If input is numeric, pad with zeros and find exact match
+    if (/^\d+$/.test(memberQuery)) {
+      const paddedId = memberQuery.padStart(4, '0');
+      const exactMatch = mockMembers.find(member => member.id === paddedId);
+      return exactMatch ? [exactMatch] : [];
+    }
+    
+    // If input contains letters, search by name
     return mockMembers.filter(member => 
-      member.id.includes(memberQuery) || 
       member.name.toLowerCase().includes(memberQuery.toLowerCase())
-    ).slice(0, 10);
+    ).slice(0, 5);
   }, [memberQuery]);
 
   const selectedMember = mockMembers.find(m => m.id === memberId);
@@ -166,8 +174,23 @@ export function CashCollectionForm() {
 
           {selectedMember && (
             <div className="p-3 bg-success/10 rounded-lg border border-success/20">
-              <p className="font-medium text-success">Selected Member:</p>
-              <p className="text-sm">{selectedMember.id} - {selectedMember.name}</p>
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="font-medium text-success">Selected Member:</p>
+                  <p className="text-sm">{selectedMember.id} - {selectedMember.name}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setMemberId('');
+                    setMemberQuery('');
+                  }}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  ×
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
