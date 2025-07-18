@@ -2,7 +2,7 @@ import Dexie, { Table } from 'dexie';
 
 // Define interfaces for your data
 export interface Allocation {
-  id: string;
+  memberId: string;
   type: 'savings' | 'loan' | 'advance' | 'advance-interest' | 'other';
   amount: number;
   reason?: string;
@@ -13,6 +13,7 @@ export interface CashCollection {
   memberId: string;
   memberName: string;
   amount: number;
+  mpesaAmount?: number;
   allocations: Allocation[];
   timestamp: Date;
   synced: boolean;
@@ -23,6 +24,9 @@ export interface LoanApplication {
   memberId: string;
   memberName: string;
   loanAmount: number;
+  purpose?: string;
+  tenure?: number;
+  interestRate?: number;
   installments: number;
   guarantors: string[];
   timestamp: Date;
@@ -43,6 +47,8 @@ export interface AdvanceLoan {
   memberId: string;
   memberName: string;
   amount: number;
+  reason?: string;
+  repaymentDate?: string;
   timestamp: Date;
   synced: boolean;
 }
@@ -85,6 +91,10 @@ export const dbOperations = {
     async markCashCollectionSynced(id: number) {
       return await db.cashCollections.update(id, { synced: true });
     },
+
+    async updateCashCollection(id: string, data: CashCollection) {
+      return await db.cashCollections.update(Number(id), { ...data, synced: false });
+    },
   
     // Loan Applications
     async addLoanApplication(data: Omit<LoanApplication, 'id' | 'synced'>) {
@@ -101,6 +111,10 @@ export const dbOperations = {
   
     async markLoanApplicationSynced(id: number) {
       return await db.loanApplications.update(id, { synced: true });
+    },
+
+    async updateLoanApplication(id: string, data: LoanApplication) {
+      return await db.loanApplications.update(Number(id), { ...data, synced: false });
     },
   
     // Loan Disbursements
@@ -135,6 +149,10 @@ export const dbOperations = {
   
     async markAdvanceLoanSynced(id: number) {
       return await db.advanceLoans.update(id, { synced: true });
+    },
+
+    async updateAdvanceLoan(id: string, data: AdvanceLoan) {
+      return await db.advanceLoans.update(Number(id), { ...data, synced: false });
     },
   
     // Get all unsynced records

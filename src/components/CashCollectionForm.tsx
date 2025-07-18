@@ -106,11 +106,19 @@ export function CashCollectionForm() {
         return;
       }
 
+      const formattedAllocations = allocations.map(allocation => ({
+        memberId: memberId,
+        type: allocation.type as 'savings' | 'loan' | 'advance' | 'advance-interest' | 'other',
+        amount: allocation.amount,
+        reason: allocation.reason
+      }));
+
       await dbOperations.addCashCollection({
         memberId,
         memberName: selectedMemberData.name,
         amount: totalCollected,
-        allocations: allocations,
+        mpesaAmount: parseFloat(mpesaAmount) || 0,
+        allocations: formattedAllocations,
         timestamp: new Date()
       });
       

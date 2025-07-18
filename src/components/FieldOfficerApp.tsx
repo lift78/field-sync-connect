@@ -6,6 +6,7 @@ import { CashCollectionForm } from "./CashCollectionForm";
 import { LoanSection } from "./LoanSection";
 import { AdvanceLoanForm } from "./AdvanceLoanForm";
 import { SyncManager } from "./SyncManager";
+import { RecordDetailView } from "./RecordDetailView";
 import { useTheme } from "next-themes";
 import { 
   Wallet, 
@@ -20,9 +21,22 @@ import {
 
 type AppSection = 'cash' | 'loan' | 'advance' | 'sync';
 
+interface RecordView {
+  type: 'cash' | 'loan' | 'advance';
+  record: {
+    id: string;
+    memberId: string;
+    amount?: number;
+    status: 'synced' | 'pending' | 'failed';
+    lastUpdated: string;
+    data: any;
+  };
+}
+
 export function FieldOfficerApp() {
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [recordView, setRecordView] = useState<RecordView | null>(null);
   const { theme, setTheme } = useTheme();
 
   const sections = [
@@ -35,13 +49,27 @@ export function FieldOfficerApp() {
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
 
   const handleEditRecord = (type: 'cash' | 'loan' | 'advance', recordData: any) => {
-    // Switch to the appropriate form section with the record data
-    setActiveSection(type);
-    // In a real app, you'd pass the recordData to pre-populate the form
-    console.log('Editing record:', type, recordData);
+    // Open record detail view instead of switching to form
+    setRecordView({ type, record: recordData });
+  };
+
+  const handleBackFromRecord = () => {
+    setRecordView(null);
   };
 
   const renderActiveSection = () => {
+    // If viewing a record, show the record detail view
+    if (recordView) {
+      return (
+        <RecordDetailView
+          record={recordView.record}
+          type={recordView.type}
+          onBack={handleBackFromRecord}
+        />
+      );
+    }
+
+    // Otherwise show the normal sections
     switch (activeSection) {
       case 'cash':
         return <CashCollectionForm />;
