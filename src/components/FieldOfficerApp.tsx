@@ -63,6 +63,11 @@ export function FieldOfficerApp() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
+              <img 
+                src="/lovable-uploads/1a913f01-4cbe-458f-b154-186d6ef7d8e3.png" 
+                alt="LIFT Company Logo" 
+                className="h-6 w-6"
+              />
               <h1 className="text-lg font-bold">LIFT</h1>
               <Badge variant="outline" className="bg-white/20 text-white border-white/30 text-xs">
                 Offline Mode
