@@ -71,7 +71,7 @@ export const dbOperations = {
     },
   
     async getUnsyncedCashCollections() {
-      return await db.cashCollections.where('synced').equals(false as any).toArray();
+      return await db.cashCollections.where('synced').equals(0).toArray();
     },
   
     async markCashCollectionSynced(id: number) {
@@ -88,7 +88,7 @@ export const dbOperations = {
     },
   
     async getUnsyncedLoanApplications() {
-      return await db.loanApplications.where('synced').equals(false as any).toArray();
+      return await db.loanApplications.where('synced').equals(0).toArray();
     },
   
     async markLoanApplicationSynced(id: number) {
@@ -105,7 +105,7 @@ export const dbOperations = {
     },
   
     async getUnsyncedLoanDisbursements() {
-      return await db.loanDisbursements.where('synced').equals(false as any).toArray();
+      return await db.loanDisbursements.where('synced').equals(0).toArray();
     },
   
     async markLoanDisbursementSynced(id: number) {
@@ -122,7 +122,7 @@ export const dbOperations = {
     },
   
     async getUnsyncedAdvanceLoans() {
-      return await db.advanceLoans.where('synced').equals(false as any).toArray();
+      return await db.advanceLoans.where('synced').equals(0).toArray();
     },
   
     async markAdvanceLoanSynced(id: number) {
