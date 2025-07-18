@@ -110,6 +110,7 @@ export function CashCollectionForm() {
         memberId,
         memberName: selectedMemberData.name,
         amount: totalCollected,
+        allocations: allocations,
         timestamp: new Date()
       });
       

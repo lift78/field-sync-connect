@@ -1,11 +1,19 @@
 import Dexie, { Table } from 'dexie';
 
 // Define interfaces for your data
+export interface Allocation {
+  id: string;
+  type: 'savings' | 'loan' | 'advance' | 'advance-interest' | 'other';
+  amount: number;
+  reason?: string;
+}
+
 export interface CashCollection {
   id?: number;
   memberId: string;
   memberName: string;
   amount: number;
+  allocations: Allocation[];
   timestamp: Date;
   synced: boolean;
 }
@@ -48,7 +56,7 @@ export class FieldOfficerDB extends Dexie {
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(1).stores({
+    this.version(2).stores({
       cashCollections: '++id, memberId, memberName, amount, timestamp, synced',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp, synced',
       loanDisbursements: '++id, loanId, amountType, customAmount, timestamp, synced',
