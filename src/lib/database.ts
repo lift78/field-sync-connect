@@ -12,8 +12,11 @@ export interface CashCollection {
   id?: number;
   memberId: string;
   memberName: string;
-  amount: number;
-  mpesaAmount?: number;
+  totalAmount: number;        // Total amount collected
+  cashAmount: number;         // Cash portion
+  mpesaAmount: number;        // M-Pesa portion
+  cashReference?: string;     // Reference number for cash only
+  allocationId: string;       // Single ID for all allocations
   allocations: Allocation[];
   timestamp: Date;
   synced: boolean;
@@ -62,8 +65,8 @@ export class FieldOfficerDB extends Dexie {
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(2).stores({
-      cashCollections: '++id, memberId, memberName, amount, timestamp, synced',
+    this.version(3).stores({
+      cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp, synced',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp, synced',
       loanDisbursements: '++id, loanId, amountType, customAmount, timestamp, synced',
       advanceLoans: '++id, memberId, memberName, amount, timestamp, synced'
@@ -73,11 +76,25 @@ export class FieldOfficerDB extends Dexie {
 
 export const db = new FieldOfficerDB();
 
+// Helper function to generate cash reference
+function generateCashReference(): string {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 8);
+  return `CASH-${timestamp}-${random}`.toUpperCase();
+}
 
 export const dbOperations = {
     // Cash Collections
-    async addCashCollection(data: Omit<CashCollection, 'id' | 'synced'>) {
-      return await db.cashCollections.add({ ...data, synced: false });
+    async addCashCollection(data: Omit<CashCollection, 'id' | 'synced' | 'allocationId' | 'cashReference'>) {
+      const allocationId = `ALLOC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`.toUpperCase();
+      const cashReference = data.cashAmount > 0 ? generateCashReference() : undefined;
+      
+      return await db.cashCollections.add({ 
+        ...data, 
+        allocationId,
+        cashReference,
+        synced: false 
+      });
     },
   
     async getCashCollections() {
@@ -93,7 +110,19 @@ export const dbOperations = {
     },
 
     async updateCashCollection(id: string, data: CashCollection) {
-      return await db.cashCollections.update(Number(id), { ...data, synced: false });
+      // Generate new cash reference if cash amount changed and is > 0
+      const updates: Partial<CashCollection> = { 
+        ...data, 
+        synced: false 
+      };
+      
+      if (data.cashAmount > 0 && !data.cashReference) {
+        updates.cashReference = generateCashReference();
+      } else if (data.cashAmount === 0) {
+        updates.cashReference = undefined;
+      }
+      
+      return await db.cashCollections.update(Number(id), updates);
     },
   
     // Loan Applications

@@ -43,9 +43,9 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     const loadOfflineData = async () => {
       try {
         const [cash, loans, advances] = await Promise.all([
-          dbOperations.getUnsyncedCashCollections(),
-          dbOperations.getUnsyncedLoanApplications(),
-          dbOperations.getUnsyncedAdvanceLoans()
+          dbOperations.getCashCollections(),  // All records
+          dbOperations.getLoanApplications(), // All records  
+          dbOperations.getAdvanceLoans()      // All records
         ]);
 
         setOfflineData([

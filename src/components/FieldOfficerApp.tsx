@@ -18,6 +18,7 @@ import {
   Moon,
   Sun
 } from "lucide-react";
+import { CashCollection, LoanApplication, AdvanceLoan } from "@/lib/database";
 
 type AppSection = 'cash' | 'loan' | 'advance' | 'sync';
 
@@ -48,9 +49,49 @@ export function FieldOfficerApp() {
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
 
+  // Transform database record to the format expected by RecordDetailView
+  const transformRecordForDetailView = (type: 'cash' | 'loan' | 'advance', dbRecord: CashCollection | LoanApplication | AdvanceLoan) => {
+    let amount: number | undefined;
+    let timestamp: Date;
+
+    // Extract the appropriate amount and timestamp based on record type
+    switch (type) {
+      case 'cash':
+      const cashRecord = dbRecord as CashCollection;
+      amount = cashRecord.totalAmount; 
+      timestamp = cashRecord.timestamp;
+      break;
+      case 'loan':
+        const loanRecord = dbRecord as LoanApplication;
+        amount = loanRecord.loanAmount;
+        timestamp = loanRecord.timestamp;
+        break;
+      case 'advance':
+        const advanceRecord = dbRecord as AdvanceLoan;
+        amount = advanceRecord.amount;
+        timestamp = advanceRecord.timestamp;
+        break;
+      default:
+        amount = undefined;
+        timestamp = new Date();
+    }
+
+    return {
+      id: dbRecord.id?.toString() || '',
+      memberId: dbRecord.memberId,
+      amount,
+      status: dbRecord.synced ? 'synced' as const : 'pending' as const,
+      lastUpdated: timestamp.toISOString(),
+      data: dbRecord // This is the key fix - pass the full record as data
+    };
+  };
+
   const handleEditRecord = (type: 'cash' | 'loan' | 'advance', recordData: any) => {
-    // Open record detail view instead of switching to form
-    setRecordView({ type, record: recordData });
+    // Transform the record data to the expected format
+    const transformedRecord = transformRecordForDetailView(type, recordData);
+    
+    // Open record detail view
+    setRecordView({ type, record: transformedRecord });
   };
 
   const handleBackFromRecord = () => {

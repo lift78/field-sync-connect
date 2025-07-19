@@ -82,13 +82,34 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   };
 
   const formatDateTime = (isoString: string) => {
-    return new Intl.DateTimeFormat('en-KE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(isoString));
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      return new Intl.DateTimeFormat('en-KE', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(date);
+    } catch (error) {
+      console.error('Error formatting date:', error, 'Input:', isoString);
+      return 'Invalid date';
+    }
+  };
+
+  const getMemberDisplayName = () => {
+    if (!record.data) {
+      return `Member ${record.memberId}`;
+    }
+    
+    const memberName = record.data?.memberName;
+    if (memberName) {
+      return `${memberName} (${record.memberId})`;
+    }
+    return `Member ${record.memberId}`;
   };
 
   const handleEdit = (fieldName: string, currentValue: any) => {
@@ -103,17 +124,14 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
 
   const handleFieldSave = (fieldName: string) => {
     setEditingField(null);
-    // The field value is already in editValues, we'll save all changes when Save Changes is clicked
   };
 
   const handleSaveChanges = async () => {
     try {
       setIsSaving(true);
       
-      // Create updated record with changes
       const updatedData = { ...record.data, ...editValues };
       
-      // Update in database based on type
       switch (type) {
         case 'cash':
           await dbOperations.updateCashCollection(record.id, updatedData as CashCollection);
@@ -131,7 +149,6 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
         description: "Record updated successfully",
       });
 
-      // Clear edit values
       setEditValues({});
       
     } catch (error) {
@@ -220,10 +237,16 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
 
   const renderCashCollectionDetails = () => {
     const data = record.data as CashCollection;
+    if (!data) {
+      return <p className="text-muted-foreground">No data available</p>;
+    }
+    
     return (
       <>
-        {renderEditableField('Cash Amount', 'amount', data.amount, 'number')}
-        {renderEditableField('M-Pesa Amount', 'mpesaAmount', data.mpesaAmount, 'number')}
+        {/* Transaction amounts */}
+        {renderEditableField('Total Amount', 'totalAmount', data.totalAmount || 0, 'number')}
+        {renderEditableField('Cash Amount', 'cashAmount', data.cashAmount || 0, 'number')}
+        {renderEditableField('M-Pesa Amount', 'mpesaAmount', data.mpesaAmount || 0, 'number')}
         
         {/* Member Allocations */}
         <div className="space-y-3">
@@ -232,13 +255,14 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
             {data.allocations?.map((allocation, index) => (
               <Card key={index} className="p-3">
                 <div className="grid grid-cols-2 gap-3">
-                  {renderReadOnlyField('Member ID', allocation.memberId)}
+                  {renderReadOnlyField('Allocation Type', allocation.type)}
                   {renderEditableField(
                     'Amount', 
                     `allocations.${index}.amount`, 
                     allocation.amount, 
                     'number'
                   )}
+                  {allocation.reason && renderReadOnlyField('Reason', allocation.reason)}
                 </div>
               </Card>
             )) || <p className="text-muted-foreground text-sm">No allocations recorded</p>}
@@ -250,23 +274,35 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
 
   const renderLoanApplicationDetails = () => {
     const data = record.data as LoanApplication;
+    if (!data) {
+      return <p className="text-muted-foreground">No data available</p>;
+    }
+    
     return (
       <>
-        {renderEditableField('Loan Amount', 'loanAmount', data.loanAmount, 'number')}
-        {renderEditableField('Purpose', 'purpose', data.purpose)}
-        {renderEditableField('Tenure (Months)', 'tenure', data.tenure, 'number')}
-        {renderReadOnlyField('Interest Rate', `${data.interestRate}%`)}
+        {/* Loan details */}
+        {renderEditableField('Loan Amount', 'loanAmount', data.loanAmount || 0, 'number')}
+        {renderEditableField('Purpose', 'purpose', data.purpose || '')}
+        {renderEditableField('Tenure (Months)', 'tenure', data.tenure || 0, 'number')}
+        {renderReadOnlyField('Interest Rate', `${data.interestRate || 0}%`)}
+        {renderReadOnlyField('Monthly Installment', formatAmount(data.installments || 0))}
+        {renderReadOnlyField('Guarantors', data.guarantors?.join(', ') || 'None')}
       </>
     );
   };
 
   const renderAdvanceLoanDetails = () => {
     const data = record.data as AdvanceLoan;
+    if (!data) {
+      return <p className="text-muted-foreground">No data available</p>;
+    }
+    
     return (
       <>
-        {renderEditableField('Amount', 'amount', data.amount, 'number')}
-        {renderEditableField('Reason', 'reason', data.reason)}
-        {renderEditableField('Repayment Date', 'repaymentDate', data.repaymentDate)}
+        {/* Advance loan details */}
+        {renderEditableField('Amount', 'amount', data.amount || 0, 'number')}
+        {renderEditableField('Reason', 'reason', data.reason || '')}
+        {renderEditableField('Repayment Date', 'repaymentDate', data.repaymentDate || '')}
       </>
     );
   };
@@ -305,24 +341,24 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
         </CardHeader>
       </Card>
 
-      {/* Record Status and Info */}
+      {/* Member Info Card - Shows member info only once */}
       <Card className="shadow-card">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-full">
-                <User className="h-5 w-5 text-primary" />
+              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-full">
+                <User className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <p className="font-semibold">
-                    {(record.data as any).memberName ? 
-                      `${(record.data as any).memberName} (${record.memberId})` : 
-                      `Member ${record.memberId}`
-                    }
-                  </p>
+                  <h3 className="font-semibold text-lg">
+                    {getMemberDisplayName()}
+                  </h3>
                   {getStatusIcon(record.status)}
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  Record ID: {record.id}
+                </p>
                 <p className="text-sm text-muted-foreground">
                   Last updated: {formatDateTime(record.lastUpdated)}
                 </p>
@@ -333,17 +369,12 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
         </CardContent>
       </Card>
 
-      {/* Record Details */}
+      {/* Transaction Details - Only shows transaction-specific fields */}
       <Card className="shadow-card">
         <CardHeader>
-          <CardTitle className="text-base">Record Details</CardTitle>
+          <CardTitle className="text-base">Transaction Details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Non-editable fields */}
-          {renderReadOnlyField('Member ID', record.memberId)}
-          {renderReadOnlyField('Record ID', record.id)}
-          
-          {/* Editable fields by type */}
           {renderDetailsByType()}
         </CardContent>
       </Card>

@@ -17,7 +17,6 @@ const mockMembers = Array.from({ length: 50 }, (_, i) => ({
 }));
 
 interface Allocation {
-  id: string;
   type: 'savings' | 'loan' | 'advance' | 'advance-interest' | 'other';
   amount: number;
   reason?: string;
@@ -62,7 +61,9 @@ export function CashCollectionForm() {
 
   const selectedMember = mockMembers.find(m => m.id === memberId);
 
-  const totalCollected = (parseFloat(cashAmount) || 0) + (parseFloat(mpesaAmount) || 0);
+  const cashAmountNum = parseFloat(cashAmount) || 0;
+  const mpesaAmountNum = parseFloat(mpesaAmount) || 0;
+  const totalCollected = cashAmountNum + mpesaAmountNum;
   const totalAllocated = allocations.reduce((sum, alloc) => sum + alloc.amount, 0);
   const remainingAmount = totalCollected - totalAllocated;
 
@@ -76,7 +77,6 @@ export function CashCollectionForm() {
 
   const addAllocation = (type: Allocation['type']) => {
     const newAllocation: Allocation = {
-      id: Date.now().toString(),
       type,
       amount: 0,
       reason: type === 'other' ? allocationReasons[0] : undefined,
@@ -84,14 +84,14 @@ export function CashCollectionForm() {
     setAllocations([...allocations, newAllocation]);
   };
 
-  const updateAllocation = (id: string, updates: Partial<Allocation>) => {
-    setAllocations(allocations.map(alloc => 
-      alloc.id === id ? { ...alloc, ...updates } : alloc
+  const updateAllocation = (index: number, updates: Partial<Allocation>) => {
+    setAllocations(allocations.map((alloc, i) => 
+      i === index ? { ...alloc, ...updates } : alloc
     ));
   };
 
-  const removeAllocation = (id: string) => {
-    setAllocations(allocations.filter(alloc => alloc.id !== id));
+  const removeAllocation = (index: number) => {
+    setAllocations(allocations.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
@@ -106,9 +106,10 @@ export function CashCollectionForm() {
         return;
       }
 
+      // Prepare allocations without individual IDs
       const formattedAllocations = allocations.map(allocation => ({
         memberId: memberId,
-        type: allocation.type as 'savings' | 'loan' | 'advance' | 'advance-interest' | 'other',
+        type: allocation.type,
         amount: allocation.amount,
         reason: allocation.reason
       }));
@@ -116,15 +117,18 @@ export function CashCollectionForm() {
       await dbOperations.addCashCollection({
         memberId,
         memberName: selectedMemberData.name,
-        amount: totalCollected,
-        mpesaAmount: parseFloat(mpesaAmount) || 0,
+        totalAmount: totalCollected,
+        cashAmount: cashAmountNum,
+        mpesaAmount: mpesaAmountNum,
         allocations: formattedAllocations,
         timestamp: new Date()
       });
       
       toast({
         title: "✅ Cash Collection Saved",
-        description: `${formatAmount(totalCollected)} saved for ${selectedMemberData.name}`,
+        description: `${formatAmount(totalCollected)} saved for ${selectedMemberData.name}${
+          cashAmountNum > 0 ? ' (Cash reference generated)' : ''
+        }`,
       });
       
       // Reset form
@@ -221,6 +225,11 @@ export function CashCollectionForm() {
                 value={cashAmount}
                 onChange={(e) => setCashAmount(e.target.value)}
               />
+              {cashAmountNum > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  📄 Cash reference will be generated automatically
+                </p>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -237,7 +246,7 @@ export function CashCollectionForm() {
 
           <div className="p-4 bg-primary/10 rounded-lg">
             <div className="flex justify-between items-center">
-              <span className="font-medium">Total Amount to Allocate:</span>
+              <span className="font-medium">Amount to Allocate:</span>
               <span className="text-xl font-bold text-primary">
                 {formatAmount(totalCollected)}
               </span>
@@ -250,6 +259,9 @@ export function CashCollectionForm() {
       <Card className="shadow-card bg-gradient-card">
         <CardHeader>
           <CardTitle className="text-lg">Member Allocations</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            All allocations will be saved under one allocation ID
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Core Allocation Fields - Always Visible */}
@@ -261,21 +273,16 @@ export function CashCollectionForm() {
                 type="number"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'savings')?.amount || ''}
-                 onChange={(e) => {
-                   const value = e.target.value;
-                   const amount = value === '' ? 0 : parseFloat(value);
-                   const existing = allocations.find(a => a.type === 'savings');
-                   if (existing) {
-                     updateAllocation(existing.id, { amount });
-                   } else if (amount > 0) {
-                     const newAllocation: Allocation = {
-                       id: Date.now().toString(),
-                       type: 'savings',
-                       amount
-                     };
-                     setAllocations(prev => [...prev, newAllocation]);
-                   }
-                 }}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const amount = value === '' ? 0 : parseFloat(value);
+                  const existingIndex = allocations.findIndex(a => a.type === 'savings');
+                  if (existingIndex >= 0) {
+                    updateAllocation(existingIndex, { amount });
+                  } else if (amount > 0) {
+                    setAllocations(prev => [...prev, { type: 'savings', amount }]);
+                  }
+                }}
               />
             </div>
             
@@ -286,21 +293,16 @@ export function CashCollectionForm() {
                 type="number"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'loan')?.amount || ''}
-                 onChange={(e) => {
-                   const value = e.target.value;
-                   const amount = value === '' ? 0 : parseFloat(value);
-                   const existing = allocations.find(a => a.type === 'loan');
-                   if (existing) {
-                     updateAllocation(existing.id, { amount });
-                   } else if (amount > 0) {
-                     const newAllocation: Allocation = {
-                       id: Date.now().toString(),
-                       type: 'loan',
-                       amount
-                     };
-                     setAllocations(prev => [...prev, newAllocation]);
-                   }
-                 }}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const amount = value === '' ? 0 : parseFloat(value);
+                  const existingIndex = allocations.findIndex(a => a.type === 'loan');
+                  if (existingIndex >= 0) {
+                    updateAllocation(existingIndex, { amount });
+                  } else if (amount > 0) {
+                    setAllocations(prev => [...prev, { type: 'loan', amount }]);
+                  }
+                }}
               />
             </div>
             
@@ -311,21 +313,16 @@ export function CashCollectionForm() {
                 type="number"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'advance')?.amount || ''}
-                 onChange={(e) => {
-                   const value = e.target.value;
-                   const amount = value === '' ? 0 : parseFloat(value);
-                   const existing = allocations.find(a => a.type === 'advance');
-                   if (existing) {
-                     updateAllocation(existing.id, { amount });
-                   } else if (amount > 0) {
-                     const newAllocation: Allocation = {
-                       id: Date.now().toString(),
-                       type: 'advance',
-                       amount
-                     };
-                     setAllocations(prev => [...prev, newAllocation]);
-                   }
-                 }}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const amount = value === '' ? 0 : parseFloat(value);
+                  const existingIndex = allocations.findIndex(a => a.type === 'advance');
+                  if (existingIndex >= 0) {
+                    updateAllocation(existingIndex, { amount });
+                  } else if (amount > 0) {
+                    setAllocations(prev => [...prev, { type: 'advance', amount }]);
+                  }
+                }}
               />
             </div>
             
@@ -336,21 +333,16 @@ export function CashCollectionForm() {
                 type="number"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'advance-interest')?.amount || ''}
-                 onChange={(e) => {
-                   const value = e.target.value;
-                   const amount = value === '' ? 0 : parseFloat(value);
-                   const existing = allocations.find(a => a.type === 'advance-interest');
-                   if (existing) {
-                     updateAllocation(existing.id, { amount });
-                   } else if (amount > 0) {
-                     const newAllocation: Allocation = {
-                       id: Date.now().toString(),
-                       type: 'advance-interest',
-                       amount
-                     };
-                     setAllocations(prev => [...prev, newAllocation]);
-                   }
-                 }}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const amount = value === '' ? 0 : parseFloat(value);
+                  const existingIndex = allocations.findIndex(a => a.type === 'advance-interest');
+                  if (existingIndex >= 0) {
+                    updateAllocation(existingIndex, { amount });
+                  } else if (amount > 0) {
+                    setAllocations(prev => [...prev, { type: 'advance-interest', amount }]);
+                  }
+                }}
               />
             </div>
           </div>
@@ -369,62 +361,63 @@ export function CashCollectionForm() {
               </Button>
             </div>
 
-          <div className="space-y-3">
-            {allocations.filter(a => a.type === 'other').map((allocation) => (
-              <div key={allocation.id} className="p-3 border rounded-lg bg-background/50">
-                <div className="flex items-center justify-between mb-2">
-                  <Badge variant="secondary">
-                    {allocation.type.replace('-', ' ').toUpperCase()}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeAllocation(allocation.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs">Amount (KES)</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={allocation.amount || ''}
-                       onChange={(e) => {
-                         const value = e.target.value;
-                         updateAllocation(allocation.id, {
-                           amount: value === '' ? 0 : parseFloat(value)
-                         });
-                       }}
-                    />
-                  </div>
-                  
-                  {allocation.type === 'other' && (
-                    <div>
-                      <Label className="text-xs">Reason</Label>
-                      <Select
-                        value={allocation.reason}
-                        onValueChange={(value) => updateAllocation(allocation.id, { reason: value })}
+            <div className="space-y-3">
+              {allocations.filter(a => a.type === 'other').map((allocation, index) => {
+                const otherIndex = allocations.findIndex(a => a.type === 'other' && a === allocation);
+                return (
+                  <div key={index} className="p-3 border rounded-lg bg-background/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge variant="secondary">
+                        OTHER ALLOCATION
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeAllocation(otherIndex)}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allocationReasons.map((reason) => (
-                            <SelectItem key={reason} value={reason}>
-                              {reason}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Amount (KES)</Label>
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={allocation.amount || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            updateAllocation(otherIndex, {
+                              amount: value === '' ? 0 : parseFloat(value)
+                            });
+                          }}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label className="text-xs">Reason</Label>
+                        <Select
+                          value={allocation.reason}
+                          onValueChange={(value) => updateAllocation(otherIndex, { reason: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allocationReasons.map((reason) => (
+                              <SelectItem key={reason} value={reason}>
+                                {reason}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Summary */}
@@ -454,7 +447,7 @@ export function CashCollectionForm() {
             className="w-full"
           >
             <Save className="h-5 w-5 mr-2" />
-            Save Transaction
+            Save Record
           </Button>
         </CardContent>
       </Card>
