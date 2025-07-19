@@ -7,6 +7,7 @@ import { LoanSection } from "./LoanSection";
 import { AdvanceLoanForm } from "./AdvanceLoanForm";
 import { SyncManager } from "./SyncManager";
 import { RecordDetailView } from "./RecordDetailView";
+import { SplashScreen } from "./SplashScreen";
 import { useTheme } from "next-themes";
 import { 
   Wallet, 
@@ -38,6 +39,7 @@ export function FieldOfficerApp() {
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
   const [menuOpen, setMenuOpen] = useState(false);
   const [recordView, setRecordView] = useState<RecordView | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
   const { theme, setTheme } = useTheme();
 
   const sections = [
@@ -124,6 +126,11 @@ export function FieldOfficerApp() {
         return <CashCollectionForm />;
     }
   };
+
+  // Show splash screen first
+  if (showSplash) {
+    return <SplashScreen onComplete={() => setShowSplash(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-background">
