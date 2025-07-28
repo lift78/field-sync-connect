@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Lift Offline</string>
+    <string name="title_activity_main">Lift Offline</string>
+    <string name="package_name">app.lovable.da3c5a951a55424bb1b2b102a1fdb4b2</string>
+    <string name="custom_url_scheme">app.lovable.da3c5a951a55424bb1b2b102a1fdb4b2</string>
+</resources>
