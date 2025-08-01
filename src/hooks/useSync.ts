@@ -7,6 +7,31 @@ export function useSync() {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const { toast } = useToast();
 
+  const formatSyncErrors = (errors: string[]) => {
+    if (errors.length === 0) return '';
+    
+    // Try different line break approaches for better toast rendering
+    const numberedErrors = errors.map((error, index) => {
+      return `${index + 1}. ${error}`;
+    });
+
+    // Use multiple approaches to ensure line breaks work
+    return numberedErrors.join('\n');
+  };
+
+  const getSyncSummary = (result: any) => {
+    const totalSynced = Object.values(result.summary)
+      .reduce((sum: number, recordType: any) => sum + recordType.success, 0);
+    
+    const totalFailed = result.errors?.length || 0;
+    
+    if (totalFailed === 0) {
+      return `${totalSynced} records synced successfully`;
+    }
+    
+    return `${totalSynced} synced, ${totalFailed} failed`;
+  };
+
   const performSync = useCallback(async () => {
     setIsSyncing(true);
     
@@ -19,12 +44,15 @@ export function useSync() {
 
         toast({
           title: '✅ Sync Complete',
-          description: `${totalSynced} records synced`,
+          description: `${totalSynced} records synced successfully`,
         });
       } else {
+        const formattedErrors = formatSyncErrors(result.errors);
+        const summary = getSyncSummary(result);
+
         toast({
           title: '⚠️ Sync Completed with Errors',
-          description: result.errors.join('\n'),
+          description: `${summary}\n\n${formattedErrors}`,
           variant: 'destructive'
         });
       }

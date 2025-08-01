@@ -11,11 +11,12 @@ import {
   User,
   Loader2
 } from "lucide-react";
-import { dbOperations, CashCollection, LoanApplication, AdvanceLoan } from "@/lib/database";
+import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement } from "@/lib/database";
 
 interface Record {
   id: string;
-  memberId: string;
+  memberId?: string; // Made optional for disbursements
+  loanId?: string; // Added for disbursements
   amount?: number;
   status: 'synced' | 'pending' | 'failed';
   lastUpdated: string;
@@ -23,7 +24,7 @@ interface Record {
 }
 
 interface RecordsListProps {
-  type: 'cash' | 'loan' | 'advance';
+  type: 'cash' | 'loan' | 'advance' | 'disbursement'; // Added 'disbursement'
   onBack: () => void;
   onEditRecord: (record: Record) => void;
 }
@@ -39,7 +40,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         setLoading(true);
         setError(null);
         
-        let data: (CashCollection | LoanApplication | AdvanceLoan)[] = [];
+        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement)[] = [];
         
         switch (type) {
           case 'cash':
@@ -51,14 +52,19 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
           case 'advance':
             data = await dbOperations.getAdvanceLoans();
             break;
+          case 'disbursement': // Added disbursement case
+            data = await dbOperations.getLoanDisbursements();
+            break;
         }
 
         // Convert database records to Record interface
         const formattedRecords: Record[] = data.map((item) => ({
           id: item.id?.toString() || '',
-          memberId: item.memberId,
+          memberId: 'memberId' in item ? item.memberId : undefined,
+          loanId: 'loanId' in item ? item.loanId : undefined, // Added for disbursements
           amount: 'amount' in item ? item.amount : 
-                 'loanAmount' in item ? item.loanAmount : undefined,
+                 'loanAmount' in item ? item.loanAmount : 
+                 'customAmount' in item ? item.customAmount : undefined, // Added customAmount for disbursements
           status: item.synced ? 'synced' : 'pending',
           lastUpdated: item.timestamp.toISOString(),
           data: item // Store full record for editing
@@ -84,6 +90,8 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         return 'Loan Application Records';
       case 'advance':
         return 'Advance Loan Records';
+      case 'disbursement': // Added disbursement title
+        return 'Loan Disbursement Records';
       default:
         return 'Records';
     }
@@ -129,13 +137,40 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     }).format(amount);
   };
 
-  const getMemberDisplayName = (record: Record) => {
-    // Try to get member name from the full data
+  // Updated to handle disbursements which have loanId instead of memberId
+  const getRecordDisplayName = (record: Record) => {
     const fullData = record.data as any;
-    if (fullData?.memberName) {
-      return `${fullData.memberName} (${record.memberId})`;
+    
+    if (type === 'disbursement') {
+      // For disbursements, show loan ID
+      return `Loan ID: ${record.loanId || fullData?.loanId || 'Unknown'}`;
+    } else {
+      // For other types, show member info
+      if (fullData?.memberName) {
+        return `${fullData.memberName} (${record.memberId})`;
+      }
+      return `Member ${record.memberId}`;
     }
-    return `Member ${record.memberId}`;
+  };
+
+  const getRecordSubtitle = (record: Record) => {
+    const fullData = record.data as any;
+    
+    if (type === 'disbursement') {
+      // For disbursements, show amount type and custom amount if applicable
+      if (fullData?.amountType === 'custom' && fullData?.customAmount) {
+        return `Custom Amount: ${formatAmount(fullData.customAmount)}`;
+      } else if (fullData?.amountType === 'all') {
+        return 'Full Loan Amount';
+      }
+      return 'Disbursement';
+    } else {
+      // For other types, show amount
+      if (record.amount) {
+        return formatAmount(record.amount);
+      }
+      return '';
+    }
   };
 
   if (loading) {
@@ -242,15 +277,15 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
                   </div>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <p className="font-semibold">{getMemberDisplayName(record)}</p>
+                      <p className="font-semibold">{getRecordDisplayName(record)}</p>
                       {getStatusIcon(record.status)}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {formatDateTime(record.lastUpdated)}
                     </p>
-                    {record.amount && (
+                    {getRecordSubtitle(record) && (
                       <p className="text-sm font-medium text-primary">
-                        {formatAmount(record.amount)}
+                        {getRecordSubtitle(record)}
                       </p>
                     )}
                   </div>

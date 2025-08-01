@@ -9,15 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Save } from "lucide-react";
 import { dbOperations } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
+import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
+import { Calculator } from "lucide-react";
 
 // Mock member data - replace with actual member data from your system
-const mockMembers = Array.from({ length: 50 }, (_, i) => ({
+const mockMembers = Array.from({ length: 9999 }, (_, i) => ({
   id: String(i + 1).padStart(4, '0'),
   name: `Member ${i + 1}`,
 }));
 
 interface Allocation {
-  type: 'savings' | 'loan' | 'advance' | 'advance-interest' | 'other';
+  type: 'savings' | 'loan' | 'amount_for_advance_payment' | 'other';
   amount: number;
   reason?: string;
 }
@@ -34,6 +36,18 @@ const allocationReasons = [
   'Custom (Other)'
 ];
 
+// Helper function to handle precise decimal calculations
+const toPreciseNumber = (value: string | number): number => {
+  if (typeof value === 'string') {
+    if (value === '') return 0;
+    const num = parseFloat(value);
+    if (isNaN(num)) return 0;
+    // Round to 2 decimal places to avoid floating point precision issues
+    return Math.round(num * 100) / 100;
+  }
+  return Math.round(value * 100) / 100;
+};
+
 export function CashCollectionForm() {
   const [memberId, setMemberId] = useState('');
   const [cashAmount, setCashAmount] = useState('');
@@ -42,30 +56,62 @@ export function CashCollectionForm() {
   const [memberQuery, setMemberQuery] = useState('');
   const { toast } = useToast();
 
-  // Filter members based on search query - exact padded match only
+  // Filter members based on search query
   const filteredMembers = useMemo(() => {
     if (!memberQuery) return [];
     
-    // If input is numeric, pad with zeros and find exact match
-    if (/^\d+$/.test(memberQuery.trim())) {
-      const paddedId = memberQuery.trim().padStart(4, '0');
+    const query = memberQuery.trim();
+    
+    // If input is numeric, handle ID searching
+    if (/^\d+$/.test(query)) {
+      const results = [];
+      
+      // 1. Try exact padded match first (e.g., "345" -> "0345")
+      const paddedId = query.padStart(4, '0');
       const exactMatch = mockMembers.find(member => member.id === paddedId);
-      return exactMatch ? [exactMatch] : [];
+      if (exactMatch) {
+        results.push(exactMatch);
+      }
+      
+      // 2. If no exact match and query is shorter than 4 digits, 
+      //    also search for IDs that start with the query
+      if (!exactMatch && query.length < 4) {
+        const startMatches = mockMembers.filter(member => 
+          member.id.startsWith(query.padStart(query.length, '0'))
+        ).slice(0, 5);
+        results.push(...startMatches);
+      }
+      
+      // 3. If query is 4+ digits and no exact match, search for partial matches
+      if (!exactMatch && query.length >= 4) {
+        const partialMatches = mockMembers.filter(member => 
+          member.id.includes(query) || member.id === query
+        ).slice(0, 5);
+        results.push(...partialMatches);
+      }
+      
+      return results;
     }
     
     // If input contains letters, search by name
     return mockMembers.filter(member => 
-      member.name.toLowerCase().includes(memberQuery.toLowerCase())
+      member.name.toLowerCase().includes(query.toLowerCase())
     ).slice(0, 5);
   }, [memberQuery]);
 
   const selectedMember = mockMembers.find(m => m.id === memberId);
 
-  const cashAmountNum = parseFloat(cashAmount) || 0;
-  const mpesaAmountNum = parseFloat(mpesaAmount) || 0;
-  const totalCollected = cashAmountNum + mpesaAmountNum;
-  const totalAllocated = allocations.reduce((sum, alloc) => sum + alloc.amount, 0);
-  const remainingAmount = totalCollected - totalAllocated;
+  // Use precise calculations to avoid floating point issues
+  const cashAmountNum = toPreciseNumber(cashAmount);
+  const mpesaAmountNum = toPreciseNumber(mpesaAmount);
+  const totalCollected = toPreciseNumber(cashAmountNum + mpesaAmountNum);
+  const totalAllocated = toPreciseNumber(
+    allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+  );
+  const remainingAmount = toPreciseNumber(totalCollected - totalAllocated);
+
+  // Check if form has meaningful data for save button
+  const hasValidData = memberId && (totalCollected > 0 || totalAllocated > 0);
 
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
@@ -86,7 +132,12 @@ export function CashCollectionForm() {
 
   const updateAllocation = (index: number, updates: Partial<Allocation>) => {
     setAllocations(allocations.map((alloc, i) => 
-      i === index ? { ...alloc, ...updates } : alloc
+      i === index ? { 
+        ...alloc, 
+        ...updates,
+        // Ensure amount precision
+        amount: updates.amount !== undefined ? toPreciseNumber(updates.amount) : alloc.amount
+      } : alloc
     ));
   };
 
@@ -106,13 +157,25 @@ export function CashCollectionForm() {
         return;
       }
 
+      // Validate that we have either collection amounts or allocations
+      if (totalCollected === 0 && totalAllocated === 0) {
+        toast({
+          title: "❌ No Data to Save",
+          description: "Please enter collection amounts or allocations",
+          variant: "destructive"
+        });
+        return;
+      }
+
       // Prepare allocations without individual IDs
-      const formattedAllocations = allocations.map(allocation => ({
-        memberId: memberId,
-        type: allocation.type,
-        amount: allocation.amount,
-        reason: allocation.reason
-      }));
+      const formattedAllocations = allocations
+        .filter(allocation => allocation.amount > 0) // Only save allocations with amounts
+        .map(allocation => ({
+          memberId: memberId,
+          type: allocation.type,
+          amount: allocation.amount,
+          reason: allocation.reason
+        }));
 
       await dbOperations.addCashCollection({
         memberId,
@@ -221,6 +284,7 @@ export function CashCollectionForm() {
               <Input
                 id="cash-amount"
                 type="number"
+                step="0.01"
                 placeholder="0"
                 value={cashAmount}
                 onChange={(e) => setCashAmount(e.target.value)}
@@ -237,6 +301,7 @@ export function CashCollectionForm() {
               <Input
                 id="mpesa-amount"
                 type="number"
+                step="0.01"
                 placeholder="0"
                 value={mpesaAmount}
                 onChange={(e) => setMpesaAmount(e.target.value)}
@@ -271,11 +336,12 @@ export function CashCollectionForm() {
               <Input
                 id="savings-amount"
                 type="number"
+                step="0.01"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'savings')?.amount || ''}
                 onChange={(e) => {
                   const value = e.target.value;
-                  const amount = value === '' ? 0 : parseFloat(value);
+                  const amount = toPreciseNumber(value);
                   const existingIndex = allocations.findIndex(a => a.type === 'savings');
                   if (existingIndex >= 0) {
                     updateAllocation(existingIndex, { amount });
@@ -291,11 +357,12 @@ export function CashCollectionForm() {
               <Input
                 id="loan-amount"
                 type="number"
+                step="0.01"
                 placeholder="0"
                 value={allocations.find(a => a.type === 'loan')?.amount || ''}
                 onChange={(e) => {
                   const value = e.target.value;
-                  const amount = value === '' ? 0 : parseFloat(value);
+                  const amount = toPreciseNumber(value);
                   const existingIndex = allocations.findIndex(a => a.type === 'loan');
                   if (existingIndex >= 0) {
                     updateAllocation(existingIndex, { amount });
@@ -307,43 +374,55 @@ export function CashCollectionForm() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="advance-amount">Pay Advance (KES)</Label>
-              <Input
-                id="advance-amount"
-                type="number"
-                placeholder="0"
-                value={allocations.find(a => a.type === 'advance')?.amount || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  const amount = value === '' ? 0 : parseFloat(value);
-                  const existingIndex = allocations.findIndex(a => a.type === 'advance');
-                  if (existingIndex >= 0) {
-                    updateAllocation(existingIndex, { amount });
-                  } else if (amount > 0) {
-                    setAllocations(prev => [...prev, { type: 'advance', amount }]);
-                  }
-                }}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="advance-interest-amount">Pay Advance Interest (KES)</Label>
-              <Input
-                id="advance-interest-amount"
-                type="number"
-                placeholder="0"
-                value={allocations.find(a => a.type === 'advance-interest')?.amount || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  const amount = value === '' ? 0 : parseFloat(value);
-                  const existingIndex = allocations.findIndex(a => a.type === 'advance-interest');
-                  if (existingIndex >= 0) {
-                    updateAllocation(existingIndex, { amount });
-                  } else if (amount > 0) {
-                    setAllocations(prev => [...prev, { type: 'advance-interest', amount }]);
-                  }
-                }}
-              />
+              <Label htmlFor="advance-payment-amount">Advance Payments (KES)</Label>
+              <div className="relative">
+                <Input
+                  id="advance-payment-amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="0"
+                  value={allocations.find(a => a.type === 'amount_for_advance_payment')?.amount || ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const amount = toPreciseNumber(value);
+                    const existingIndex = allocations.findIndex(a => a.type === 'amount_for_advance_payment');
+                    if (existingIndex >= 0) {
+                      updateAllocation(existingIndex, { amount });
+                    } else if (amount > 0) {
+                      setAllocations(prev => [...prev, { type: 'amount_for_advance_payment', amount }]);
+                    }
+                  }}
+                  className="pr-12" // Add padding for the calculator button
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <AdvanceCalculatorDialog
+                    currentAmount={allocations.find(a => a.type === 'amount_for_advance_payment')?.amount || 0}
+                    onAmountSelect={(amount) => {
+                      const preciseAmount = toPreciseNumber(amount);
+                      const existingIndex = allocations.findIndex(a => a.type === 'amount_for_advance_payment');
+                      if (existingIndex >= 0) {
+                        updateAllocation(existingIndex, { amount: preciseAmount });
+                      } else {
+                        setAllocations(prev => [...prev, { type: 'amount_for_advance_payment', amount: preciseAmount }]);
+                      }
+                    }}
+                    trigger={
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 hover:bg-accent"
+                        type="button"
+                      >
+                        <Calculator className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Calculator className="h-3 w-3" />
+                Click calculator to preview payment split
+              </p>
             </div>
           </div>
 
@@ -384,12 +463,13 @@ export function CashCollectionForm() {
                         <Label className="text-xs">Amount (KES)</Label>
                         <Input
                           type="number"
+                          step="0.01"
                           placeholder="0"
                           value={allocation.amount || ''}
                           onChange={(e) => {
                             const value = e.target.value;
                             updateAllocation(otherIndex, {
-                              amount: value === '' ? 0 : parseFloat(value)
+                              amount: toPreciseNumber(value)
                             });
                           }}
                         />
@@ -443,7 +523,7 @@ export function CashCollectionForm() {
             variant="mobile" 
             size="mobile" 
             onClick={handleSave}
-            disabled={!memberId || totalCollected === 0}
+            disabled={!hasValidData}
             className="w-full"
           >
             <Save className="h-5 w-5 mr-2" />
@@ -453,4 +533,4 @@ export function CashCollectionForm() {
       </Card>
     </div>
   );
-}
+}  

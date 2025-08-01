@@ -9,7 +9,7 @@ import { dbOperations } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 
 // Mock member data - replace with actual member data from your system
-const mockMembers = Array.from({ length: 50 }, (_, i) => ({
+const mockMembers = Array.from({ length: 9999 }, (_, i) => ({
   id: String(i + 1).padStart(4, '0'),
   name: `Member ${i + 1}`,
 }));
@@ -27,20 +27,46 @@ export function AdvanceLoanForm() {
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const { toast } = useToast();
 
-  // Filter members based on search query - exact padded match only
+  // Filter members based on search query - same logic as CashCollectionForm
   const filteredMembers = useMemo(() => {
     if (!memberQuery) return [];
     
-    // If input is numeric, pad with zeros and find exact match
-    if (/^\d+$/.test(memberQuery.trim())) {
-      const paddedId = memberQuery.trim().padStart(4, '0');
+    const query = memberQuery.trim();
+    
+    // If input is numeric, handle ID searching
+    if (/^\d+$/.test(query)) {
+      const results = [];
+      
+      // 1. Try exact padded match first (e.g., "345" -> "0345")
+      const paddedId = query.padStart(4, '0');
       const exactMatch = mockMembers.find(member => member.id === paddedId);
-      return exactMatch ? [exactMatch] : [];
+      if (exactMatch) {
+        results.push(exactMatch);
+      }
+      
+      // 2. If no exact match and query is shorter than 4 digits, 
+      //    also search for IDs that start with the query
+      if (!exactMatch && query.length < 4) {
+        const startMatches = mockMembers.filter(member => 
+          member.id.startsWith(query.padStart(query.length, '0'))
+        ).slice(0, 5);
+        results.push(...startMatches);
+      }
+      
+      // 3. If query is 4+ digits and no exact match, search for partial matches
+      if (!exactMatch && query.length >= 4) {
+        const partialMatches = mockMembers.filter(member => 
+          member.id.includes(query) || member.id === query
+        ).slice(0, 5);
+        results.push(...partialMatches);
+      }
+      
+      return results;
     }
     
     // If input contains letters, search by name
     return mockMembers.filter(member => 
-      member.name.toLowerCase().includes(memberQuery.toLowerCase())
+      member.name.toLowerCase().includes(query.toLowerCase())
     ).slice(0, 5);
   }, [memberQuery]);
 
@@ -122,7 +148,7 @@ export function AdvanceLoanForm() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="member-search">Search Member</Label>
+            <Label htmlFor="member-search">Search Member ID or Name</Label>
             <Input
               id="member-search"
               placeholder="Type member ID or name..."
@@ -266,15 +292,15 @@ export function AdvanceLoanForm() {
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm">Processing Fee (5%):</span>
+                      <span className="text-sm">Zero Processing Fee:</span>
                       <span className="text-sm font-medium">
-                        {formatAmount(application.advanceAmount * 0.05)}
+                        {formatAmount(application.advanceAmount)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center border-t pt-2">
                       <span className="text-sm font-medium">Net Amount:</span>
                       <span className="font-bold text-success">
-                        {formatAmount(application.advanceAmount * 0.95)}
+                        {formatAmount(application.advanceAmount)}
                       </span>
                     </div>
                   </div>
@@ -302,12 +328,12 @@ export function AdvanceLoanForm() {
                   </div>
                   <div className="text-sm text-muted-foreground">
                     Total Processing Fees: {formatAmount(
-                      applications.reduce((sum, app) => sum + (app.advanceAmount * 0.05), 0)
+                      applications.reduce((sum, app) => sum + (app.advanceAmount), 0)
                     )}
                   </div>
                   <div className="text-base font-semibold text-success">
                     Net Disbursement: {formatAmount(
-                      applications.reduce((sum, app) => sum + (app.advanceAmount * 0.95), 0)
+                      applications.reduce((sum, app) => sum + (app.advanceAmount), 0)
                     )}
                   </div>
                 </div>
@@ -335,7 +361,7 @@ export function AdvanceLoanForm() {
               No advance loan applications yet. Add members to get started.
             </p>
             <p className="text-sm text-muted-foreground mt-2">
-              Advance loans are processed quickly with a 5% processing fee
+              Advance loans are processed quickly with no processing fee
             </p>
           </CardContent>
         </Card>

@@ -9,11 +9,17 @@ import { Plus, Trash2, Save, User } from "lucide-react";
 import { dbOperations } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 
-// Mock member data - replace with actual member data from your system
-const mockMembers = Array.from({ length: 50 }, (_, i) => ({
-  id: String(i + 1).padStart(4, '0'),
-  name: `Member ${i + 1}`,
-}));
+// Helper function to generate member data on demand
+const getMember = (id: string) => ({
+  id: id.padStart(4, '0'),
+  name: `Member ${parseInt(id)}`,
+});
+
+// Helper function to check if member ID exists (1-9999)
+const isValidMemberId = (id: string): boolean => {
+  const num = parseInt(id);
+  return num >= 1 && num <= 9999;
+};
 
 interface LoanApplication {
   id: string;
@@ -30,27 +36,104 @@ export function LoanApplicationForm() {
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const { toast } = useToast();
 
-  // Filter members based on search query - exact padded match only
+  // Filter members based on search query - efficient search without pre-generating all members
   const filteredMembers = useMemo(() => {
     if (!memberQuery) return [];
     
-    // If input is numeric, pad with zeros and find exact match
-    if (/^\d+$/.test(memberQuery.trim())) {
-      const paddedId = memberQuery.trim().padStart(4, '0');
-      const exactMatch = mockMembers.find(member => member.id === paddedId);
-      return exactMatch ? [exactMatch] : [];
+    const query = memberQuery.trim();
+    const results = [];
+    
+    // If input is numeric, handle ID searching
+    if (/^\d+$/.test(query)) {
+      // 1. Try exact padded match first (e.g., "345" -> "0345")
+      const paddedId = query.padStart(4, '0');
+      if (isValidMemberId(paddedId)) {
+        results.push(getMember(paddedId));
+      }
+      
+      // 2. If query is shorter than 4 digits, find IDs that start with the query
+      if (query.length < 4) {
+        const baseNum = parseInt(query);
+        const multiplier = Math.pow(10, 4 - query.length);
+        
+        // Generate up to 5 matching IDs
+        for (let i = 0; i < Math.min(5, multiplier); i++) {
+          const candidateNum = baseNum * multiplier + i;
+          if (candidateNum >= 1 && candidateNum <= 9999) {
+            const candidateId = candidateNum.toString().padStart(4, '0');
+            if (candidateId.startsWith(query.padStart(query.length, '0')) && 
+                !results.some(r => r.id === candidateId)) {
+              results.push(getMember(candidateNum.toString()));
+            }
+          }
+        }
+      }
+    } else {
+      // If input contains letters, search by name pattern
+      const lowerQuery = query.toLowerCase();
+      if (lowerQuery.includes('member')) {
+        // Extract number from "member X" pattern
+        const match = lowerQuery.match(/member\s*(\d+)/);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num >= 1 && num <= 9999) {
+            results.push(getMember(num.toString()));
+          }
+        }
+      }
+      
+      // Also try to find members by partial number in the name
+      const numberMatch = query.match(/\d+/);
+      if (numberMatch) {
+        const num = parseInt(numberMatch[0]);
+        if (num >= 1 && num <= 9999) {
+          results.push(getMember(num.toString()));
+        }
+      }
     }
     
-    // If input contains letters, search by name
-    return mockMembers.filter(member => 
-      member.name.toLowerCase().includes(memberQuery.toLowerCase())
-    ).slice(0, 5);
+    return results.slice(0, 5); // Limit to 5 results
   }, [memberQuery]);
 
-  const availableGuarantors = mockMembers.filter(m => 
-    m.id !== selectedMemberId && 
-    !applications.some(app => app.memberId === m.id)
-  );
+  // Generate available guarantors on demand (excluding selected member and existing applicants)
+  const getAvailableGuarantors = (searchTerm: string = '') => {
+    const results = [];
+    const excludedIds = new Set([
+      selectedMemberId,
+      ...applications.map(app => app.memberId)
+    ]);
+    
+    if (!searchTerm) return [];
+    
+    // Similar search logic but excluding already used members
+    if (/^\d+$/.test(searchTerm.trim())) {
+      const query = searchTerm.trim();
+      const paddedId = query.padStart(4, '0');
+      
+      if (isValidMemberId(paddedId) && !excludedIds.has(paddedId)) {
+        results.push(getMember(paddedId));
+      }
+      
+      // For shorter queries, generate some matching options
+      if (query.length < 4) {
+        const baseNum = parseInt(query);
+        const multiplier = Math.pow(10, 4 - query.length);
+        
+        for (let i = 0; i < Math.min(10, multiplier); i++) {
+          const candidateNum = baseNum * multiplier + i;
+          if (candidateNum >= 1 && candidateNum <= 9999) {
+            const candidateId = candidateNum.toString().padStart(4, '0');
+            if (!excludedIds.has(candidateId) && 
+                candidateId.startsWith(query.padStart(query.length, '0'))) {
+              results.push(getMember(candidateNum.toString()));
+            }
+          }
+        }
+      }
+    }
+    
+    return results.slice(0, 20); // More options for guarantor selection
+  };
 
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
@@ -61,15 +144,15 @@ export function LoanApplicationForm() {
   };
 
   const addMember = () => {
-    const selectedMember = mockMembers.find(m => m.id === selectedMemberId);
-    if (!selectedMember) return;
-
+    if (!selectedMemberId || !isValidMemberId(selectedMemberId)) return;
+    
+    const selectedMember = getMember(selectedMemberId);
     const newApplication: LoanApplication = {
       id: Date.now().toString(),
       memberId: selectedMember.id,
       memberName: selectedMember.name,
       loanAmount: 0,
-      installments: 12,
+      installments: 0,
       guarantors: [],
     };
 
@@ -149,7 +232,7 @@ export function LoanApplicationForm() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="member-search">Search Member</Label>
+            <Label htmlFor="member-search">Search Member ID or Name</Label>
             <Input
               id="member-search"
               placeholder="Type member ID or name..."
@@ -186,7 +269,7 @@ export function LoanApplicationForm() {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="font-medium text-success">Selected Member:</p>
-                  <p className="text-sm">{mockMembers.find(m => m.id === selectedMemberId)?.id} - {mockMembers.find(m => m.id === selectedMemberId)?.name}</p>
+                  <p className="text-sm">{getMember(selectedMemberId)?.id} - {getMember(selectedMemberId)?.name}</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -283,7 +366,9 @@ export function LoanApplicationForm() {
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Monthly Payment:</span>
                     <span className="font-bold text-primary">
-                      {formatAmount(application.loanAmount / application.installments)}
+                    {formatAmount(
+                        (application.loanAmount * (1 + 0.015 * application.installments)) / application.installments
+                      )}
                     </span>
                   </div>
                 </div>
@@ -297,7 +382,7 @@ export function LoanApplicationForm() {
                 {application.guarantors.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {application.guarantors.map((guarantorId) => {
-                      const guarantor = mockMembers.find(m => m.id === guarantorId);
+                      const guarantor = getMember(guarantorId);
                       return (
                         <Badge key={guarantorId} variant="secondary" className="flex items-center gap-1">
                           {guarantor?.name}
@@ -313,25 +398,52 @@ export function LoanApplicationForm() {
                   </div>
                 )}
 
-                {/* Add Guarantor Dropdown */}
-                <Select
-                  onValueChange={(guarantorId) => {
-                    addGuarantor(application.id, guarantorId);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select guarantor..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableGuarantors
-                      .filter(member => !application.guarantors.includes(member.id))
-                      .map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.id} - {member.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Add Guarantor - Simple Input */}
+                <div className="space-y-2">
+                  <Label>Add Guarantor by ID</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Enter member ID (1-9999)"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const input = e.currentTarget;
+                          const value = input.value.trim();
+                          if (value) {
+                            const paddedId = value.padStart(4, '0');
+                            if (isValidMemberId(paddedId) && 
+                                !application.guarantors.includes(paddedId) &&
+                                paddedId !== application.memberId) {
+                              addGuarantor(application.id, paddedId);
+                              input.value = '';
+                            }
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                        const value = input.value.trim();
+                        if (value) {
+                          const paddedId = value.padStart(4, '0');
+                          if (isValidMemberId(paddedId) && 
+                              !application.guarantors.includes(paddedId) &&
+                              paddedId !== application.memberId) {
+                            addGuarantor(application.id, paddedId);
+                            input.value = '';
+                          }
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Press Enter or click Add to add guarantor by ID
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

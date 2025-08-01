@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { RecordsList } from "./RecordsList";
 import { dbOperations } from "@/lib/database";
 import { 
@@ -16,17 +18,20 @@ import {
   AlertCircle,
   Clock,
   Upload,
-  Settings
+  Settings,
+  User,
+  Key,
+  X
 } from "lucide-react";
 
 interface SyncData {
-  type: 'cash' | 'loan' | 'advance';
+  type: 'cash' | 'loan' | 'advance' | 'disbursement'; // Added 'disbursement' type
   count: number;
   lastUpdated: string;
 }
 
 interface SyncManagerProps {
-  onEditRecord?: (type: 'cash' | 'loan' | 'advance', recordData: any) => void;
+  onEditRecord?: (type: 'cash' | 'loan' | 'advance' | 'disbursement', recordData: any) => void; // Added 'disbursement'
 }
 
 export function SyncManager({ onEditRecord }: SyncManagerProps) {
@@ -34,18 +39,32 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | null>(null);
+  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | null>(null); // Added 'disbursement'
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [offlineData, setOfflineData] = useState<SyncData[]>([]);
+  const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [showCredentialModal, setShowCredentialModal] = useState(false);
 
   // Load actual data from IndexedDB
   useEffect(() => {
+    const loadCredentials = async () => {
+      const creds = await dbOperations.getUserCredentials();
+      if (creds) {
+        setCredentials({ 
+          username: creds.username, 
+          password: "••••••••" // Masked password
+        });
+      }
+    };
+    
     const loadOfflineData = async () => {
       try {
-        const [cash, loans, advances] = await Promise.all([
-          dbOperations.getCashCollections(),  // All records
-          dbOperations.getLoanApplications(), // All records  
-          dbOperations.getAdvanceLoans()      // All records
+        // FIX: Load UNSYNCED records instead of all records
+        const [cash, loans, advances, disbursements] = await Promise.all([
+          dbOperations.getUnsyncedCashCollections(),      // ✅ Only unsynced
+          dbOperations.getUnsyncedLoanApplications(),     // ✅ Only unsynced
+          dbOperations.getUnsyncedAdvanceLoans(),         // ✅ Only unsynced
+          dbOperations.getUnsyncedLoanDisbursements()     // ✅ Only unsynced
         ]);
 
         setOfflineData([
@@ -64,13 +83,21 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
             count: advances.length, 
             lastUpdated: advances.length > 0 ? advances[0].timestamp.toISOString() : new Date().toISOString()
           },
+          { 
+            type: 'disbursement', 
+            count: disbursements.length, 
+            lastUpdated: disbursements.length > 0 ? disbursements[0].timestamp.toISOString() : new Date().toISOString()
+          },
         ]);
       } catch (error) {
         console.error('Failed to load offline data:', error);
       }
     };
 
+    // Run both functions
+    loadCredentials();
     loadOfflineData();
+    
     const interval = setInterval(loadOfflineData, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, []);
@@ -86,9 +113,8 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
       minute: '2-digit',
     }).format(new Date(isoString));
   };
-  const { performSync } = useSync();
   
-  const { checkConnectivity } = useSync();
+  const { performSync, checkConnectivity } = useSync();
 
   useEffect(() => {
     const updateConnectionStatus = async () => {
@@ -141,7 +167,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     try {
       const result = await performSync();
   
-      // Optional: simulate progress visually
+      // Simulate progress visually
       for (let i = 0; i <= 100; i += 25) {
         setSyncProgress(i);
         await new Promise(resolve => setTimeout(resolve, 150));
@@ -164,7 +190,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     }
   };
   
-
+  // FIX: Updated getTypeIcon to include disbursement
   const getTypeIcon = (type: SyncData['type']) => {
     switch (type) {
       case 'cash':
@@ -173,11 +199,14 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         return '🏦';
       case 'advance':
         return '⚡';
+      case 'disbursement':
+        return '💸'; // Added disbursement icon
       default:
         return '📄';
     }
   };
 
+  // FIX: Updated getTypeLabel to include disbursement
   const getTypeLabel = (type: SyncData['type']) => {
     switch (type) {
       case 'cash':
@@ -186,8 +215,36 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         return 'Loan Applications';
       case 'advance':
         return 'Advance Loans';
+      case 'disbursement':
+        return 'Loan Disbursements'; // Added disbursement label
       default:
         return 'Unknown';
+    }
+  };
+
+  const handleUpdateCredentials = async () => {
+    try {
+      // Only update if password was changed (not masked)
+      const actualPassword = credentials.password === "••••••••" 
+        ? "" 
+        : credentials.password;
+      
+      await dbOperations.updateUserCredentials({
+        username: credentials.username,
+        password: actualPassword
+      });
+      
+      alert("✅ Credentials updated successfully!");
+      setShowCredentialModal(false);
+      
+      // Update local state with masked password
+      setCredentials({
+        username: credentials.username,
+        password: "••••••••"
+      });
+    } catch (err) {
+      alert("❌ Failed to update credentials");
+      console.error(err);
     }
   };
 
@@ -197,10 +254,6 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
       setViewingRecords(null);
     }
   };
-
-  // Listen for online/offline events
-  window.addEventListener('online', () => setIsOnline(true));
-  window.addEventListener('offline', () => setIsOnline(false));
 
   // Show records view if selected
   if (viewingRecords) {
@@ -255,7 +308,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <Database className="h-5 w-5 mr-2" />
-            Local Data Summary
+            Unsynced Data Summary
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -270,21 +323,27 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
                 <div>
                   <p className="font-medium">{getTypeLabel(data.type)}</p>
                   <p className="text-sm text-muted-foreground">
-                    Last updated: {formatDateTime(data.lastUpdated)}
+                    {data.count > 0 
+                      ? `Last updated: ${formatDateTime(data.lastUpdated)}`
+                      : "All records synced"
+                    }
                   </p>
                 </div>
               </div>
-              <Badge variant="secondary">
-                {data.count} record{data.count !== 1 ? 's' : ''}
+              <Badge variant={data.count > 0 ? "destructive" : "default"} className={data.count > 0 ? "" : "bg-success text-success-foreground"}>
+                {data.count > 0 
+                  ? `${data.count} unsynced`
+                  : "✅ All synced"
+                }
               </Badge>
             </div>
           ))}
 
           <div className="border-t pt-4">
             <div className="flex justify-between items-center">
-              <span className="font-semibold">Total Records:</span>
-              <Badge variant="default" className="text-lg px-3 py-1">
-                {totalRecords}
+              <span className="font-semibold">Total Unsynced Records:</span>
+              <Badge variant={totalRecords > 0 ? "destructive" : "default"} className={totalRecords > 0 ? "text-lg px-3 py-1" : "bg-success text-success-foreground text-lg px-3 py-1"}>
+                {totalRecords > 0 ? totalRecords : "✅ All synced"}
               </Badge>
             </div>
           </div>
@@ -368,9 +427,12 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
           <div className="text-center space-y-4">
             <div>
               <p className="text-sm text-muted-foreground mb-2">
-                Ready to sync {totalRecords} records to the server
+                {totalRecords > 0 
+                  ? `Ready to sync ${totalRecords} unsynced records to the server`
+                  : "All records are synced to the server"
+                }
               </p>
-              {!isOnline && (
+              {!isOnline && totalRecords > 0 && (
                 <p className="text-sm text-warning mb-4">
                   ⚠️ Internet connection required for syncing
                 </p>
@@ -398,8 +460,8 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
             </Button>
 
             {totalRecords === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No offline data to sync
+              <p className="text-sm text-success">
+                ✅ All data is synced to the server
               </p>
             )}
           </div>
@@ -423,6 +485,89 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
           </ul>
         </CardContent>
       </Card>
+
+      {/* Credentials Management */}
+      <Card className="shadow-card bg-gradient-card">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center">
+            <User className="h-5 w-5 mr-2" />
+            Account Credentials
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium mb-1">Username</p>
+              <div className="flex items-center justify-between bg-background/50 p-3 rounded-lg">
+                <span>{credentials.username || "Not set"}</span>
+              </div>
+            </div>
+            
+            <div>
+              <p className="text-sm font-medium mb-1">Password</p>
+              <div className="flex items-center justify-between bg-background/50 p-3 rounded-lg">
+                <span>{credentials.password ? "••••••••" : "Not set"}</span>
+              </div>
+            </div>
+            
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={() => setShowCredentialModal(true)}
+            >
+              <Key className="h-4 w-4 mr-2" />
+              Update Credentials
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Credential Update Modal */}
+      {showCredentialModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">Update Credentials</h3>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => setShowCredentialModal(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <Label>Username</Label>
+                <Input
+                  value={credentials.username}
+                  onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+                  placeholder="Enter username"
+                />
+              </div>
+              
+              <div>
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  value={credentials.password === "••••••••" ? "" : credentials.password}
+                  onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+                  placeholder="Enter new password"
+                />
+              </div>
+              
+              <Button 
+                className="w-full mt-2"
+                onClick={handleUpdateCredentials}
+                disabled={!credentials.username || !credentials.password}
+              >
+                Save Credentials
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
