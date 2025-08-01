@@ -107,7 +107,7 @@ export class SyncTestUtils {
       console.log(`🔍 dbOperations.getUnsyncedCashCollections(): ${method1.length}`);
       
       // Method 2: Direct query
-      const method2 = await db.cashCollections.where('synced').equals(false).toArray();
+      const method2 = await db.cashCollections.filter(record => record.synced === false).toArray();
       console.log(`🔍 Direct query synced=false: ${method2.length}`);
       
       // Method 3: Check the exact query used in dbOperations

@@ -11,6 +11,7 @@ import { LoanSection } from "./LoanSection";
 import { AdvanceLoanForm } from "./AdvanceLoanForm";
 import { SyncManager } from "./SyncManager";
 import { RecordDetailView } from "./RecordDetailView";
+import { DataManagement } from "./DataManagement";
 import { 
   Wallet, 
   CreditCard, 
@@ -245,7 +246,12 @@ export function FieldOfficerApp() {
       case 'advance':
         return <AdvanceLoanForm />;
       case 'sync':
-        return <SyncManager onEditRecord={handleEditRecord} />;
+        return (
+          <div className="space-y-6">
+            <SyncManager onEditRecord={handleEditRecord} />
+            <DataManagement />
+          </div>
+        );
       default:
         return <CashCollectionForm />;
     }
