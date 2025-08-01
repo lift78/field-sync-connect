@@ -12,6 +12,7 @@ import { AdvanceLoanForm } from "./AdvanceLoanForm";
 import { SyncManager } from "./SyncManager";
 import { RecordDetailView } from "./RecordDetailView";
 import { DataManagement } from "./DataManagement";
+import { SplashScreen } from "./SplashScreen";
 import { 
   Wallet, 
   CreditCard, 
