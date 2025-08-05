@@ -12,6 +12,24 @@ export interface UserCredentials {
   username: string;
   password: string;
   lastLogin: Date;
+  token?: string;
+}
+
+export interface MemberBalance {
+  id?: number;
+  member_id: string;
+  name: string;
+  phone: string;
+  group_name: string;
+  meeting_date: string;
+  balances: {
+    savings_balance: number;
+    loan_balance: number;
+    advance_loan_balance: number;
+    unallocated_funds: number;
+    total_outstanding: number;
+  };
+  last_updated: string;
 }
 
 export interface CashCollection {
@@ -77,16 +95,18 @@ export class FieldOfficerDB extends Dexie {
   loanDisbursements!: Table<LoanDisbursement>;
   advanceLoans!: Table<AdvanceLoan>;
   userCredentials!: Table<UserCredentials>;
+  memberBalances!: Table<MemberBalance>;
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(4).stores({
+    this.version(5).stores({
       // Removed 'synced' from indexes since it's boolean and causes TypeScript errors
       cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp',
       loanDisbursements: '++id, loanId, amountType, customAmount, timestamp',
       advanceLoans: '++id, memberId, memberName, amount, timestamp',
-      userCredentials: '++id, username, lastLogin'
+      userCredentials: '++id, username, lastLogin',
+      memberBalances: '++id, member_id, name, phone, last_updated'
     });
   }
 }
@@ -375,5 +395,60 @@ export const dbOperations = {
   async syncSingleAdvanceLoan(record: AdvanceLoan): Promise<{success: boolean; error?: string; result?: any}> {
     // This method can be used by the sync service if needed
     return { success: true };
+  },
+
+  // Member Balance operations
+  async storeMemberBalances(members: Omit<MemberBalance, 'id'>[]) {
+    try {
+      const now = new Date().toISOString();
+      const membersWithTimestamp = members.map(member => ({
+        ...member,
+        last_updated: now
+      }));
+      
+      // Clear existing data and store new
+      await db.memberBalances.clear();
+      await db.memberBalances.bulkAdd(membersWithTimestamp);
+    } catch (error) {
+      console.error('Error storing member balances:', error);
+      throw error;
+    }
+  },
+
+  async searchMembers(query: string): Promise<MemberBalance[]> {
+    try {
+      if (!query.trim()) return [];
+      
+      const queryLower = query.toLowerCase();
+      return await db.memberBalances
+        .filter(member => 
+          member.member_id.toLowerCase().includes(queryLower) ||
+          member.name.toLowerCase().includes(queryLower) ||
+          member.phone.includes(query)
+        )
+        .limit(10)
+        .toArray();
+    } catch (error) {
+      console.error('Error searching members:', error);
+      return [];
+    }
+  },
+
+  async getMemberById(memberId: string): Promise<MemberBalance | undefined> {
+    try {
+      return await db.memberBalances.where('member_id').equals(memberId).first();
+    } catch (error) {
+      console.error('Error getting member by ID:', error);
+      return undefined;
+    }
+  },
+
+  async getAllMembers(): Promise<MemberBalance[]> {
+    try {
+      return await db.memberBalances.orderBy('name').toArray();
+    } catch (error) {
+      console.error('Error getting all members:', error);
+      return [];
+    }
   }
 };
