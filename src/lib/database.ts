@@ -26,6 +26,8 @@ export interface CashCollection {
   allocations: Allocation[];
   timestamp: Date;
   synced: boolean;
+  syncStatus?: 'pending' | 'failed' | 'synced';
+  syncError?: string;
 }
 
 export interface LoanApplication {
@@ -40,6 +42,8 @@ export interface LoanApplication {
   guarantors: string[];
   timestamp: Date;
   synced: boolean;
+  syncStatus?: 'pending' | 'failed' | 'synced';
+  syncError?: string;
 }
 
 export interface LoanDisbursement {
@@ -49,6 +53,8 @@ export interface LoanDisbursement {
   customAmount?: number;
   timestamp: Date;
   synced: boolean;
+  syncStatus?: 'pending' | 'failed' | 'synced';
+  syncError?: string;
 }
 
 export interface AdvanceLoan {
@@ -60,6 +66,8 @@ export interface AdvanceLoan {
   repaymentDate?: string;
   timestamp: Date;
   synced: boolean;
+  syncStatus?: 'pending' | 'failed' | 'synced';
+  syncError?: string;
 }
 
 // Database class
@@ -122,7 +130,9 @@ export const dbOperations = {
     // Generate new cash reference if cash amount changed and is > 0
     const updates: Partial<CashCollection> = { 
       ...data, 
-      synced: false 
+      synced: false,
+      syncStatus: 'pending',
+      syncError: undefined
     };
     
     if (data.cashAmount > 0 && !data.cashReference) {
@@ -152,7 +162,7 @@ export const dbOperations = {
   },
 
   async updateLoanApplication(id: string, data: LoanApplication) {
-    return await db.loanApplications.update(Number(id), { ...data, synced: false });
+    return await db.loanApplications.update(Number(id), { ...data, synced: false, syncStatus: 'pending', syncError: undefined });
   },
 
   // Loan Disbursements
@@ -190,7 +200,7 @@ export const dbOperations = {
   },
 
   async updateAdvanceLoan(id: string, data: AdvanceLoan) {
-    return await db.advanceLoans.update(Number(id), { ...data, synced: false });
+    return await db.advanceLoans.update(Number(id), { ...data, synced: false, syncStatus: 'pending', syncError: undefined });
   },
 
   // User Credentials
@@ -236,6 +246,119 @@ export const dbOperations = {
       advanceLoans,
       total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length
     };
+  },
+
+  // Mark records as failed with error message
+  async markCashCollectionFailed(id: number, error: string): Promise<number> {
+    return await db.cashCollections.update(id, { syncStatus: 'failed', syncError: error });
+  },
+
+  async markLoanApplicationFailed(id: number, error: string): Promise<number> {
+    return await db.loanApplications.update(id, { syncStatus: 'failed', syncError: error });
+  },
+
+  async markLoanDisbursementFailed(id: number, error: string): Promise<number> {
+    return await db.loanDisbursements.update(id, { syncStatus: 'failed', syncError: error });
+  },
+
+  async markAdvanceLoanFailed(id: number, error: string): Promise<number> {
+    return await db.advanceLoans.update(id, { syncStatus: 'failed', syncError: error });
+  },
+
+  // Get failed records
+  async getFailedRecords(): Promise<{
+    cashCollections: CashCollection[];
+    loanApplications: LoanApplication[];
+    loanDisbursements: LoanDisbursement[];
+    advanceLoans: AdvanceLoan[];
+    total: number;
+  }> {
+    const [cashCollections, loanApplications, loanDisbursements, advanceLoans] = await Promise.all([
+      db.cashCollections.filter(record => record.syncStatus === 'failed').toArray(),
+      db.loanApplications.filter(record => record.syncStatus === 'failed').toArray(),
+      db.loanDisbursements.filter(record => record.syncStatus === 'failed').toArray(),
+      db.advanceLoans.filter(record => record.syncStatus === 'failed').toArray()
+    ]);
+
+    return {
+      cashCollections,
+      loanApplications,
+      loanDisbursements,
+      advanceLoans,
+      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length
+    };
+  },
+
+  // Clear synced records
+  async clearSyncedRecords(): Promise<number> {
+    const results = await Promise.all([
+      db.cashCollections.filter(record => record.synced === true).delete(),
+      db.loanApplications.filter(record => record.synced === true).delete(),
+      db.loanDisbursements.filter(record => record.synced === true).delete(),
+      db.advanceLoans.filter(record => record.synced === true).delete()
+    ]);
+    
+    return results.reduce((sum, count) => sum + count, 0);
+  },
+
+  // Get count of old pending records (older than 3 days)
+  async getOldPendingRecordsCount(): Promise<number> {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    
+    const counts = await Promise.all([
+      db.cashCollections.filter(record => 
+        record.synced === false && 
+        record.syncStatus !== 'failed' && 
+        record.timestamp < threeDaysAgo
+      ).count(),
+      db.loanApplications.filter(record => 
+        record.synced === false && 
+        record.syncStatus !== 'failed' && 
+        record.timestamp < threeDaysAgo
+      ).count(),
+      db.loanDisbursements.filter(record => 
+        record.synced === false && 
+        record.syncStatus !== 'failed' && 
+        record.timestamp < threeDaysAgo
+      ).count(),
+      db.advanceLoans.filter(record => 
+        record.synced === false && 
+        record.syncStatus !== 'failed' && 
+        record.timestamp < threeDaysAgo
+      ).count()
+    ]);
+    
+    return counts.reduce((sum, count) => sum + count, 0);
+  },
+
+  // Delete old pending records (older than 3 days)
+  async deleteOldPendingRecords(): Promise<number> {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    
+    const results = await Promise.all([
+      db.cashCollections.filter(record => 
+        record.synced === false && 
+        record.syncStatus !== 'failed' && 
+        record.timestamp < threeDaysAgo
+      ).delete(),
+      db.loanApplications.filter(record => 
+        record.synced === false && 
+        record.syncStatus !== 'failed' && 
+        record.timestamp < threeDaysAgo
+      ).delete(),
+      db.loanDisbursements.filter(record => 
+        record.synced === false && 
+        record.syncStatus !== 'failed' && 
+        record.timestamp < threeDaysAgo
+      ).delete(),
+      db.advanceLoans.filter(record => 
+        record.synced === false && 
+        record.syncStatus !== 'failed' && 
+        record.timestamp < threeDaysAgo
+      ).delete()
+    ]);
+    
+    return results.reduce((sum, count) => sum + count, 0);
   },
   
   // Add individual sync methods for each record type

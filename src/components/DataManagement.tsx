@@ -15,7 +15,7 @@ export function DataManagement() {
   const checkOldPendingRecords = async () => {
     try {
       const count = await dbOperations.getOldPendingRecordsCount();
-      setOldPendingCount(count.total);
+      setOldPendingCount(count);
     } catch (error) {
       console.error('Error checking old pending records:', error);
     }
@@ -27,7 +27,7 @@ export function DataManagement() {
       const result = await dbOperations.clearSyncedRecords();
       toast({
         title: '✅ Synced Records Cleared',
-        description: `Removed ${result.total} synced records from local storage`,
+        description: `Removed ${result} synced records from local storage`,
       });
     } catch (error: any) {
       toast({
@@ -46,7 +46,7 @@ export function DataManagement() {
       const result = await dbOperations.deleteOldPendingRecords();
       toast({
         title: '✅ Old Records Deleted',
-        description: `Removed ${result.total} pending records older than 3 days`,
+        description: `Removed ${result} pending records older than 3 days`,
       });
       setOldPendingCount(0);
     } catch (error: any) {

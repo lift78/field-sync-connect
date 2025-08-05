@@ -322,7 +322,12 @@ export class SyncService {
           console.log(`✅ Record ${record.id} marked as synced`);
         } else {
           failed++;
-          errors.push(`Cash sync failed for ${record.id}: ${cashResult?.error || 'Unknown error'}`);
+          const errorMsg = `Cash sync failed for ${record.id}: ${cashResult?.error || 'Unknown error'}`;
+          errors.push(errorMsg);
+          // Mark record as failed
+          if (record.id) {
+            await dbOperations.markCashCollectionFailed(record.id, cashResult?.error || 'Unknown error');
+          }
         }
   
       } catch (error: any) {
@@ -394,7 +399,12 @@ export class SyncService {
             // Response was OK but success is explicitly false
             console.error(`❌ Loan application sync failed for ${record.id}:`, result.error);
             failed++;
-            errors.push(`LoanApplication ${record.id}: ${result.error || 'Unknown error from server'}`);
+            const errorMsg = result.error || 'Unknown error from server';
+            errors.push(`LoanApplication ${record.id}: ${errorMsg}`);
+            // Mark record as failed
+            if (record.id) {
+              await dbOperations.markLoanApplicationFailed(record.id, errorMsg);
+            }
           }
         } else {
           // HTTP error occurred
@@ -425,7 +435,12 @@ export class SyncService {
           } else {
             console.error(`❌ Loan application sync failed for ${record.id}:`, result.error);
             failed++;
-            errors.push(`LoanApplication ${record.id}: ${result.error || `HTTP ${response.status}`}`);
+            const errorMsg = result.error || `HTTP ${response.status}`;
+            errors.push(`LoanApplication ${record.id}: ${errorMsg}`);
+            // Mark record as failed
+            if (record.id) {
+              await dbOperations.markLoanApplicationFailed(record.id, errorMsg);
+            }
           }
         }
   
