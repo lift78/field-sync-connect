@@ -363,7 +363,7 @@ function CalculatorContent({ onAmountSelect, currentAmount }: AdvanceCalculatorP
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Enter the current advance loan balance to see payment calculations. This calculator helps you understand how your payment will be split between principal and interest using the same logic as the backend system.
+            Enter the current advance loan balance to see payment calculations. This calculator helps you understand how your payment will be split between principal(adva paid) and interest(int paid) using the same logic as the backend system.
           </AlertDescription>
         </Alert>
       )}

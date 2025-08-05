@@ -969,7 +969,7 @@ export class SyncService {
 
 // Create singleton instance with safe environment variable access
 export const syncService = new SyncService(
-  (typeof process !== 'undefined' && process.env?.REACT_APP_API_BASE_URL) || 'http://127.0.0.1:8000'
+  (typeof process !== 'undefined' && process.env?.REACT_APP_API_BASE_URL) || 'https://api.liftipoa.com'
 );
 
 export default syncService;
