@@ -42,7 +42,6 @@ const toPreciseNumber = (value: string | number): number => {
 
 export function CashCollectionForm() {
   const [selectedMember, setSelectedMember] = useState<MemberBalance | null>(null);
-  const [manualEntry, setManualEntry] = useState(false);
   const [manualMemberData, setManualMemberData] = useState({
     memberId: '',
     memberName: '',
@@ -53,6 +52,34 @@ export function CashCollectionForm() {
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const { toast } = useToast();
 
+  // Auto-lookup member data when member ID is entered
+  const handleMemberIdChange = async (memberId: string) => {
+    setManualMemberData(prev => ({ ...prev, memberId }));
+    
+    if (memberId.trim()) {
+      try {
+        const member = await dbOperations.getMemberById(memberId.trim());
+        if (member) {
+          setSelectedMember(member);
+          setManualMemberData({
+            memberId: member.member_id,
+            memberName: member.name,
+            phone: member.phone || ''
+          });
+        } else {
+          setSelectedMember(null);
+          setManualMemberData(prev => ({ ...prev, memberName: '', phone: '' }));
+        }
+      } catch (error) {
+        // If lookup fails, just continue with manual entry
+        setSelectedMember(null);
+      }
+    } else {
+      setSelectedMember(null);
+      setManualMemberData({ memberId: '', memberName: '', phone: '' });
+    }
+  };
+
   const cashAmountNum = toPreciseNumber(cashAmount);
   const mpesaAmountNum = toPreciseNumber(mpesaAmount);
   const totalCollected = toPreciseNumber(cashAmountNum + mpesaAmountNum);
@@ -61,7 +88,7 @@ export function CashCollectionForm() {
   );
   const remainingAmount = toPreciseNumber(totalCollected - totalAllocated);
 
-  const hasValidData = (selectedMember || (manualEntry && manualMemberData.memberId && manualMemberData.memberName)) && (totalCollected > 0 || totalAllocated > 0);
+  const hasValidData = (manualMemberData.memberId && manualMemberData.memberName) && (totalCollected > 0 || totalAllocated > 0);
 
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
@@ -77,16 +104,10 @@ export function CashCollectionForm() {
 
   const handleSave = async () => {
     try {
-      const memberData = selectedMember || {
-        member_id: manualMemberData.memberId,
-        name: manualMemberData.memberName,
-        phone: manualMemberData.phone
-      };
-
-      if (!memberData.member_id || !memberData.name) {
+      if (!manualMemberData.memberId || !manualMemberData.memberName) {
         toast({
           title: "❌ Member Information Required",
-          description: "Please select a member or enter member details",
+          description: "Please enter member ID and name",
           variant: "destructive"
         });
         return;
@@ -95,15 +116,15 @@ export function CashCollectionForm() {
       const formattedAllocations = allocations
         .filter(allocation => allocation.amount > 0)
         .map(allocation => ({
-          memberId: memberData.member_id,
+          memberId: manualMemberData.memberId,
           type: allocation.type,
           amount: allocation.amount,
           reason: allocation.reason
         }));
 
       await dbOperations.addCashCollection({
-        memberId: memberData.member_id,
-        memberName: memberData.name,
+        memberId: manualMemberData.memberId,
+        memberName: manualMemberData.memberName,
         totalAmount: totalCollected,
         cashAmount: cashAmountNum,
         mpesaAmount: mpesaAmountNum,
@@ -113,12 +134,11 @@ export function CashCollectionForm() {
       
       toast({
         title: "✅ Cash Collection Saved",
-        description: `${formatAmount(totalCollected)} saved for ${memberData.name}`,
+        description: `${formatAmount(totalCollected)} saved for ${manualMemberData.memberName}`,
       });
       
       // Reset form
       setSelectedMember(null);
-      setManualEntry(false);
       setManualMemberData({ memberId: '', memberName: '', phone: '' });
       setCashAmount('');
       setMpesaAmount('');
@@ -137,82 +157,60 @@ export function CashCollectionForm() {
       {/* Member Selection */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Member Identification</CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setManualEntry(!manualEntry);
-                setSelectedMember(null);
-                setManualMemberData({ memberId: '', memberName: '', phone: '' });
-              }}
-            >
-              <UserPlus className="h-4 w-4 mr-2" />
-              {manualEntry ? 'Search Members' : 'Manual Entry'}
-            </Button>
-          </div>
+          <CardTitle>Member Identification</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!manualEntry ? (
-            <>
-              <MemberSearch
-                onMemberSelect={setSelectedMember}
-                selectedMember={selectedMember}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="member-id">Member ID</Label>
+              <Input
+                id="member-id"
+                placeholder="e.g., MEM/2024/0001"
+                value={manualMemberData.memberId}
+                onChange={(e) => handleMemberIdChange(e.target.value)}
               />
-              
-              {selectedMember && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                  <BalanceDisplay
-                    label="Savings"
-                    currentBalance={selectedMember.balances.savings_balance}
-                    newAmount={getSavingsAllocation()}
-                    type="savings"
-                  />
-                  <BalanceDisplay
-                    label="Loan Balance" 
-                    currentBalance={selectedMember.balances.loan_balance}
-                    newAmount={getLoanAllocation()}
-                    type="loan"
-                  />
-                  <BalanceDisplay
-                    label="Advance Balance"
-                    currentBalance={selectedMember.balances.advance_loan_balance}
-                    newAmount={getAdvanceAllocation()}
-                    type="advance"
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="member-id">Member ID</Label>
-                <Input
-                  id="member-id"
-                  placeholder="e.g., MEM/2024/0001"
-                  value={manualMemberData.memberId}
-                  onChange={(e) => setManualMemberData(prev => ({ ...prev, memberId: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="member-name">Member Name</Label>
-                <Input
-                  id="member-name"
-                  placeholder="Full name"
-                  value={manualMemberData.memberName}
-                  onChange={(e) => setManualMemberData(prev => ({ ...prev, memberName: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="member-phone">Phone Number</Label>
-                <Input
-                  id="member-phone"
-                  placeholder="+254..."
-                  value={manualMemberData.phone}
-                  onChange={(e) => setManualMemberData(prev => ({ ...prev, phone: e.target.value }))}
-                />
-              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-name">Member Name</Label>
+              <Input
+                id="member-name"
+                placeholder="Full name"
+                value={manualMemberData.memberName}
+                onChange={(e) => setManualMemberData(prev => ({ ...prev, memberName: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-phone">Phone Number</Label>
+              <Input
+                id="member-phone"
+                placeholder="+254..."
+                value={manualMemberData.phone}
+                onChange={(e) => setManualMemberData(prev => ({ ...prev, phone: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {/* Balance displays when member data is available */}
+          {selectedMember && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <BalanceDisplay
+                label="Savings"
+                currentBalance={selectedMember.balances.savings_balance}
+                newAmount={getSavingsAllocation()}
+                type="savings"
+              />
+              <BalanceDisplay
+                label="Loan Balance" 
+                currentBalance={selectedMember.balances.loan_balance}
+                newAmount={getLoanAllocation()}
+                type="loan"
+              />
+              <BalanceDisplay
+                label="Advance Balance"
+                currentBalance={selectedMember.balances.advance_loan_balance}
+                newAmount={getAdvanceAllocation()}
+                type="advance"
+              />
             </div>
           )}
         </CardContent>
@@ -260,123 +258,141 @@ export function CashCollectionForm() {
       </Card>
 
       {/* Allocations */}
-      {totalCollected > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Fund Allocation</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setAllocations([...allocations, { type: 'savings', amount: 0 }]);
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Allocation
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {allocations.map((allocation, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 p-3 border rounded-lg">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Fund Allocation</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setAllocations([...allocations, { type: 'savings', amount: 0 }]);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Allocation
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {allocations.map((allocation, index) => (
+            <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 p-3 border rounded-lg">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select
+                  value={allocation.type}
+                  onValueChange={(value) => {
+                    const newAllocations = [...allocations];
+                    newAllocations[index].type = value as Allocation['type'];
+                    setAllocations(newAllocations);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="savings">Savings</SelectItem>
+                    <SelectItem value="loan">Loan Payment</SelectItem>
+                    <SelectItem value="amount_for_advance_payment">Advance Payment</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Amount (KES)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0"
+                  value={allocation.amount || ''}
+                  onChange={(e) => {
+                    const newAllocations = [...allocations];
+                    newAllocations[index].amount = toPreciseNumber(e.target.value);
+                    setAllocations(newAllocations);
+                  }}
+                />
+              </div>
+
+              {allocation.type === 'other' && (
                 <div className="space-y-2">
-                  <Label>Type</Label>
+                  <Label>Reason</Label>
                   <Select
-                    value={allocation.type}
+                    value={allocation.reason || ''}
                     onValueChange={(value) => {
                       const newAllocations = [...allocations];
-                      newAllocations[index].type = value as Allocation['type'];
+                      newAllocations[index].reason = value;
                       setAllocations(newAllocations);
                     }}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select reason" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="savings">Savings</SelectItem>
-                      <SelectItem value="loan">Loan Payment</SelectItem>
-                      <SelectItem value="amount_for_advance_payment">Advance Payment</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      {allocationReasons.map((reason) => (
+                        <SelectItem key={reason} value={reason}>
+                          {reason}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+              )}
 
-                <div className="space-y-2">
-                  <Label>Amount (KES)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="0"
-                    value={allocation.amount || ''}
-                    onChange={(e) => {
-                      const newAllocations = [...allocations];
-                      newAllocations[index].amount = toPreciseNumber(e.target.value);
-                      setAllocations(newAllocations);
-                    }}
-                  />
-                </div>
-
-                {allocation.type === 'other' && (
-                  <div className="space-y-2">
-                    <Label>Reason</Label>
-                    <Select
-                      value={allocation.reason || ''}
-                      onValueChange={(value) => {
-                        const newAllocations = [...allocations];
-                        newAllocations[index].reason = value;
-                        setAllocations(newAllocations);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select reason" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allocationReasons.map((reason) => (
-                          <SelectItem key={reason} value={reason}>
-                            {reason}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="flex items-end">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => {
-                      setAllocations(allocations.filter((_, i) => i !== index));
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+              <div className="flex items-end">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setAllocations(allocations.filter((_, i) => i !== index));
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
-            ))}
+            </div>
+          ))}
 
-            {allocations.length > 0 && (
-              <div className="space-y-2 border-t pt-4">
-                <div className="flex justify-between text-sm">
-                  <span>Total Allocated:</span>
-                  <span className="font-medium">{formatAmount(totalAllocated)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Remaining Amount:</span>
-                  <span className={`font-medium ${remainingAmount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatAmount(remainingAmount)}
-                  </span>
-                </div>
-                {remainingAmount < 0 && (
-                  <div className="text-sm text-red-600">
-                    ⚠️ Allocation exceeds collected amount
-                  </div>
-                )}
+          {allocations.length > 0 && (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex justify-between text-sm">
+                <span>Total Allocated:</span>
+                <span className="font-medium">{formatAmount(totalAllocated)}</span>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div className="flex justify-between text-sm">
+                <span>Remaining Amount:</span>
+                <span className={`font-medium ${remainingAmount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatAmount(remainingAmount)}
+                </span>
+              </div>
+              {remainingAmount < 0 && (
+                <div className="text-sm text-red-600">
+                  ⚠️ Allocation exceeds collected amount
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {totalCollected > 0 && allocations.length > 0 && (
+        <div className="space-y-2 border-t pt-4">
+          <div className="flex justify-between text-sm">
+            <span>Total Allocated:</span>
+            <span className="font-medium">{formatAmount(totalAllocated)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span>Remaining Amount:</span>
+            <span className={`font-medium ${remainingAmount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {formatAmount(remainingAmount)}
+            </span>
+          </div>
+          {remainingAmount < 0 && (
+            <div className="text-sm text-red-600">
+              ⚠️ Allocation exceeds collected amount
+            </div>
+          )}
+        </div>
       )}
 
       <Button 
