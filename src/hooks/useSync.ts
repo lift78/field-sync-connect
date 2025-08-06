@@ -40,7 +40,7 @@ export function useSync() {
       
       if (result.success) {
         const totalSynced = Object.values(result.summary)
-          .reduce((sum, recordType) => sum + recordType.success, 0);
+          .reduce((sum: number, recordType: any) => sum + (typeof recordType.success === 'number' ? recordType.success : 0), 0);
 
         toast({
           title: '✅ Sync Complete',

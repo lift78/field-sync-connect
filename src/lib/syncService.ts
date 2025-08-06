@@ -311,7 +311,12 @@ export class SyncService {
           const allocJson = await allocRes.json();
           if (!allocRes.ok || !allocJson.success) {
             console.warn(`⚠️ Allocation sync failed for ${record.id}`, allocJson);
-            errors.push(`Allocation failed for ${record.id}: ${allocJson.error || 'Unknown error'}`);
+            const errorMsg = `${allocJson.error || 'Unknown error'}`;
+            errors.push(`Allocation failed for ${record.id}: ${errorMsg}`);
+            // Mark record as failed
+            if (record.id) {
+              await dbOperations.markCashCollectionFailed(record.id, errorMsg);
+            }
             failed++;
             continue; // Skip marking as synced
           } else {
@@ -340,6 +345,10 @@ export class SyncService {
         failed++;
         errors.push(`Exception for ${record.id}: ${error.message}`);
         console.error(`💥 Exception during sync for ${record.id}:`, error);
+        // Mark record as failed
+        if (record.id) {
+          await dbOperations.markCashCollectionFailed(record.id, error.message);
+        }
       }
     }
   
@@ -421,7 +430,12 @@ export class SyncService {
             // Can't parse JSON, use HTTP status as error
             console.error(`❌ Loan application sync failed for ${record.id}: HTTP ${response.status}`);
             failed++;
-            errors.push(`LoanApplication ${record.id}: HTTP ${response.status} ${response.statusText}`);
+            const errorMsg = `HTTP ${response.status} ${response.statusText}`;
+            errors.push(`LoanApplication ${record.id}: ${errorMsg}`);
+            // Mark record as failed
+            if (record.id) {
+              await dbOperations.markLoanApplicationFailed(record.id, errorMsg);
+            }
             continue;
           }
   
@@ -454,6 +468,10 @@ export class SyncService {
         failed++;
         errors.push(`LoanApplication ${record.id}: ${error.message}`);
         console.error(`💥 Exception during loan application sync for ${record.id}:`, error);
+        // Mark record as failed
+        if (record.id) {
+          await dbOperations.markLoanApplicationFailed(record.id, error.message);
+        }
       }
     }
   
@@ -522,7 +540,12 @@ export class SyncService {
             // Response was OK but success is explicitly false
             console.error(`❌ Advance loan sync failed for ${record.id}:`, result.error);
             failed++;
-            errors.push(`AdvanceLoan ${record.id}: ${result.error || 'Unknown error from server'}`);
+            const errorMsg = result.error || 'Unknown error from server';
+            errors.push(`AdvanceLoan ${record.id}: ${errorMsg}`);
+            // Mark record as failed
+            if (record.id) {
+              await dbOperations.markAdvanceLoanFailed(record.id, errorMsg);
+            }
           }
         } else {
           // HTTP error occurred
@@ -553,7 +576,12 @@ export class SyncService {
           } else {
             console.error(`❌ Advance loan sync failed for ${record.id}:`, result.error);
             failed++;
-            errors.push(`AdvanceLoan ${record.id}: ${result.error || `HTTP ${response.status}`}`);
+            const errorMsg = result.error || `HTTP ${response.status}`;
+            errors.push(`AdvanceLoan ${record.id}: ${errorMsg}`);
+            // Mark record as failed
+            if (record.id) {
+              await dbOperations.markAdvanceLoanFailed(record.id, errorMsg);
+            }
           }
         }
 
@@ -561,6 +589,10 @@ export class SyncService {
         failed++;
         errors.push(`AdvanceLoan ${record.id}: ${error.message}`);
         console.error(`💥 Exception during advance loan sync for ${record.id}:`, error);
+        // Mark record as failed
+        if (record.id) {
+          await dbOperations.markAdvanceLoanFailed(record.id, error.message);
+        }
       }
     }
 
@@ -627,7 +659,12 @@ export class SyncService {
           } else {
             console.error(`❌ Loan disbursement sync failed for ${record.id}:`, result.error);
             failed++;
-            errors.push(`LoanDisbursement ${record.id}: ${result.error || 'Unknown error from server'}`);
+            const errorMsg = result.error || 'Unknown error from server';
+            errors.push(`LoanDisbursement ${record.id}: ${errorMsg}`);
+            // Mark record as failed
+            if (record.id) {
+              await dbOperations.markLoanDisbursementFailed(record.id, errorMsg);
+            }
           }
         } else {
           // HTTP error occurred
@@ -637,7 +674,12 @@ export class SyncService {
           } catch (jsonError) {
             console.error(`❌ Loan disbursement sync failed for ${record.id}: HTTP ${response.status}`);
             failed++;
-            errors.push(`LoanDisbursement ${record.id}: HTTP ${response.status} ${response.statusText}`);
+            const errorMsg = `HTTP ${response.status} ${response.statusText}`;
+            errors.push(`LoanDisbursement ${record.id}: ${errorMsg}`);
+            // Mark record as failed
+            if (record.id) {
+              await dbOperations.markLoanDisbursementFailed(record.id, errorMsg);
+            }
             continue;
           }
   
@@ -657,7 +699,12 @@ export class SyncService {
           } else {
             console.error(`❌ Loan disbursement sync failed for ${record.id}:`, result.error);
             failed++;
-            errors.push(`LoanDisbursement ${record.id}: ${result.error || `HTTP ${response.status}`}`);
+            const errorMsg = result.error || `HTTP ${response.status}`;
+            errors.push(`LoanDisbursement ${record.id}: ${errorMsg}`);
+            // Mark record as failed
+            if (record.id) {
+              await dbOperations.markLoanDisbursementFailed(record.id, errorMsg);
+            }
           }
         }
   
@@ -665,6 +712,10 @@ export class SyncService {
         failed++;
         errors.push(`LoanDisbursement ${record.id}: ${error.message}`);
         console.error(`💥 Exception during loan disbursement sync for ${record.id}:`, error);
+        // Mark record as failed
+        if (record.id) {
+          await dbOperations.markLoanDisbursementFailed(record.id, error.message);
+        }
       }
     }
   
