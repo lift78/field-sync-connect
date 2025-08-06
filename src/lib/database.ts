@@ -7,6 +7,7 @@ export interface Allocation {
   amount: number;
   reason?: string;
 }
+
 export interface UserCredentials {
   id?: number;
   username: string;
@@ -99,14 +100,14 @@ export class FieldOfficerDB extends Dexie {
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(5).stores({
-      // Removed 'synced' from indexes since it's boolean and causes TypeScript errors
+    this.version(6).stores({
+      // Enhanced indexing for better search performance
       cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp',
       loanDisbursements: '++id, loanId, amountType, customAmount, timestamp',
       advanceLoans: '++id, memberId, memberName, amount, timestamp',
       userCredentials: '++id, username, lastLogin',
-      memberBalances: '++id, member_id, name, phone, last_updated'
+      memberBalances: '++id, member_id, name, phone, group_name, last_updated'
     });
   }
 }
@@ -120,17 +121,27 @@ function generateCashReference(): string {
   return `CASH-${timestamp}-${random}`.toUpperCase();
 }
 
+// Helper function to generate allocation ID
+function generateAllocationId(): string {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 8);
+  return `ALLOC-${timestamp}-${random}`.toUpperCase();
+}
+
 export const dbOperations = {
-  // Cash Collections
+  // =============================================================================
+  // CASH COLLECTIONS
+  // =============================================================================
   async addCashCollection(data: Omit<CashCollection, 'id' | 'synced' | 'allocationId' | 'cashReference'>) {
-    const allocationId = `ALLOC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`.toUpperCase();
+    const allocationId = generateAllocationId();
     const cashReference = data.cashAmount > 0 ? generateCashReference() : undefined;
     
     return await db.cashCollections.add({ 
       ...data, 
       allocationId,
       cashReference,
-      synced: false 
+      synced: false,
+      syncStatus: 'pending'
     });
   },
 
@@ -143,11 +154,21 @@ export const dbOperations = {
   },
 
   async markCashCollectionSynced(id: number): Promise<number> {
-    return await db.cashCollections.update(id, { synced: true });
+    return await db.cashCollections.update(id, { 
+      synced: true, 
+      syncStatus: 'synced',
+      syncError: undefined
+    });
+  },
+
+  async markCashCollectionFailed(id: number, error: string): Promise<number> {
+    return await db.cashCollections.update(id, { 
+      syncStatus: 'failed', 
+      syncError: error 
+    });
   },
 
   async updateCashCollection(id: string, data: CashCollection) {
-    // Generate new cash reference if cash amount changed and is > 0
     const updates: Partial<CashCollection> = { 
       ...data, 
       synced: false,
@@ -164,9 +185,15 @@ export const dbOperations = {
     return await db.cashCollections.update(Number(id), updates);
   },
 
-  // Loan Applications
+  // =============================================================================
+  // LOAN APPLICATIONS
+  // =============================================================================
   async addLoanApplication(data: Omit<LoanApplication, 'id' | 'synced'>) {
-    return await db.loanApplications.add({ ...data, synced: false });
+    return await db.loanApplications.add({ 
+      ...data, 
+      synced: false,
+      syncStatus: 'pending'
+    });
   },
 
   async getLoanApplications() {
@@ -178,16 +205,38 @@ export const dbOperations = {
   },
 
   async markLoanApplicationSynced(id: number): Promise<number> {
-    return await db.loanApplications.update(id, { synced: true });
+    return await db.loanApplications.update(id, { 
+      synced: true,
+      syncStatus: 'synced',
+      syncError: undefined
+    });
+  },
+
+  async markLoanApplicationFailed(id: number, error: string): Promise<number> {
+    return await db.loanApplications.update(id, { 
+      syncStatus: 'failed', 
+      syncError: error 
+    });
   },
 
   async updateLoanApplication(id: string, data: LoanApplication) {
-    return await db.loanApplications.update(Number(id), { ...data, synced: false, syncStatus: 'pending', syncError: undefined });
+    return await db.loanApplications.update(Number(id), { 
+      ...data, 
+      synced: false, 
+      syncStatus: 'pending', 
+      syncError: undefined 
+    });
   },
 
-  // Loan Disbursements
+  // =============================================================================
+  // LOAN DISBURSEMENTS
+  // =============================================================================
   async addLoanDisbursement(data: Omit<LoanDisbursement, 'id' | 'synced'>) {
-    return await db.loanDisbursements.add({ ...data, synced: false });
+    return await db.loanDisbursements.add({ 
+      ...data, 
+      synced: false,
+      syncStatus: 'pending'
+    });
   },
 
   async getLoanDisbursements() {
@@ -199,12 +248,29 @@ export const dbOperations = {
   },
 
   async markLoanDisbursementSynced(id: number): Promise<number> {
-    return await db.loanDisbursements.update(id, { synced: true });
+    return await db.loanDisbursements.update(id, { 
+      synced: true,
+      syncStatus: 'synced',
+      syncError: undefined
+    });
   },
 
-  // Advance Loans
+  async markLoanDisbursementFailed(id: number, error: string): Promise<number> {
+    return await db.loanDisbursements.update(id, { 
+      syncStatus: 'failed', 
+      syncError: error 
+    });
+  },
+
+  // =============================================================================
+  // ADVANCE LOANS
+  // =============================================================================
   async addAdvanceLoan(data: Omit<AdvanceLoan, 'id' | 'synced'>) {
-    return await db.advanceLoans.add({ ...data, synced: false });
+    return await db.advanceLoans.add({ 
+      ...data, 
+      synced: false,
+      syncStatus: 'pending'
+    });
   },
 
   async getAdvanceLoans() {
@@ -216,19 +282,37 @@ export const dbOperations = {
   },
 
   async markAdvanceLoanSynced(id: number): Promise<number> {
-    return await db.advanceLoans.update(id, { synced: true });
+    return await db.advanceLoans.update(id, { 
+      synced: true,
+      syncStatus: 'synced',
+      syncError: undefined
+    });
+  },
+
+  async markAdvanceLoanFailed(id: number, error: string): Promise<number> {
+    return await db.advanceLoans.update(id, { 
+      syncStatus: 'failed', 
+      syncError: error 
+    });
   },
 
   async updateAdvanceLoan(id: string, data: AdvanceLoan) {
-    return await db.advanceLoans.update(Number(id), { ...data, synced: false, syncStatus: 'pending', syncError: undefined });
+    return await db.advanceLoans.update(Number(id), { 
+      ...data, 
+      synced: false, 
+      syncStatus: 'pending', 
+      syncError: undefined 
+    });
   },
 
-  // User Credentials
+  // =============================================================================
+  // USER CREDENTIALS
+  // =============================================================================
   async getUserCredentials() {
     return await db.userCredentials.limit(1).first();
   },
 
-  async saveUserCredentials(credentials: { username: string; password: string }) {
+  async saveUserCredentials(credentials: { username: string; password: string; token?: string }) {
     await db.userCredentials.clear();
     return await db.userCredentials.add({
       ...credentials,
@@ -236,15 +320,271 @@ export const dbOperations = {
     });
   },
 
-  async updateUserCredentials(credentials: { username: string; password: string }) {
+  async updateUserCredentials(credentials: { username: string; password: string; token?: string }) {
     const existing = await db.userCredentials.limit(1).first();
     if (existing) {
-      return await db.userCredentials.update(existing.id!, credentials);
+      return await db.userCredentials.update(existing.id!, {
+        ...credentials,
+        lastLogin: new Date()
+      });
     }
     return this.saveUserCredentials(credentials);
   },
 
-  // Get all unsynced records
+  // =============================================================================
+  // MEMBER BALANCES - ENHANCED
+  // =============================================================================
+  
+  /**
+   * Store member balances (bulk operation - clears and replaces all)
+   */
+  async storeMemberBalances(members: Omit<MemberBalance, 'id'>[]) {
+    try {
+      const now = new Date().toISOString();
+      const membersWithTimestamp = members.map(member => ({
+        ...member,
+        last_updated: now
+      }));
+      
+      // Clear existing data and store new
+      await db.memberBalances.clear();
+      await db.memberBalances.bulkAdd(membersWithTimestamp);
+      
+      return membersWithTimestamp.length;
+    } catch (error) {
+      console.error('Error storing member balances:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Add individual member balance
+   */
+  async addMemberBalance(member: Omit<MemberBalance, 'id'>): Promise<number> {
+    try {
+      return await db.memberBalances.add({
+        ...member,
+        last_updated: member.last_updated || new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error adding member balance:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update existing member balance
+   */
+  async updateMemberBalance(memberId: string, updates: Partial<Omit<MemberBalance, 'id'>>): Promise<number> {
+    try {
+      const existingMember = await db.memberBalances.where('member_id').equals(memberId).first();
+      if (!existingMember) {
+        throw new Error(`Member ${memberId} not found`);
+      }
+      
+      return await db.memberBalances.update(existingMember.id!, {
+        ...updates,
+        last_updated: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error updating member balance:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Enhanced search with better performance
+   */
+  async searchMembers(query: string): Promise<MemberBalance[]> {
+    try {
+      if (!query.trim()) return [];
+      
+      const queryLower = query.toLowerCase().trim();
+      
+      // Use Dexie's where clause for better performance on indexed fields
+      let results = await db.memberBalances
+        .where('member_id').startsWithIgnoreCase(query)
+        .or('name').startsWithIgnoreCase(query)
+        .or('phone').startsWith(query)
+        .limit(10)
+        .toArray();
+
+      // If no results with startsWith, try contains search
+      if (results.length === 0) {
+        results = await db.memberBalances
+          .filter(member => 
+            member.member_id.toLowerCase().includes(queryLower) ||
+            member.name.toLowerCase().includes(queryLower) ||
+            member.phone.includes(query.trim())
+          )
+          .limit(10)
+          .toArray();
+      }
+
+      return results;
+    } catch (error) {
+      console.error('Error searching members:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get member by ID
+   */
+  async getMemberById(memberId: string): Promise<MemberBalance | undefined> {
+    try {
+      return await db.memberBalances.where('member_id').equals(memberId).first();
+    } catch (error) {
+      console.error('Error getting member by ID:', error);
+      return undefined;
+    }
+  },
+
+  /**
+   * Get members by multiple IDs (batch operation)
+   */
+  async getMembersByIds(memberIds: string[]): Promise<MemberBalance[]> {
+    try {
+      return await db.memberBalances.where('member_id').anyOf(memberIds).toArray();
+    } catch (error) {
+      console.error('Error getting members by IDs:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get all members with optional sorting
+   */
+  async getAllMembers(sortBy: 'name' | 'member_id' | 'last_updated' = 'name'): Promise<MemberBalance[]> {
+    try {
+      return await db.memberBalances.orderBy(sortBy).toArray();
+    } catch (error) {
+      console.error('Error getting all members:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get member count
+   */
+  async getMemberCount(): Promise<number> {
+    try {
+      return await db.memberBalances.count();
+    } catch (error) {
+      console.error('Error getting member count:', error);
+      return 0;
+    }
+  },
+
+  /**
+   * Get members with low balances (for alerts)
+   */
+  async getMembersWithLowBalances(savingsThreshold: number = 1000): Promise<MemberBalance[]> {
+    try {
+      return await db.memberBalances
+        .filter(member => member.balances.savings_balance < savingsThreshold)
+        .toArray();
+    } catch (error) {
+      console.error('Error getting members with low balances:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get members with outstanding loans
+   */
+  async getMembersWithOutstandingLoans(): Promise<MemberBalance[]> {
+    try {
+      return await db.memberBalances
+        .filter(member => 
+          member.balances.loan_balance > 0 || 
+          member.balances.advance_loan_balance > 0
+        )
+        .toArray();
+    } catch (error) {
+      console.error('Error getting members with outstanding loans:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get member balance summary statistics
+   */
+  async getMemberBalanceSummary(): Promise<{
+    totalMembers: number;
+    totalSavings: number;
+    totalLoanBalance: number;
+    totalAdvanceBalance: number;
+    totalUnallocatedFunds: number;
+    averageSavings: number;
+  }> {
+    try {
+      const members = await this.getAllMembers();
+      
+      if (members.length === 0) {
+        return {
+          totalMembers: 0,
+          totalSavings: 0,
+          totalLoanBalance: 0,
+          totalAdvanceBalance: 0,
+          totalUnallocatedFunds: 0,
+          averageSavings: 0
+        };
+      }
+
+      const summary = members.reduce(
+        (acc, member) => ({
+          totalSavings: acc.totalSavings + member.balances.savings_balance,
+          totalLoanBalance: acc.totalLoanBalance + member.balances.loan_balance,
+          totalAdvanceBalance: acc.totalAdvanceBalance + member.balances.advance_loan_balance,
+          totalUnallocatedFunds: acc.totalUnallocatedFunds + member.balances.unallocated_funds,
+        }),
+        { totalSavings: 0, totalLoanBalance: 0, totalAdvanceBalance: 0, totalUnallocatedFunds: 0 }
+      );
+
+      return {
+        totalMembers: members.length,
+        ...summary,
+        averageSavings: summary.totalSavings / members.length
+      };
+    } catch (error) {
+      console.error('Error getting member balance summary:', error);
+      return {
+        totalMembers: 0,
+        totalSavings: 0,
+        totalLoanBalance: 0,
+        totalAdvanceBalance: 0,
+        totalUnallocatedFunds: 0,
+        averageSavings: 0
+      };
+    }
+  },
+
+  /**
+   * Clean up old member records (if needed)
+   */
+  async cleanupOldMemberRecords(daysOld: number = 30): Promise<number> {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+      const cutoffISOString = cutoffDate.toISOString();
+      
+      return await db.memberBalances
+        .filter(member => member.last_updated < cutoffISOString)
+        .delete();
+    } catch (error) {
+      console.error('Error cleaning up old member records:', error);
+      return 0;
+    }
+  },
+
+  // =============================================================================
+  // BULK OPERATIONS
+  // =============================================================================
+
+  /**
+   * Get all unsynced records across all tables
+   */
   async getAllUnsyncedRecords(): Promise<{
     cashCollections: CashCollection[];
     loanApplications: LoanApplication[];
@@ -268,24 +608,9 @@ export const dbOperations = {
     };
   },
 
-  // Mark records as failed with error message
-  async markCashCollectionFailed(id: number, error: string): Promise<number> {
-    return await db.cashCollections.update(id, { syncStatus: 'failed', syncError: error });
-  },
-
-  async markLoanApplicationFailed(id: number, error: string): Promise<number> {
-    return await db.loanApplications.update(id, { syncStatus: 'failed', syncError: error });
-  },
-
-  async markLoanDisbursementFailed(id: number, error: string): Promise<number> {
-    return await db.loanDisbursements.update(id, { syncStatus: 'failed', syncError: error });
-  },
-
-  async markAdvanceLoanFailed(id: number, error: string): Promise<number> {
-    return await db.advanceLoans.update(id, { syncStatus: 'failed', syncError: error });
-  },
-
-  // Get failed records
+  /**
+   * Get all failed records across all tables
+   */
   async getFailedRecords(): Promise<{
     cashCollections: CashCollection[];
     loanApplications: LoanApplication[];
@@ -309,7 +634,9 @@ export const dbOperations = {
     };
   },
 
-  // Clear synced records
+  /**
+   * Clear all synced records to free up space
+   */
   async clearSyncedRecords(): Promise<number> {
     const results = await Promise.all([
       db.cashCollections.filter(record => record.synced === true).delete(),
@@ -321,134 +648,86 @@ export const dbOperations = {
     return results.reduce((sum, count) => sum + count, 0);
   },
 
-  // Get count of old pending records (older than 3 days)
-  async getOldPendingRecordsCount(): Promise<number> {
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  /**
+   * Get count of old pending records (older than specified days)
+   */
+  async getOldPendingRecordsCount(daysOld: number = 3): Promise<number> {
+    const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
     
     const counts = await Promise.all([
       db.cashCollections.filter(record => 
         record.synced === false && 
         record.syncStatus !== 'failed' && 
-        record.timestamp < threeDaysAgo
+        record.timestamp < cutoffDate
       ).count(),
       db.loanApplications.filter(record => 
         record.synced === false && 
         record.syncStatus !== 'failed' && 
-        record.timestamp < threeDaysAgo
+        record.timestamp < cutoffDate
       ).count(),
       db.loanDisbursements.filter(record => 
         record.synced === false && 
         record.syncStatus !== 'failed' && 
-        record.timestamp < threeDaysAgo
+        record.timestamp < cutoffDate
       ).count(),
       db.advanceLoans.filter(record => 
         record.synced === false && 
         record.syncStatus !== 'failed' && 
-        record.timestamp < threeDaysAgo
+        record.timestamp < cutoffDate
       ).count()
     ]);
     
     return counts.reduce((sum, count) => sum + count, 0);
   },
 
-  // Delete old pending records (older than 3 days)
-  async deleteOldPendingRecords(): Promise<number> {
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  /**
+   * Delete old pending records (older than specified days)
+   */
+  async deleteOldPendingRecords(daysOld: number = 3): Promise<number> {
+    const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
     
     const results = await Promise.all([
       db.cashCollections.filter(record => 
         record.synced === false && 
         record.syncStatus !== 'failed' && 
-        record.timestamp < threeDaysAgo
+        record.timestamp < cutoffDate
       ).delete(),
       db.loanApplications.filter(record => 
         record.synced === false && 
         record.syncStatus !== 'failed' && 
-        record.timestamp < threeDaysAgo
+        record.timestamp < cutoffDate
       ).delete(),
       db.loanDisbursements.filter(record => 
         record.synced === false && 
         record.syncStatus !== 'failed' && 
-        record.timestamp < threeDaysAgo
+        record.timestamp < cutoffDate
       ).delete(),
       db.advanceLoans.filter(record => 
         record.synced === false && 
         record.syncStatus !== 'failed' && 
-        record.timestamp < threeDaysAgo
+        record.timestamp < cutoffDate
       ).delete()
     ]);
     
     return results.reduce((sum, count) => sum + count, 0);
   },
+
+  // =============================================================================
+  // PLACEHOLDER SYNC METHODS (for future implementation)
+  // =============================================================================
   
-  // Add individual sync methods for each record type
   async syncSingleLoanApplication(record: LoanApplication): Promise<{success: boolean; error?: string; result?: any}> {
-    // This method can be used by the sync service if needed
+    // This method can be implemented by the sync service
     return { success: true };
   },
   
   async syncSingleLoanDisbursement(record: LoanDisbursement): Promise<{success: boolean; error?: string; result?: any}> {
-    // This method can be used by the sync service if needed
+    // This method can be implemented by the sync service
     return { success: true };
   },
   
   async syncSingleAdvanceLoan(record: AdvanceLoan): Promise<{success: boolean; error?: string; result?: any}> {
-    // This method can be used by the sync service if needed
+    // This method can be implemented by the sync service
     return { success: true };
-  },
-
-  // Member Balance operations
-  async storeMemberBalances(members: Omit<MemberBalance, 'id'>[]) {
-    try {
-      const now = new Date().toISOString();
-      const membersWithTimestamp = members.map(member => ({
-        ...member,
-        last_updated: now
-      }));
-      
-      // Clear existing data and store new
-      await db.memberBalances.clear();
-      await db.memberBalances.bulkAdd(membersWithTimestamp);
-    } catch (error) {
-      console.error('Error storing member balances:', error);
-      throw error;
-    }
-  },
-
-  async searchMembers(query: string): Promise<MemberBalance[]> {
-    try {
-      if (!query.trim()) return [];
-      
-      const queryLower = query.toLowerCase();
-      return await db.memberBalances
-        .filter(member => 
-          member.member_id.toLowerCase().includes(queryLower) ||
-          member.name.toLowerCase().includes(queryLower) ||
-          member.phone.includes(query)
-        )
-        .limit(10)
-        .toArray();
-    } catch (error) {
-      console.error('Error searching members:', error);
-      return [];
-    }
-  },
-
-  async getMemberById(memberId: string): Promise<MemberBalance | undefined> {
-    try {
-      return await db.memberBalances.where('member_id').equals(memberId).first();
-    } catch (error) {
-      console.error('Error getting member by ID:', error);
-      return undefined;
-    }
-  },
-
-  async getAllMembers(): Promise<MemberBalance[]> {
-    try {
-      return await db.memberBalances.orderBy('name').toArray();
-    } catch (error) {
-      console.error('Error getting all members:', error);
-      return [];
-    }
   }
 };

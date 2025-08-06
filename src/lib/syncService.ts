@@ -1,6 +1,7 @@
 // Import the interfaces from your database file
 import { CashCollection, LoanApplication, LoanDisbursement, AdvanceLoan, Allocation } from './database';
 import { dbOperations } from './database';
+import { memberDataService } from './memberDataService';
 
 interface SyncEndpoints {
   cashCollections: string;
@@ -72,12 +73,14 @@ export class SyncService {
         console.error('No stored credentials found');
         return false;
       }
-
+  
       // Check if we already have a valid token
       if (this.authToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
+        // Share auth token with member data service
+        memberDataService.setAuthToken(this.authToken, this.tokenExpiry);
         return true;
       }
-
+  
       // Attempt login
       const response = await fetch(this.endpoints.login, {
         method: 'POST',
@@ -90,25 +93,28 @@ export class SyncService {
           password: credentials.password
         })
       });
-
+  
       if (!response.ok) {
         console.error(`Authentication failed: ${response.status} ${response.statusText}`);
         return false;
       }
-
+  
       const authResult: AuthResponse = await response.json();
-
+  
       if (authResult.success && authResult.token) {
         this.authToken = authResult.token;
         // Set token expiry to 23 hours from now (assuming 24h token validity)
         this.tokenExpiry = Date.now() + (23 * 60 * 60 * 1000);
+        
+        // Share auth token with member data service
+        memberDataService.setAuthToken(this.authToken, this.tokenExpiry);
         
         // Update last login time
         await dbOperations.updateUserCredentials({
           username: credentials.username,
           password: credentials.password
         });
-
+  
         console.log('Authentication successful');
         return true;
       } else {
@@ -699,79 +705,129 @@ export class SyncService {
   }
 
   async syncAllData(): Promise<{
-  success: boolean;
-  summary: {
-    cashCollections: { success: number; failed: number };
-    loanApplications: { success: number; failed: number };
-    loanDisbursements: { success: number; failed: number };
-    advanceLoans: { success: number; failed: number };
-  };
-  errors: string[];
-}> {
+    success: boolean;
+    summary: {
+      cashCollections: { success: number; failed: number };
+      loanApplications: { success: number; failed: number };
+      loanDisbursements: { success: number; failed: number };
+      advanceLoans: { success: number; failed: number };
+      memberData?: { success: boolean; totalMembers: number; totalMeetings: number; error?: string };
+    };
+    errors: string[];
+  }> {
+    
+    // Authenticate first
+    const authSuccess = await this.authenticate();
+    if (!authSuccess) {
+      throw new Error('Authentication failed - cannot sync');
+    }
   
-  // Authenticate first
-  const authSuccess = await this.authenticate();
-  if (!authSuccess) {
-    throw new Error('Authentication failed - cannot sync');
-  }
-
-  if (!(await this.isOnline())) {
-    throw new Error('Offline — cannot sync.');
-  }
-
-  const unsynced = await dbOperations.getAllUnsyncedRecords();
-  console.log("🧾 Unsynced cashCollections count:", unsynced.cashCollections?.length);
-  console.log("🧾 Unsynced loanApplications count:", unsynced.loanApplications?.length);
-  console.log("🧾 Unsynced advanceLoans count:", unsynced.advanceLoans?.length);
-  console.log("🧾 Unsynced object:", unsynced);
-
+    if (!(await this.isOnline())) {
+      throw new Error('Offline — cannot sync.');
+    }
   
-  // Initialize summary
-  const summary = {
-    cashCollections: { success: 0, failed: 0 },
-    loanApplications: { success: 0, failed: 0 },
-    loanDisbursements: { success: 0, failed: 0 },
-    advanceLoans: { success: 0, failed: 0 }
-  };
-
-  if (unsynced.total === 0) {
-    return { success: true, summary, errors: [] };
+    // Sync member data first (since other operations depend on current member data)
+    console.log('🔄 Starting member data sync...');
+    const memberDataResult = await memberDataService.syncMemberData();
+    
+    if (memberDataResult.success) {
+      console.log(`✅ Member data sync completed: ${memberDataResult.totalMembers} members, ${memberDataResult.totalMeetings} meetings`);
+    } else {
+      console.warn('⚠️ Member data sync failed:', memberDataResult.error);
+    }
+  
+    const unsynced = await dbOperations.getAllUnsyncedRecords();
+    console.log("🧾 Unsynced cashCollections count:", unsynced.cashCollections?.length);
+    console.log("🧾 Unsynced loanApplications count:", unsynced.loanApplications?.length);
+    console.log("🧾 Unsynced advanceLoans count:", unsynced.advanceLoans?.length);
+    console.log("🧾 Unsynced object:", unsynced);
+  
+    
+    // Initialize summary
+    const summary = {
+      cashCollections: { success: 0, failed: 0 },
+      loanApplications: { success: 0, failed: 0 },
+      loanDisbursements: { success: 0, failed: 0 },
+      advanceLoans: { success: 0, failed: 0 },
+      memberData: memberDataResult
+    };
+  
+    if (unsynced.total === 0) {
+      return { success: memberDataResult.success, summary, errors: memberDataResult.error ? [memberDataResult.error] : [] };
+    }
+  
+    // Continue with existing sync operations...
+    const cashCollectionsResult = await this.syncCashCollections(unsynced.cashCollections || []);
+    summary.cashCollections = { success: cashCollectionsResult.success, failed: cashCollectionsResult.failed };
+  
+    const loanApplicationsResult = await this.syncLoanApplications(unsynced.loanApplications || []);
+    summary.loanApplications = { success: loanApplicationsResult.success, failed: loanApplicationsResult.failed };
+  
+    const advanceLoansResult = await this.syncAdvanceLoans(unsynced.advanceLoans || []);
+    summary.advanceLoans = { success: advanceLoansResult.success, failed: advanceLoansResult.failed };
+  
+    const disbursementsResult = await this.syncLoanDisbursements(unsynced.loanDisbursements || []);
+    summary.loanDisbursements = { success: disbursementsResult.success, failed: disbursementsResult.failed };
+  
+    const errors = [
+      ...cashCollectionsResult.errors,
+      ...loanApplicationsResult.errors,
+      ...advanceLoansResult.errors,
+      ...disbursementsResult.errors
+    ];
+  
+    // Add member data error if it failed
+    if (memberDataResult.error) {
+      errors.push(`Member data sync: ${memberDataResult.error}`);
+    }
+  
+    const totalFailed = 
+      cashCollectionsResult.failed + 
+      loanApplicationsResult.failed + 
+      advanceLoansResult.failed + 
+      disbursementsResult.failed;
+  
+    return {
+      success: totalFailed === 0 && memberDataResult.success,
+      summary,
+      errors
+    };
   }
 
-  // Sync cash collections first (using specialized method)
-  const cashCollectionsResult = await this.syncCashCollections(unsynced.cashCollections || []);
-  summary.cashCollections = { success: cashCollectionsResult.success, failed: cashCollectionsResult.failed };
-
-  // Sync loan applications using specialized method
-  const loanApplicationsResult = await this.syncLoanApplications(unsynced.loanApplications || []);
-  summary.loanApplications = { success: loanApplicationsResult.success, failed: loanApplicationsResult.failed };
-
-  // Sync advance loans using specialized method
-  const advanceLoansResult = await this.syncAdvanceLoans(unsynced.advanceLoans || []);
-  summary.advanceLoans = { success: advanceLoansResult.success, failed: advanceLoansResult.failed };
-
-  const disbursementsResult = await this.syncLoanDisbursements(unsynced.loanDisbursements || []);
-
-  summary.loanDisbursements = { success: disbursementsResult.success, failed: disbursementsResult.failed };
-
-  const errors = [
-    ...cashCollectionsResult.errors,
-    ...loanApplicationsResult.errors,
-    ...advanceLoansResult.errors,
-    ...disbursementsResult.errors
-  ];
-
-  const totalFailed = 
-    cashCollectionsResult.failed + 
-    loanApplicationsResult.failed + 
-    advanceLoansResult.failed + 
-    disbursementsResult.failed;
-
-  return {
-    success: totalFailed === 0,
-    summary,
-    errors
-  };
+  clearAuth(): void {
+    this.authToken = null;
+    this.tokenExpiry = null;
+    memberDataService.clearAuth(); // Clear auth from member service too
+  }
+  
+  // Add a dedicated method for syncing only member data:
+  async syncMemberDataOnly(): Promise<{
+    success: boolean;
+    totalMembers: number;
+    totalMeetings: number;
+    error?: string;
+  }> {
+    // Authenticate first
+    const authSuccess = await this.authenticate();
+    if (!authSuccess) {
+      return {
+        success: false,
+        totalMembers: 0,
+        totalMeetings: 0,
+        error: 'Authentication failed'
+      };
+    }
+  
+    if (!(await this.isOnline())) {
+      return {
+        success: false,
+        totalMembers: 0,
+        totalMeetings: 0,
+        error: 'Offline — cannot sync'
+      };
+    }
+  
+    return await memberDataService.syncMemberData();
   }
 
   async syncSingleCashCollection(record: CashCollection): Promise<{
@@ -968,12 +1024,6 @@ export class SyncService {
     };
   }
 
-  // Method to manually clear auth token (for logout)
-  clearAuth(): void {
-    this.authToken = null;
-    this.tokenExpiry = null;
-  }
-
   // Method to check if user is authenticated
   isAuthenticated(): boolean {
     return this.authToken !== null && 
@@ -984,7 +1034,7 @@ export class SyncService {
 
 // Create singleton instance with safe environment variable access
 export const syncService = new SyncService(
-  (typeof process !== 'undefined' && process.env?.REACT_APP_API_BASE_URL) || 'https://api.liftipoa.com'
+  (typeof process !== 'undefined' && process.env?.REACT_APP_API_BASE_URL) || 'http://127.0.0.1:8000'
 );
 
 export default syncService;

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,10 +6,22 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Save, User } from "lucide-react";
-import { dbOperations } from "@/lib/database";
+import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 
-// Helper function to generate member data on demand
+// Mock member data - fallback when no real data exists
+const mockMembers = Array.from({ length: 9999 }, (_, i) => ({
+  id: String(i + 1).padStart(4, '0'),
+  name: `Member ${i + 1}`,
+}));
+
+// Helper function to extract member ID from member_id field (e.g., "MEM/2025/0007" -> "0007")
+const extractMemberId = (memberIdField: string): string => {
+  const parts = memberIdField.split('/');
+  return parts[parts.length - 1] || memberIdField;
+};
+
+// Helper function to generate member data on demand (for mock data)
 const getMember = (id: string) => ({
   id: id.padStart(4, '0'),
   name: `Member ${parseInt(id)}`,
@@ -34,70 +46,125 @@ export function LoanApplicationForm() {
   const [applications, setApplications] = useState<LoanApplication[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [selectedMemberName, setSelectedMemberName] = useState('');
+  const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
   const { toast } = useToast();
 
-  // Filter members based on search query - efficient search without pre-generating all members
+  // Load real member data on component mount
+  useEffect(() => {
+    const loadRealMembers = async () => {
+      try {
+        const members = await dbOperations.getAllMembers();
+        setRealMembers(members);
+        console.log(`Loaded ${members.length} real members for loan applications`);
+      } catch (error) {
+        console.error('Error loading real members:', error);
+        setRealMembers([]);
+      }
+    };
+
+    loadRealMembers();
+  }, []);
+
+  // Search and filter members based on query (hybrid approach)
   const filteredMembers = useMemo(() => {
     if (!memberQuery) return [];
     
-    const query = memberQuery.trim();
-    const results = [];
-    
-    // If input is numeric, handle ID searching
-    if (/^\d+$/.test(query)) {
-      // 1. Try exact padded match first (e.g., "345" -> "0345")
-      const paddedId = query.padStart(4, '0');
-      if (isValidMemberId(paddedId)) {
-        results.push(getMember(paddedId));
-      }
+    const query = memberQuery.trim().toLowerCase();
+    const results: Array<{
+      id: string;
+      name: string;
+      isReal: boolean;
+    }> = [];
+
+    // First, search in real member data
+    if (realMembers.length > 0) {
+      const realMatches = realMembers.filter(member => {
+        const memberId = extractMemberId(member.member_id);
+        return (
+          memberId.toLowerCase().includes(query) ||
+          member.name.toLowerCase().includes(query) ||
+          member.phone.includes(memberQuery.trim()) ||
+          member.member_id.toLowerCase().includes(query)
+        );
+      }).slice(0, 10);
+
+      // Add real members to results
+      realMatches.forEach(member => {
+        const memberId = extractMemberId(member.member_id);
+        results.push({
+          id: memberId,
+          name: member.name,
+          isReal: true
+        });
+      });
+    }
+
+    // If no real members found or query looks like numeric ID, also search mock data
+    if (results.length === 0 || /^\d+$/.test(query)) {
+      const mockQuery = memberQuery.trim();
       
-      // 2. If query is shorter than 4 digits, find IDs that start with the query
-      if (query.length < 4) {
-        const baseNum = parseInt(query);
-        const multiplier = Math.pow(10, 4 - query.length);
+      // If input is numeric, handle ID searching in mock data
+      if (/^\d+$/.test(mockQuery)) {
+        // 1. Try exact padded match first (e.g., "345" -> "0345")
+        const paddedId = mockQuery.padStart(4, '0');
         
-        // Generate up to 5 matching IDs
-        for (let i = 0; i < Math.min(5, multiplier); i++) {
-          const candidateNum = baseNum * multiplier + i;
-          if (candidateNum >= 1 && candidateNum <= 9999) {
-            const candidateId = candidateNum.toString().padStart(4, '0');
-            if (candidateId.startsWith(query.padStart(query.length, '0')) && 
-                !results.some(r => r.id === candidateId)) {
-              results.push(getMember(candidateNum.toString()));
-            }
+        // Skip if we already have this ID from real data
+        const alreadyHasThisId = results.some(r => r.id === paddedId);
+        
+        if (!alreadyHasThisId) {
+          const exactMatch = mockMembers.find(member => member.id === paddedId);
+          if (exactMatch) {
+            results.push({
+              id: exactMatch.id,
+              name: exactMatch.name,
+              isReal: false
+            });
           }
-        }
-      }
-    } else {
-      // If input contains letters, search by name pattern
-      const lowerQuery = query.toLowerCase();
-      if (lowerQuery.includes('member')) {
-        // Extract number from "member X" pattern
-        const match = lowerQuery.match(/member\s*(\d+)/);
-        if (match) {
-          const num = parseInt(match[1]);
-          if (num >= 1 && num <= 9999) {
-            results.push(getMember(num.toString()));
+          
+          // 2. If no exact match and query is shorter than 4 digits, search for IDs that start with the query
+          if (!exactMatch && mockQuery.length < 4) {
+            const startMatches = mockMembers.filter(member => 
+              member.id.startsWith(mockQuery.padStart(mockQuery.length, '0')) &&
+              !results.some(r => r.id === member.id) // Avoid duplicates
+            ).slice(0, 5);
+            startMatches.forEach(member => {
+              results.push({
+                id: member.id,
+                name: member.name,
+                isReal: false
+              });
+            });
           }
-        }
-      }
-      
-      // Also try to find members by partial number in the name
-      const numberMatch = query.match(/\d+/);
-      if (numberMatch) {
-        const num = parseInt(numberMatch[0]);
-        if (num >= 1 && num <= 9999) {
-          results.push(getMember(num.toString()));
+          
+          // 3. If query is 4+ digits and no exact match, search for partial matches
+          if (!exactMatch && mockQuery.length >= 4) {
+            const partialMatches = mockMembers.filter(member => 
+              (member.id.includes(mockQuery) || member.id === mockQuery) &&
+              !results.some(r => r.id === member.id) // Avoid duplicates
+            ).slice(0, 5);
+            partialMatches.forEach(member => {
+              results.push({
+                id: member.id,
+                name: member.name,
+                isReal: false
+              });
+            });
+          }
         }
       }
     }
-    
-    return results.slice(0, 5); // Limit to 5 results
-  }, [memberQuery]);
+
+    return results.slice(0, 10); // Limit total results
+  }, [memberQuery, realMembers]);
 
   // Generate available guarantors on demand (excluding selected member and existing applicants)
   const getAvailableGuarantors = (searchTerm: string = '') => {
-    const results = [];
+    const results: Array<{
+      id: string;
+      name: string;
+      isReal: boolean;
+    }> = [];
     const excludedIds = new Set([
       selectedMemberId,
       ...applications.map(app => app.memberId)
@@ -105,27 +172,63 @@ export function LoanApplicationForm() {
     
     if (!searchTerm) return [];
     
-    // Similar search logic but excluding already used members
+    const query = searchTerm.trim().toLowerCase();
+
+    // First, search in real member data for guarantors
+    if (realMembers.length > 0) {
+      const realMatches = realMembers.filter(member => {
+        const memberId = extractMemberId(member.member_id);
+        return !excludedIds.has(memberId) && (
+          memberId.toLowerCase().includes(query) ||
+          member.name.toLowerCase().includes(query) ||
+          member.phone.includes(searchTerm.trim()) ||
+          member.member_id.toLowerCase().includes(query)
+        );
+      }).slice(0, 10);
+
+      realMatches.forEach(member => {
+        const memberId = extractMemberId(member.member_id);
+        results.push({
+          id: memberId,
+          name: member.name,
+          isReal: true
+        });
+      });
+    }
+
+    // Also search mock data for guarantors if needed
     if (/^\d+$/.test(searchTerm.trim())) {
-      const query = searchTerm.trim();
-      const paddedId = query.padStart(4, '0');
+      const mockQuery = searchTerm.trim();
+      const paddedId = mockQuery.padStart(4, '0');
       
-      if (isValidMemberId(paddedId) && !excludedIds.has(paddedId)) {
-        results.push(getMember(paddedId));
+      if (isValidMemberId(paddedId) && !excludedIds.has(paddedId) && 
+          !results.some(r => r.id === paddedId)) {
+        const mockMember = getMember(paddedId);
+        results.push({
+          id: mockMember.id,
+          name: mockMember.name,
+          isReal: false
+        });
       }
       
-      // For shorter queries, generate some matching options
-      if (query.length < 4) {
-        const baseNum = parseInt(query);
-        const multiplier = Math.pow(10, 4 - query.length);
+      // For shorter queries, generate some matching options from mock data
+      if (mockQuery.length < 4) {
+        const baseNum = parseInt(mockQuery);
+        const multiplier = Math.pow(10, 4 - mockQuery.length);
         
         for (let i = 0; i < Math.min(10, multiplier); i++) {
           const candidateNum = baseNum * multiplier + i;
           if (candidateNum >= 1 && candidateNum <= 9999) {
             const candidateId = candidateNum.toString().padStart(4, '0');
             if (!excludedIds.has(candidateId) && 
-                candidateId.startsWith(query.padStart(query.length, '0'))) {
-              results.push(getMember(candidateNum.toString()));
+                candidateId.startsWith(mockQuery.padStart(mockQuery.length, '0')) &&
+                !results.some(r => r.id === candidateId)) {
+              const mockMember = getMember(candidateNum.toString());
+              results.push({
+                id: mockMember.id,
+                name: mockMember.name,
+                isReal: false
+              });
             }
           }
         }
@@ -144,13 +247,12 @@ export function LoanApplicationForm() {
   };
 
   const addMember = () => {
-    if (!selectedMemberId || !isValidMemberId(selectedMemberId)) return;
-    
-    const selectedMember = getMember(selectedMemberId);
+    if (!selectedMemberId || !selectedMemberName) return;
+
     const newApplication: LoanApplication = {
       id: Date.now().toString(),
-      memberId: selectedMember.id,
-      memberName: selectedMember.name,
+      memberId: selectedMemberId,
+      memberName: selectedMemberName,
       loanAmount: 0,
       installments: 0,
       guarantors: [],
@@ -158,6 +260,7 @@ export function LoanApplicationForm() {
 
     setApplications([...applications, newApplication]);
     setSelectedMemberId('');
+    setSelectedMemberName('');
     setMemberQuery('');
   };
 
@@ -169,6 +272,12 @@ export function LoanApplicationForm() {
 
   const removeApplication = (id: string) => {
     setApplications(applications.filter(app => app.id !== id));
+  };
+
+  const handleMemberSelect = (member: { id: string; name: string; isReal: boolean }) => {
+    setSelectedMemberId(member.id);
+    setSelectedMemberName(member.name);
+    setMemberQuery('');
   };
 
   const addGuarantor = (applicationId: string, guarantorId: string) => {
@@ -211,6 +320,7 @@ export function LoanApplicationForm() {
       setApplications([]);
       setMemberQuery('');
       setSelectedMemberId('');
+      setSelectedMemberName('');
     } catch (error) {
       toast({
         title: "❌ Save Failed",
@@ -247,17 +357,23 @@ export function LoanApplicationForm() {
               <div className="grid gap-2 max-h-48 overflow-y-auto">
                 {filteredMembers
                   .filter(member => !applications.some(app => app.memberId === member.id))
-                  .map((member) => (
+                  .map((member, index) => (
                   <Button
-                    key={member.id}
+                    key={`${member.id}-${index}`}
                     variant={selectedMemberId === member.id ? "default" : "outline"}
-                    onClick={() => {
-                      setSelectedMemberId(member.id);
-                      setMemberQuery('');
-                    }}
-                    className="justify-start"
+                    onClick={() => handleMemberSelect(member)}
+                    className="justify-start p-3 h-auto text-left"
                   >
-                    {member.id} - {member.name}
+                    <div className="flex flex-col items-start w-full">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{member.id} - {member.name}</span>
+                        {member.isReal && (
+                          <Badge variant="secondary" className="text-xs">
+                            REAL DATA
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   </Button>
                 ))}
               </div>
@@ -269,13 +385,14 @@ export function LoanApplicationForm() {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="font-medium text-success">Selected Member:</p>
-                  <p className="text-sm">{getMember(selectedMemberId)?.id} - {getMember(selectedMemberId)?.name}</p>
+                  <p className="text-sm">{selectedMemberId} - {selectedMemberName}</p>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
                     setSelectedMemberId('');
+                    setSelectedMemberName('');
                     setMemberQuery('');
                   }}
                   className="text-muted-foreground hover:text-destructive"
@@ -382,10 +499,18 @@ export function LoanApplicationForm() {
                 {application.guarantors.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {application.guarantors.map((guarantorId) => {
-                      const guarantor = getMember(guarantorId);
+                      // Try to find guarantor in real data first, then fall back to mock
+                      let guarantorName = `Member ${parseInt(guarantorId)}`;
+                      const realGuarantor = realMembers.find(member => 
+                        extractMemberId(member.member_id) === guarantorId
+                      );
+                      if (realGuarantor) {
+                        guarantorName = realGuarantor.name;
+                      }
+                      
                       return (
                         <Badge key={guarantorId} variant="secondary" className="flex items-center gap-1">
-                          {guarantor?.name}
+                          {guarantorName}
                           <button
                             onClick={() => removeGuarantor(application.id, guarantorId)}
                             className="ml-1 hover:text-destructive"

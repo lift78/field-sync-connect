@@ -1,18 +1,24 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Save, Zap } from "lucide-react";
-import { dbOperations } from "@/lib/database";
+import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 
-// Mock member data - replace with actual member data from your system
+// Mock member data - fallback when no real data exists
 const mockMembers = Array.from({ length: 9999 }, (_, i) => ({
   id: String(i + 1).padStart(4, '0'),
   name: `Member ${i + 1}`,
 }));
+
+// Helper function to extract member ID from member_id field (e.g., "MEM/2025/0007" -> "0007")
+const extractMemberId = (memberIdField: string): string => {
+  const parts = memberIdField.split('/');
+  return parts[parts.length - 1] || memberIdField;
+};
 
 interface AdvanceLoanApplication {
   id: string;
@@ -25,50 +31,117 @@ export function AdvanceLoanForm() {
   const [applications, setApplications] = useState<AdvanceLoanApplication[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [selectedMemberName, setSelectedMemberName] = useState('');
+  const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
   const { toast } = useToast();
 
-  // Filter members based on search query - same logic as CashCollectionForm
+  // Load real member data on component mount
+  useEffect(() => {
+    const loadRealMembers = async () => {
+      try {
+        const members = await dbOperations.getAllMembers();
+        setRealMembers(members);
+        console.log(`Loaded ${members.length} real members for advance loans`);
+      } catch (error) {
+        console.error('Error loading real members:', error);
+        setRealMembers([]);
+      }
+    };
+
+    loadRealMembers();
+  }, []);
+
+  // Search and filter members based on query
   const filteredMembers = useMemo(() => {
     if (!memberQuery) return [];
     
-    const query = memberQuery.trim();
-    
-    // If input is numeric, handle ID searching
-    if (/^\d+$/.test(query)) {
-      const results = [];
-      
-      // 1. Try exact padded match first (e.g., "345" -> "0345")
-      const paddedId = query.padStart(4, '0');
-      const exactMatch = mockMembers.find(member => member.id === paddedId);
-      if (exactMatch) {
-        results.push(exactMatch);
-      }
-      
-      // 2. If no exact match and query is shorter than 4 digits, 
-      //    also search for IDs that start with the query
-      if (!exactMatch && query.length < 4) {
-        const startMatches = mockMembers.filter(member => 
-          member.id.startsWith(query.padStart(query.length, '0'))
-        ).slice(0, 5);
-        results.push(...startMatches);
-      }
-      
-      // 3. If query is 4+ digits and no exact match, search for partial matches
-      if (!exactMatch && query.length >= 4) {
-        const partialMatches = mockMembers.filter(member => 
-          member.id.includes(query) || member.id === query
-        ).slice(0, 5);
-        results.push(...partialMatches);
-      }
-      
-      return results;
+    const query = memberQuery.trim().toLowerCase();
+    const results: Array<{
+      id: string;
+      name: string;
+      isReal: boolean;
+    }> = [];
+
+    // First, search in real member data
+    if (realMembers.length > 0) {
+      const realMatches = realMembers.filter(member => {
+        const memberId = extractMemberId(member.member_id);
+        return (
+          memberId.toLowerCase().includes(query) ||
+          member.name.toLowerCase().includes(query) ||
+          member.phone.includes(memberQuery.trim()) ||
+          member.member_id.toLowerCase().includes(query)
+        );
+      }).slice(0, 10);
+
+      // Add real members to results
+      realMatches.forEach(member => {
+        const memberId = extractMemberId(member.member_id);
+        results.push({
+          id: memberId,
+          name: member.name,
+          isReal: true
+        });
+      });
     }
-    
-    // If input contains letters, search by name
-    return mockMembers.filter(member => 
-      member.name.toLowerCase().includes(query.toLowerCase())
-    ).slice(0, 5);
-  }, [memberQuery]);
+
+    // If no real members found or query looks like numeric ID, also search mock data
+    if (results.length === 0 || /^\d+$/.test(query)) {
+      const mockQuery = memberQuery.trim();
+      
+      // If input is numeric, handle ID searching in mock data
+      if (/^\d+$/.test(mockQuery)) {
+        // 1. Try exact padded match first (e.g., "345" -> "0345")
+        const paddedId = mockQuery.padStart(4, '0');
+        
+        // Skip if we already have this ID from real data
+        const alreadyHasThisId = results.some(r => r.id === paddedId);
+        
+        if (!alreadyHasThisId) {
+          const exactMatch = mockMembers.find(member => member.id === paddedId);
+          if (exactMatch) {
+            results.push({
+              id: exactMatch.id,
+              name: exactMatch.name,
+              isReal: false
+            });
+          }
+          
+          // 2. If no exact match and query is shorter than 4 digits, search for IDs that start with the query
+          if (!exactMatch && mockQuery.length < 4) {
+            const startMatches = mockMembers.filter(member => 
+              member.id.startsWith(mockQuery.padStart(mockQuery.length, '0')) &&
+              !results.some(r => r.id === member.id) // Avoid duplicates
+            ).slice(0, 5);
+            startMatches.forEach(member => {
+              results.push({
+                id: member.id,
+                name: member.name,
+                isReal: false
+              });
+            });
+          }
+          
+          // 3. If query is 4+ digits and no exact match, search for partial matches
+          if (!exactMatch && mockQuery.length >= 4) {
+            const partialMatches = mockMembers.filter(member => 
+              (member.id.includes(mockQuery) || member.id === mockQuery) &&
+              !results.some(r => r.id === member.id) // Avoid duplicates
+            ).slice(0, 5);
+            partialMatches.forEach(member => {
+              results.push({
+                id: member.id,
+                name: member.name,
+                isReal: false
+              });
+            });
+          }
+        }
+      }
+    }
+
+    return results.slice(0, 10); // Limit total results
+  }, [memberQuery, realMembers]);
 
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
@@ -79,18 +152,18 @@ export function AdvanceLoanForm() {
   };
 
   const addMember = () => {
-    const selectedMember = mockMembers.find(m => m.id === selectedMemberId);
-    if (!selectedMember) return;
+    if (!selectedMemberId || !selectedMemberName) return;
 
     const newApplication: AdvanceLoanApplication = {
       id: Date.now().toString(),
-      memberId: selectedMember.id,
-      memberName: selectedMember.name,
+      memberId: selectedMemberId,
+      memberName: selectedMemberName,
       advanceAmount: 0,
     };
 
     setApplications([...applications, newApplication]);
     setSelectedMemberId('');
+    setSelectedMemberName('');
     setMemberQuery('');
   };
 
@@ -102,6 +175,12 @@ export function AdvanceLoanForm() {
 
   const removeApplication = (id: string) => {
     setApplications(applications.filter(app => app.id !== id));
+  };
+
+  const handleMemberSelect = (member: { id: string; name: string; isReal: boolean }) => {
+    setSelectedMemberId(member.id);
+    setSelectedMemberName(member.name);
+    setMemberQuery('');
   };
 
   const handleSave = async () => {
@@ -124,6 +203,7 @@ export function AdvanceLoanForm() {
       setApplications([]);
       setMemberQuery('');
       setSelectedMemberId('');
+      setSelectedMemberName('');
     } catch (error) {
       toast({
         title: "❌ Save Failed",
@@ -163,17 +243,23 @@ export function AdvanceLoanForm() {
               <div className="grid gap-2 max-h-48 overflow-y-auto">
                 {filteredMembers
                   .filter(member => !applications.some(app => app.memberId === member.id))
-                  .map((member) => (
+                  .map((member, index) => (
                   <Button
-                    key={member.id}
+                    key={`${member.id}-${index}`}
                     variant={selectedMemberId === member.id ? "default" : "outline"}
-                    onClick={() => {
-                      setSelectedMemberId(member.id);
-                      setMemberQuery('');
-                    }}
-                    className="justify-start"
+                    onClick={() => handleMemberSelect(member)}
+                    className="justify-start p-3 h-auto text-left"
                   >
-                    {member.id} - {member.name}
+                    <div className="flex flex-col items-start w-full">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{member.id} - {member.name}</span>
+                        {member.isReal && (
+                          <Badge variant="secondary" className="text-xs">
+                            REAL DATA
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   </Button>
                 ))}
               </div>
@@ -185,13 +271,14 @@ export function AdvanceLoanForm() {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="font-medium text-success">Selected Member:</p>
-                  <p className="text-sm">{mockMembers.find(m => m.id === selectedMemberId)?.id} - {mockMembers.find(m => m.id === selectedMemberId)?.name}</p>
+                  <p className="text-sm">{selectedMemberId} - {selectedMemberName}</p>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
                     setSelectedMemberId('');
+                    setSelectedMemberName('');
                     setMemberQuery('');
                   }}
                   className="text-muted-foreground hover:text-destructive"
