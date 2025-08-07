@@ -225,12 +225,63 @@ export function CashCollectionForm() {
   const loanAllocation = allocations.find(a => a.type === 'loan')?.amount || 0;
   const advanceAllocation = allocations.find(a => a.type === 'amount_for_advance_payment')?.amount || 0;
 
+  // Calculate advance payment split to get the correct principal amount
+  const advancePaymentSplit = useMemo(() => {
+    if (currentBalances && advanceAllocation > 0) {
+      // Use the same logic from AdvanceCalculator to split the payment
+      const currentAdvanceBalance = currentBalances.advance_loan_balance;
+      
+      if (currentAdvanceBalance <= 0) {
+        return { pay_advance: 0, pay_advance_interest: 0 };
+      }
+      
+      if (advanceAllocation >= currentAdvanceBalance) {
+        // Full payment - no interest required
+        return {
+          pay_advance: currentAdvanceBalance,
+          pay_advance_interest: 0
+        };
+      }
+      
+      // Partial payment - calculate split using simultaneous equations
+      const ADVANCE_INTEREST_RATE = 0.1; // 10%
+      const ADVANCE_FIXED_FINE = 10; // 10 KES
+      
+      const interestComponent = currentAdvanceBalance * ADVANCE_INTEREST_RATE / (1 + ADVANCE_INTEREST_RATE);
+      let payAdvance = (advanceAllocation - interestComponent - ADVANCE_FIXED_FINE) * (1 + ADVANCE_INTEREST_RATE) / 1;
+      
+      // Ensure pay_advance doesn't exceed current_balance or go negative
+      payAdvance = Math.max(0, Math.min(payAdvance, currentAdvanceBalance));
+      
+      let payAdvanceInterest;
+      
+      if (payAdvance >= currentAdvanceBalance) {
+        payAdvance = currentAdvanceBalance;
+        payAdvanceInterest = 0;
+      } else {
+        // Calculate interest for remaining balance
+        const remainingBalance = currentAdvanceBalance - payAdvance;
+        const currentPrincipal = remainingBalance / (1 + ADVANCE_INTEREST_RATE);
+        payAdvanceInterest = currentPrincipal * ADVANCE_INTEREST_RATE + ADVANCE_FIXED_FINE;
+        payAdvanceInterest = Math.round(payAdvanceInterest);
+      }
+      
+      return {
+        pay_advance: Math.round(payAdvance * 100) / 100,
+        pay_advance_interest: payAdvanceInterest
+      };
+    }
+    return { pay_advance: 0, pay_advance_interest: 0 };
+  }, [currentBalances, advanceAllocation]);
+
   const savingsCarryForward = currentBalances ? 
     toPreciseNumber(currentBalances.savings_balance + savingsAllocation) : 0;
   const loanCarryForward = currentBalances ? 
     toPreciseNumber(currentBalances.loan_balance - loanAllocation) : 0;
+  // Use only the principal portion (pay_advance) to calculate advance carry forward
   const advanceCarryForward = currentBalances ? 
-    toPreciseNumber(currentBalances.advance_loan_balance - advanceAllocation) : 0;
+    toPreciseNumber(currentBalances.advance_loan_balance - advancePaymentSplit.pay_advance) : 0;
+
 
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
