@@ -380,7 +380,7 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select type">
-                              {allocation.type ? allocation.type.charAt(0).toUpperCase() + allocation.type.slice(1) : 'Select type'}
+                              {allocation.type ? (allocation.type === 'advance' ? 'Advance' : allocation.type.charAt(0).toUpperCase() + allocation.type.slice(1)) : 'Select type'}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
