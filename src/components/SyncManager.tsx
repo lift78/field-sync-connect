@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { RecordsList } from "./RecordsList";
 import { dbOperations } from "@/lib/database";
+import { syncService } from "@/lib/syncService"; // Import syncService for member data updates
 import { 
   RefreshCw, 
   Wifi, 
@@ -21,25 +22,29 @@ import {
   Settings,
   User,
   Key,
-  X
+  X,
+  Users // New icon for member data
 } from "lucide-react";
 
 interface SyncData {
-  type: 'cash' | 'loan' | 'advance' | 'disbursement'; // Added 'disbursement' type
+  type: 'cash' | 'loan' | 'advance' | 'disbursement';
   count: number;
   lastUpdated: string;
 }
 
 interface SyncManagerProps {
-  onEditRecord?: (type: 'cash' | 'loan' | 'advance' | 'disbursement', recordData: any) => void; // Added 'disbursement'
+  onEditRecord?: (type: 'cash' | 'loan' | 'advance' | 'disbursement', recordData: any) => void;
 }
 
 export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isUpdatingMembers, setIsUpdatingMembers] = useState(false); // New state for member updates
   const [syncProgress, setSyncProgress] = useState(0);
+  const [memberUpdateProgress, setMemberUpdateProgress] = useState(0); // New state for member update progress
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | null>(null); // Added 'disbursement'
+  const [lastMemberUpdateTime, setLastMemberUpdateTime] = useState<string | null>(null); // New state for last member update
+  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | null>(null);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [offlineData, setOfflineData] = useState<SyncData[]>([]);
   const [credentials, setCredentials] = useState({ username: "", password: "" });
@@ -187,6 +192,51 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     } finally {
       setIsSyncing(false);
       setSyncProgress(0);
+    }
+  };
+
+  // NEW: Handle member data update
+  const handleMemberDataUpdate = async () => {
+    if (!isOnline) {
+      alert('No internet connection. Please check your connection and try again.');
+      return;
+    }
+
+    setIsUpdatingMembers(true);
+    setMemberUpdateProgress(0);
+
+    try {
+      // Simulate progress visually
+      const progressInterval = setInterval(() => {
+        setMemberUpdateProgress(prev => {
+          if (prev >= 90) return prev; // Stop at 90% until actual completion
+          return prev + 10;
+        });
+      }, 200);
+
+      const result = await syncService.syncMemberDataOnly();
+
+      // Clear progress interval and complete
+      clearInterval(progressInterval);
+      setMemberUpdateProgress(100);
+
+      // Wait a moment to show 100%
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      setLastMemberUpdateTime(new Date().toISOString());
+
+      if (result.success) {
+        alert(`✅ Member data updated successfully!\n📊 ${result.totalMembers} members across ${result.totalMeetings} meetings`);
+      } else {
+        alert(`⚠️ Member data update failed: ${result.error}`);
+      }
+
+    } catch (error: any) {
+      console.error('Member data update failed:', error);
+      alert('❌ Member data update failed. Please try again.');
+    } finally {
+      setIsUpdatingMembers(false);
+      setMemberUpdateProgress(0);
     }
   };
   
@@ -368,18 +418,53 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         </Card>
       )}
 
+      {/* NEW: Member Data Update Progress */}
+      {isUpdatingMembers && (
+        <Card className="shadow-card bg-gradient-card">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center">
+              <Users className="h-5 w-5 mr-2 animate-pulse" />
+              Updating Member Data...
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Progress value={memberUpdateProgress} className="w-full" />
+            <p className="text-center text-sm text-muted-foreground">
+              {memberUpdateProgress}% complete
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Last Sync Info */}
-      {lastSyncTime && (
+      {(lastSyncTime || lastMemberUpdateTime) && (
         <Card className="shadow-card">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-center space-x-2 text-success">
-              <CheckCircle className="h-5 w-5" />
-              <div className="text-center">
-                <p className="font-medium">Last successful sync</p>
-                <p className="text-sm text-muted-foreground">
-                  {formatDateTime(lastSyncTime)}
-                </p>
-              </div>
+            <div className="space-y-3">
+              {lastSyncTime && (
+                <div className="flex items-center justify-center space-x-2 text-success">
+                  <CheckCircle className="h-5 w-5" />
+                  <div className="text-center">
+                    <p className="font-medium">Last successful sync</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDateTime(lastSyncTime)}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {/* NEW: Last member update info */}
+              {lastMemberUpdateTime && (
+                <div className="flex items-center justify-center space-x-2 text-blue-600">
+                  <Users className="h-5 w-5" />
+                  <div className="text-center">
+                    <p className="font-medium">Last member data update</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDateTime(lastMemberUpdateTime)}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -421,10 +506,42 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         </CardContent>
       </Card>
 
-      {/* Sync Button */}
+      {/* NEW: Updated Sync Buttons Section */}
       <Card className="shadow-card">
         <CardContent className="pt-6">
           <div className="text-center space-y-4">
+            {/* Member Data Update Button */}
+            <div className="border-b pb-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                Update member balances and group data from the server
+              </p>
+              <Button 
+                variant="outline" 
+                size="mobile"
+                onClick={handleMemberDataUpdate}
+                disabled={!isOnline || isUpdatingMembers || isSyncing}
+                className="w-full"
+              >
+                {isUpdatingMembers ? (
+                  <>
+                    <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                    Updating Members...
+                  </>
+                ) : (
+                  <>
+                    <Users className="h-5 w-5 mr-2" />
+                    Update Member Data
+                  </>
+                )}
+              </Button>
+              {!isOnline && (
+                <p className="text-sm text-warning mt-2">
+                  ⚠️ Internet connection required for member data update
+                </p>
+              )}
+            </div>
+
+            {/* Main Sync Button */}
             <div>
               <p className="text-sm text-muted-foreground mb-2">
                 {totalRecords > 0 
@@ -437,33 +554,33 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
                   ⚠️ Internet connection required for syncing
                 </p>
               )}
-            </div>
-            
-            <Button 
-              variant="mobile" 
-              size="mobile"
-              onClick={handleSync}
-              disabled={!isOnline || isSyncing || totalRecords === 0}
-              className="w-full"
-            >
-              {isSyncing ? (
-                <>
-                  <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-5 w-5 mr-2" />
-                  {autoSyncEnabled ? "Manual Sync" : "Sync All Data"}
-                </>
-              )}
-            </Button>
+              
+              <Button 
+                variant="mobile" 
+                size="mobile"
+                onClick={handleSync}
+                disabled={!isOnline || isSyncing || totalRecords === 0 || isUpdatingMembers}
+                className="w-full"
+              >
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-5 w-5 mr-2" />
+                    {autoSyncEnabled ? "Manual Sync" : "Sync All Data"}
+                  </>
+                )}
+              </Button>
 
-            {totalRecords === 0 && (
-              <p className="text-sm text-success">
-                ✅ All data is synced to the server
-              </p>
-            )}
+              {totalRecords === 0 && (
+                <p className="text-sm text-success mt-2">
+                  ✅ All data is synced to the server
+                </p>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -478,6 +595,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         </CardHeader>
         <CardContent>
           <ul className="text-sm text-muted-foreground space-y-2">
+            <li>• Use "Update Member Data" to refresh balances before transactions</li>
             <li>• Sync regularly when you have internet connection</li>
             <li>• Data is safely stored offline until synced</li>
             <li>• All records are backed up locally</li>

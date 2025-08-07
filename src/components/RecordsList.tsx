@@ -9,7 +9,8 @@ import {
   Clock, 
   AlertTriangle,
   User,
-  Loader2
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement } from "@/lib/database";
 
@@ -19,6 +20,7 @@ interface Record {
   loanId?: string; // Added for disbursements
   amount?: number;
   status: 'synced' | 'pending' | 'failed';
+  syncError?: string; // Added to show sync errors
   lastUpdated: string;
   data: any; // Full form data for editing
 }
@@ -57,18 +59,29 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             break;
         }
 
-        // Convert database records to Record interface
-        const formattedRecords: Record[] = data.map((item) => ({
-          id: item.id?.toString() || '',
-          memberId: 'memberId' in item ? item.memberId : undefined,
-          loanId: 'loanId' in item ? item.loanId : undefined, // Added for disbursements
-          amount: 'amount' in item ? item.amount : 
-                 'loanAmount' in item ? item.loanAmount : 
-                 'customAmount' in item ? item.customAmount : undefined, // Added customAmount for disbursements
-          status: item.synced ? 'synced' : 'pending',
-          lastUpdated: item.timestamp.toISOString(),
-          data: item // Store full record for editing
-        }));
+        // Convert database records to Record interface with proper status mapping
+        const formattedRecords: Record[] = data.map((item) => {
+          // Determine status from syncStatus field first, then fallback to synced boolean
+          let status: 'synced' | 'pending' | 'failed' = 'pending';
+          if (item.syncStatus) {
+            status = item.syncStatus as 'synced' | 'pending' | 'failed';
+          } else if (item.synced) {
+            status = 'synced';
+          }
+
+          return {
+            id: item.id?.toString() || '',
+            memberId: 'memberId' in item ? item.memberId : undefined,
+            loanId: 'loanId' in item ? item.loanId : undefined, // Added for disbursements
+            amount: 'amount' in item ? item.amount : 
+                   'loanAmount' in item ? item.loanAmount : 
+                   'customAmount' in item ? item.customAmount : undefined, // Added customAmount for disbursements
+            status,
+            syncError: item.syncError, // Include sync error message
+            lastUpdated: item.timestamp.toISOString(),
+            data: item // Store full record for editing
+          };
+        });
 
         setRecords(formattedRecords);
       } catch (err) {
@@ -100,22 +113,22 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
   const getStatusIcon = (status: Record['status']) => {
     switch (status) {
       case 'synced':
-        return <CheckCircle className="h-4 w-4 text-success" />;
+        return <CheckCircle className="h-4 w-4 text-green-600" />;
       case 'pending':
-        return <Clock className="h-4 w-4 text-warning" />;
+        return <Clock className="h-4 w-4 text-yellow-600" />;
       case 'failed':
-        return <AlertTriangle className="h-4 w-4 text-destructive" />;
+        return <AlertTriangle className="h-4 w-4 text-red-600" />;
     }
   };
 
   const getStatusBadge = (status: Record['status']) => {
     switch (status) {
       case 'synced':
-        return <Badge variant="default" className="bg-success text-success-foreground">Synced</Badge>;
+        return <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">Synced</Badge>;
       case 'pending':
-        return <Badge variant="secondary" className="bg-warning text-warning-foreground">Pending</Badge>;
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending</Badge>;
       case 'failed':
-        return <Badge variant="destructive">Failed</Badge>;
+        return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200">Failed</Badge>;
     }
   };
 
@@ -171,6 +184,12 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
       }
       return '';
     }
+  };
+
+  // Helper function to truncate error messages for display
+  const truncateError = (error?: string, maxLength: number = 50) => {
+    if (!error) return '';
+    return error.length > maxLength ? `${error.substring(0, maxLength)}...` : error;
   };
 
   if (loading) {
@@ -266,7 +285,9 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         {records.map((record) => (
           <Card 
             key={record.id} 
-            className="shadow-card cursor-pointer hover:shadow-lg transition-shadow"
+            className={`shadow-card cursor-pointer hover:shadow-lg transition-shadow ${
+              record.status === 'failed' ? 'border-l-4 border-l-red-500' : ''
+            }`}
             onClick={() => onEditRecord(record)}
           >
             <CardContent className="p-4">
@@ -275,7 +296,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
                   <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-full">
                     <User className="h-5 w-5 text-primary" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <div className="flex items-center space-x-2">
                       <p className="font-semibold">{getRecordDisplayName(record)}</p>
                       {getStatusIcon(record.status)}
@@ -287,6 +308,22 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
                       <p className="text-sm font-medium text-primary">
                         {getRecordSubtitle(record)}
                       </p>
+                    )}
+                    
+                    {/* Error Message Display */}
+                    {record.status === 'failed' && record.syncError && (
+                      <div className="mt-2 flex items-start space-x-2">
+                        <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-xs text-red-600 font-medium">Sync Failed:</p>
+                          <p className="text-xs text-red-500" title={record.syncError}>
+                            {truncateError(record.syncError, 80)}
+                          </p>
+                          <p className="text-xs text-muted-foreground italic mt-1">
+                            Click to edit and retry sync
+                          </p>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -308,6 +345,37 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             <p className="text-sm text-muted-foreground mt-2">
               Records you create will appear here
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Summary Stats */}
+      {records.length > 0 && (
+        <Card className="shadow-card">
+          <CardContent className="p-4">
+            <div className="flex justify-center space-x-6 text-sm">
+              <div className="text-center">
+                <div className="flex items-center space-x-1">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="font-medium">{records.filter(r => r.status === 'synced').length}</span>
+                </div>
+                <p className="text-muted-foreground">Synced</p>
+              </div>
+              <div className="text-center">
+                <div className="flex items-center space-x-1">
+                  <Clock className="h-4 w-4 text-yellow-600" />
+                  <span className="font-medium">{records.filter(r => r.status === 'pending').length}</span>
+                </div>
+                <p className="text-muted-foreground">Pending</p>
+              </div>
+              <div className="text-center">
+                <div className="flex items-center space-x-1">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <span className="font-medium">{records.filter(r => r.status === 'failed').length}</span>
+                </div>
+                <p className="text-muted-foreground">Failed</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
