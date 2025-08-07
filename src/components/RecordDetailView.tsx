@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, 
@@ -14,7 +15,9 @@ import {
   AlertTriangle,
   User,
   Banknote,
-  CreditCard
+  CreditCard,
+  Plus,
+  Trash2
 } from "lucide-react";
 import { dbOperations, CashCollection, LoanApplication, AdvanceLoan } from "@/lib/database";
 
@@ -36,6 +39,34 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   const [editValues, setEditValues] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+
+  // Available allocation types and reasons
+  const allocationTypes = ['savings', 'loan', 'advance', 'other'];
+  const allocationReasons = [
+    'Monthly Contribution',
+    'Loan Repayment',
+    'Interest Payment',
+    'Penalty Fee',
+    'Registration Fee',
+    'Loan Processing Fee',
+    'Lateness Fee',
+    'Meeting Absence Fee',
+    'Share Purchase',
+    'Insurance Premium',
+    'Emergency Fund',
+    'Development Fund',
+    'Welfare Fund',
+    'Other'
+  ];
+
+  // Get original cash amount for validation
+  const getOriginalCashAmount = () => {
+    if (type === 'cash') {
+      const data = record.data as CashCollection;
+      return data.cashAmount || 0;
+    }
+    return 0;
+  };
 
   const getTypeTitle = () => {
     switch (type) {
@@ -167,10 +198,19 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     label: string,
     fieldName: string,
     value: any,
-    type: 'text' | 'number' = 'text'
+    fieldType: 'text' | 'number' = 'text',
+    minValue?: number
   ) => {
     const currentValue = editValues[fieldName] !== undefined ? editValues[fieldName] : value;
     const isEditing = editingField === fieldName;
+
+    // Validation for cash amount - cannot be decreased
+    const isValidValue = () => {
+      if (fieldName === 'cashAmount' && fieldType === 'number' && minValue !== undefined) {
+        return currentValue >= minValue;
+      }
+      return true;
+    };
 
     return (
       <div className="space-y-2">
@@ -179,17 +219,19 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
           {isEditing ? (
             <>
               <Input
-                type={type}
+                type={fieldType}
                 value={currentValue}
+                min={minValue}
                 onChange={(e) => setEditValues({
                   ...editValues,
-                  [fieldName]: type === 'number' ? Number(e.target.value) : e.target.value
+                  [fieldName]: fieldType === 'number' ? Number(e.target.value) : e.target.value
                 })}
-                className="flex-1"
+                className={`flex-1 ${!isValidValue() ? 'border-destructive' : ''}`}
               />
               <Button
                 size="sm"
                 onClick={() => handleFieldSave(fieldName)}
+                disabled={!isValidValue()}
                 className="px-3"
               >
                 <CheckCircle className="h-4 w-4" />
@@ -206,7 +248,7 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
           ) : (
             <>
               <div className="flex-1 p-2 bg-muted/30 rounded border">
-                {type === 'number' && typeof currentValue === 'number' 
+                {fieldType === 'number' && typeof currentValue === 'number' 
                   ? formatAmount(currentValue)
                   : currentValue || 'N/A'
                 }
@@ -222,6 +264,11 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
             </>
           )}
         </div>
+        {fieldName === 'cashAmount' && minValue !== undefined && (
+          <p className="text-xs text-muted-foreground">
+            Cash amount can only be increased (minimum: {formatAmount(minValue)})
+          </p>
+        )}
       </div>
     );
   };
@@ -235,37 +282,152 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     </div>
   );
 
+  const addNewAllocation = () => {
+    const data = record.data as CashCollection;
+    const currentAllocations = editValues.allocations || data.allocations || [];
+    const newAllocation = {
+      type: 'savings',
+      amount: 0,
+      reason: ''
+    };
+    
+    setEditValues({
+      ...editValues,
+      allocations: [...currentAllocations, newAllocation]
+    });
+  };
+
+  const removeAllocation = (index: number) => {
+    const data = record.data as CashCollection;
+    const currentAllocations = editValues.allocations || data.allocations || [];
+    const updatedAllocations = currentAllocations.filter((_, i) => i !== index);
+    
+    setEditValues({
+      ...editValues,
+      allocations: updatedAllocations
+    });
+  };
+
+  const updateAllocation = (index: number, field: string, value: any) => {
+    const data = record.data as CashCollection;
+    const currentAllocations = editValues.allocations || data.allocations || [];
+    const updatedAllocations = [...currentAllocations];
+    updatedAllocations[index] = {
+      ...updatedAllocations[index],
+      [field]: value
+    };
+    
+    setEditValues({
+      ...editValues,
+      allocations: updatedAllocations
+    });
+  };
+
   const renderCashCollectionDetails = () => {
     const data = record.data as CashCollection;
     if (!data) {
       return <p className="text-muted-foreground">No data available</p>;
     }
+
+    const originalCashAmount = getOriginalCashAmount();
+    const currentAllocations = editValues.allocations || data.allocations || [];
     
     return (
       <>
         {/* Transaction amounts */}
         {renderEditableField('Total Amount', 'totalAmount', data.totalAmount || 0, 'number')}
-        {renderEditableField('Cash Amount', 'cashAmount', data.cashAmount || 0, 'number')}
+        {renderEditableField('Cash Amount', 'cashAmount', data.cashAmount || 0, 'number', originalCashAmount)}
         {renderEditableField('M-Pesa Amount', 'mpesaAmount', data.mpesaAmount || 0, 'number')}
         
         {/* Member Allocations */}
         <div className="space-y-3">
-          <Label className="text-sm font-medium">Member Allocations</Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Member Allocations</Label>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={addNewAllocation}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Allocation
+            </Button>
+          </div>
+          
           <div className="space-y-2">
-            {data.allocations?.map((allocation, index) => (
-              <Card key={index} className="p-3">
-                <div className="grid grid-cols-2 gap-3">
-                  {renderReadOnlyField('Allocation Type', allocation.type)}
-                  {renderEditableField(
-                    'Amount', 
-                    `allocations.${index}.amount`, 
-                    allocation.amount, 
-                    'number'
-                  )}
-                  {allocation.reason && renderReadOnlyField('Reason', allocation.reason)}
-                </div>
-              </Card>
-            )) || <p className="text-muted-foreground text-sm">No allocations recorded</p>}
+            {currentAllocations.length > 0 ? (
+              currentAllocations.map((allocation, index) => (
+                <Card key={index} className="p-3">
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">Allocation {index + 1}</Label>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeAllocation(index)}
+                        className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label className="text-sm">Type</Label>
+                        <Select
+                          value={allocation.type}
+                          onValueChange={(value) => updateAllocation(index, 'type', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allocationTypes.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label className="text-sm">Amount</Label>
+                        <Input
+                          type="number"
+                          value={allocation.amount}
+                          onChange={(e) => updateAllocation(index, 'amount', Number(e.target.value))}
+                          min="0"
+                        />
+                      </div>
+                    </div>
+                    
+                    {allocation.type === 'other' && (
+                      <div className="space-y-2">
+                        <Label className="text-sm">Reason</Label>
+                        <Select
+                          value={allocation.reason || ''}
+                          onValueChange={(value) => updateAllocation(index, 'reason', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select reason" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allocationReasons.map((reason) => (
+                              <SelectItem key={reason} value={reason}>
+                                {reason}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <p className="text-muted-foreground text-sm">No allocations recorded</p>
+            )}
           </div>
         </div>
       </>
