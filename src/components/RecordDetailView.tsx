@@ -379,7 +379,9 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
                           onValueChange={(value) => updateAllocation(index, 'type', value)}
                         >
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue placeholder="Select type">
+                              {allocation.type ? allocation.type.charAt(0).toUpperCase() + allocation.type.slice(1) : 'Select type'}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {allocationTypes.map((type) => (
@@ -410,7 +412,9 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
                           onValueChange={(value) => updateAllocation(index, 'reason', value)}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select reason" />
+                            <SelectValue placeholder="Select reason">
+                              {allocation.reason || 'Select reason'}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {allocationReasons.map((reason) => (
