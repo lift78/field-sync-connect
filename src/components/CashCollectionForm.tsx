@@ -6,11 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Save, User, Phone, Users } from "lucide-react";
 import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
 import { Calculator } from "lucide-react";
+import { Plus, Trash2, Save, User, Phone, Users, Banknote, Smartphone, AlertCircle } from "lucide-react";
 
 // Mock member data - fallback when no real data exists
 const mockMembers = Array.from({ length: 9999 }, (_, i) => ({
@@ -26,6 +26,7 @@ interface Allocation {
 
 const allocationReasons = [
   'Lateness Fine',
+  'Advance fine(kes 10)',
   'Loan Processing Fees',
   'Advocate Fees',
   'Insurance Risk Fund',
@@ -282,7 +283,6 @@ export function CashCollectionForm() {
   const advanceCarryForward = currentBalances ? 
     toPreciseNumber(currentBalances.advance_loan_balance - advancePaymentSplit.pay_advance) : 0;
 
-
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
@@ -505,47 +505,89 @@ export function CashCollectionForm() {
           <CardTitle className="text-lg">Cash Collection</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="cash-amount">Cash Amount (KES)</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Enhanced Cash Field */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                <Banknote className="h-5 w-5 text-green-600" />
+                <div>
+                  <Label htmlFor="cash-amount" className="text-base font-semibold text-green-800">
+                    💵 CASH Amount (KES)
+                  </Label>
+                  <p className="text-xs text-green-600">Physical money received</p>
+                </div>
+              </div>
               <Input
                 id="cash-amount"
                 type="number"
                 step="0.01"
-                placeholder="0"
+                placeholder="0.00"
                 value={cashAmount}
                 onChange={(e) => setCashAmount(e.target.value)}
+                className="text-lg p-3 border-2 border-green-300 focus:border-green-500 bg-green-50/30"
               />
               {cashAmountNum > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  📄 Cash reference will be generated automatically
-                </p>
+                <div className="flex items-center gap-2 text-sm text-green-700 bg-green-100 p-2 rounded">
+                  <span>📄 Cash reference will be generated automatically</span>
+                </div>
               )}
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="mpesa-amount">M-Pesa Amount (KES)</Label>
+            {/* Enhanced M-Pesa Field */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                <Smartphone className="h-5 w-5 text-blue-600" />
+                <div>
+                  <Label htmlFor="mpesa-amount" className="text-base font-semibold text-blue-800">
+                    📱 M-PESA Amount (KES)
+                  </Label>
+                  <p className="text-xs text-blue-600">Mobile money received</p>
+                </div>
+              </div>
               <Input
                 id="mpesa-amount"
                 type="number"
                 step="0.01"
-                placeholder="0"
+                placeholder="0.00"
                 value={mpesaAmount}
                 onChange={(e) => setMpesaAmount(e.target.value)}
+                className="text-lg p-3 border-2 border-blue-300 focus:border-blue-500 bg-blue-50/30"
               />
+              {mpesaAmountNum > 0 && (
+                <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-100 p-2 rounded">
+                  <span>📱 M-Pesa transaction recorded</span>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="p-4 bg-primary/10 rounded-lg">
+          {/* Enhanced Total Summary */}
+          <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
             <div className="flex justify-between items-center">
               <span className="font-medium">Amount to Allocate:</span>
               <span className="text-xl font-bold text-primary">
                 {formatAmount(totalCollected)}
               </span>
             </div>
+            {/* Show breakdown if both amounts exist */}
+            {cashAmountNum > 0 && mpesaAmountNum > 0 && (
+              <div className="mt-2 pt-2 border-t border-primary/20 text-sm text-muted-foreground">
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-1">
+                    <Banknote className="h-3 w-3 text-green-600" />
+                    Cash: {formatAmount(cashAmountNum)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Smartphone className="h-3 w-3 text-blue-600" />
+                    M-Pesa: {formatAmount(mpesaAmountNum)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
+
 
       {/* Allocations */}
       <Card className="shadow-card bg-gradient-card">

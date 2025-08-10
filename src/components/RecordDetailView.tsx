@@ -44,6 +44,7 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   const allocationTypes = ['savings', 'loan', 'advance', 'other'];
   const allocationReasons = [
     'Monthly Contribution',
+    'Advance fine(kes 10)',
     'Loan Repayment',
     'Interest Payment',
     'Penalty Fee',
@@ -58,6 +59,24 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     'Welfare Fund',
     'Other'
   ];
+
+  // Helper function to get display name for allocation type
+  const getDisplayName = (allocationType: string): string => {
+    switch (allocationType) {
+      case 'amount_for_advance_payment':
+      case 'amount_for_advance_payments':
+        return 'Advance';
+      case 'savings':
+        return 'Savings';
+      case 'loan':
+        return 'Loan';
+      case 'other':
+        return 'Other';
+      default:
+        // Fallback: capitalize first letter and replace underscores with spaces
+        return allocationType.charAt(0).toUpperCase() + allocationType.slice(1).replace(/_/g, ' ');
+    }
+  };
 
   // Get original cash amount for validation
   const getOriginalCashAmount = () => {
@@ -332,12 +351,21 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     const originalCashAmount = getOriginalCashAmount();
     const currentAllocations = editValues.allocations || data.allocations || [];
     
+    // Calculate current values
+    const currentCashAmount = editValues.cashAmount !== undefined ? editValues.cashAmount : (data.cashAmount || 0);
+    const currentMpesaAmount = editValues.mpesaAmount !== undefined ? editValues.mpesaAmount : (data.mpesaAmount || 0);
+    const calculatedTotal = currentCashAmount + currentMpesaAmount;
+    
+    // Calculate total allocations
+    const totalAllocations = currentAllocations.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+    
     return (
       <>
         {/* Transaction amounts */}
-        {renderEditableField('Total Amount', 'totalAmount', data.totalAmount || 0, 'number')}
         {renderEditableField('Cash Amount', 'cashAmount', data.cashAmount || 0, 'number', originalCashAmount)}
         {renderEditableField('M-Pesa Amount', 'mpesaAmount', data.mpesaAmount || 0, 'number')}
+        {renderReadOnlyField('Total Amount (Cash + M-Pesa)', formatAmount(calculatedTotal))}
+        {renderReadOnlyField('Total Allocations', formatAmount(totalAllocations))}
         
         {/* Member Allocations */}
         <div className="space-y-3">
@@ -380,13 +408,13 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select type">
-                              {allocation.type ? (allocation.type === 'advance' ? 'Advance' : allocation.type.charAt(0).toUpperCase() + allocation.type.slice(1)) : 'Select type'}
+                              {allocation.type ? getDisplayName(allocation.type) : 'Select type'}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {allocationTypes.map((type) => (
                               <SelectItem key={type} value={type}>
-                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                                {getDisplayName(type)}
                               </SelectItem>
                             ))}
                           </SelectContent>
