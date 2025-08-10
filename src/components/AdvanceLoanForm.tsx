@@ -240,6 +240,20 @@ export function AdvanceLoanForm() {
   };
 
   const handleSave = async () => {
+    // Check if all applications have fee payment type selected
+    const applicationsWithoutFee = applications.filter(app => 
+      app.advanceAmount > 0 && !app.feePaymentType
+    );
+
+    if (applicationsWithoutFee.length > 0) {
+      toast({
+        title: "❌ Fee Payment Required",
+        description: "Please collect the 10 KES advance fee for all members before saving",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       for (const application of applications) {
         await dbOperations.addAdvanceLoan({
