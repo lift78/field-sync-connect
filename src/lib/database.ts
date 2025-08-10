@@ -185,6 +185,10 @@ export const dbOperations = {
     return await db.cashCollections.update(Number(id), updates);
   },
 
+  async deleteCashCollection(id: string | number) {
+    return await db.cashCollections.delete(Number(id));
+  },
+
   // =============================================================================
   // LOAN APPLICATIONS
   // =============================================================================
