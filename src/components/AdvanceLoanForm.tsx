@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Save, Zap, Banknote, Smartphone } from "lucide-react";
 import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
-import { Keyboard } from "@capacitor/keyboard";
+// import { Keyboard } from "@capacitor/keyboard";
 
 
 // Mock member data - fallback when no real data exists
@@ -56,29 +56,7 @@ export function AdvanceLoanForm() {
   }, []);
 
 
-  useEffect(() => {
-    const handleKeyboardShow = () => {
-      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
-      if (navbar) {
-        (navbar as HTMLElement).style.transform = 'translateY(100%)';
-        (navbar as HTMLElement).style.transition = 'transform 0.3s ease-in-out';
-      }
-    };
-  
-    const handleKeyboardHide = () => {
-      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
-      if (navbar) {
-        (navbar as HTMLElement).style.transform = 'translateY(0)';
-      }
-    };
-  
-    Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
-    Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
-  
-    return () => {
-      Keyboard.removeAllListeners();
-    };
-  }, []);
+  // Mobile keyboard handling will be added later when Capacitor is properly configured
 
   // Search and filter members based on query
   const filteredMembers = useMemo(() => {

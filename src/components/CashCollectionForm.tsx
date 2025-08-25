@@ -12,7 +12,7 @@ import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
 import { Calculator } from "lucide-react";
 import { Plus, Trash2, Save, User, Phone, Users, Banknote, Smartphone, AlertCircle, DollarSign } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Keyboard } from "@capacitor/keyboard";
+// import { Keyboard } from "@capacitor/keyboard";
 
 
 // Mock member data - fallback when no real data exists
@@ -75,30 +75,7 @@ export function CashCollectionForm() {
   const { toast } = useToast();
 
 
-  // Add this useEffect in your component
-  useEffect(() => {
-    const handleKeyboardShow = () => {
-      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
-      if (navbar) {
-        (navbar as HTMLElement).style.transform = 'translateY(100%)';
-        (navbar as HTMLElement).style.transition = 'transform 0.3s ease-in-out';
-      }
-    };
-  
-    const handleKeyboardHide = () => {
-      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
-      if (navbar) {
-        (navbar as HTMLElement).style.transform = 'translateY(0)';
-      }
-    };
-  
-    Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
-    Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
-  
-    return () => {
-      Keyboard.removeAllListeners();
-    };
-  }, []);
+  // Mobile keyboard handling will be added later when Capacitor is properly configured
 
   // Load real member data on component mount
   useEffect(() => {
