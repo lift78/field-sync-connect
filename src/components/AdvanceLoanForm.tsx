@@ -27,8 +27,6 @@ interface AdvanceLoanApplication {
   memberId: string;
   memberName: string;
   advanceAmount: number;
-  feePaymentType?: 'cash' | 'mpesa' | null;
-  feeCollectionId?: string;
 }
 
 export function AdvanceLoanForm() {
@@ -180,18 +178,7 @@ export function AdvanceLoanForm() {
     ));
   };
 
-  const removeApplication = async (id: string) => {
-    const application = applications.find(app => app.id === id);
-    
-    // If there's a fee collection record, delete it first
-    if (application?.feeCollectionId) {
-      try {
-        await dbOperations.deleteCashCollection(application.feeCollectionId);
-      } catch (error) {
-        console.error('Error deleting fee collection:', error);
-      }
-    }
-    
+  const removeApplication = (id: string) => {
     setApplications(applications.filter(app => app.id !== id));
   };
 
@@ -201,72 +188,18 @@ export function AdvanceLoanForm() {
     setMemberQuery('');
   };
 
-  const handleFeePayment = async (applicationId: string, paymentType: 'cash' | 'mpesa') => {
-    const application = applications.find(app => app.id === applicationId);
-    if (!application) return;
-
-    try {
-      // Create cash collection record for the fee
-      const feeCollection = {
-        memberId: application.memberId,
-        memberName: application.memberName,
-        totalAmount: 10,
-        cashAmount: paymentType === 'cash' ? 10 : 0,
-        mpesaAmount: paymentType === 'mpesa' ? 10 : 0,
-        allocations: [{
-          memberId: application.memberId,
-          type: 'other' as const,
-          amount: 10,
-          reason: 'Advance fine(kes 10)'
-        }],
-        timestamp: new Date()
-      };
-
-      const feeCollectionId = await dbOperations.addCashCollection(feeCollection);
-      
-      // Update application with fee payment info
-      updateApplication(applicationId, {
-        feePaymentType: paymentType,
-        feeCollectionId: feeCollectionId
-      });
-
-      toast({
-        title: "✅ Fee Collected",
-        description: `10 KES advance fee collected via ${paymentType.toUpperCase()}`,
-      });
-    } catch (error) {
-      console.error('Error collecting fee:', error);
-      toast({
-        title: "❌ Fee Collection Failed",
-        description: "Failed to record advance fee payment",
-        variant: "destructive"
-      });
-    }
-  };
 
   const handleSave = async () => {
-    // Check if all applications have fee payment type selected
-    const applicationsWithoutFee = applications.filter(app => 
-      app.advanceAmount > 0 && !app.feePaymentType
-    );
-
-    if (applicationsWithoutFee.length > 0) {
-      toast({
-        title: "❌ Fee Payment Required",
-        description: "Please collect the 10 KES advance fee for all members before saving",
-        variant: "destructive"
-      });
-      return;
-    }
-
     try {
       for (const application of applications) {
-        await dbOperations.addAdvanceLoan({
-          memberId: application.memberId,
-          memberName: application.memberName,
-          amount: application.advanceAmount,
-          timestamp: new Date()
-        });
+        if (application.advanceAmount > 0) {
+          await dbOperations.addAdvanceLoan({
+            memberId: application.memberId,
+            memberName: application.memberName,
+            amount: application.advanceAmount,
+            timestamp: new Date()
+          });
+        }
       }
       
       toast({
@@ -443,76 +376,6 @@ export function AdvanceLoanForm() {
                 </div>
               </div>
 
-              {/* Advance Fee Collection */}
-              {application.advanceAmount > 0 && (
-                <div className="space-y-3">
-                  <div className="p-3 bg-warning/10 rounded-lg border border-warning/20">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-warning">Advance Fee Required:</span>
-                      <span className="font-bold">KES 10</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      Member must pay an additional 10 KES fee for advance loan processing
-                    </p>
-                    
-                    {!application.feePaymentType ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleFeePayment(application.id, 'cash')}
-                          className="flex items-center gap-2"
-                        >
-                          <Banknote className="h-4 w-4" />
-                          Cash
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleFeePayment(application.id, 'mpesa')}
-                          className="flex items-center gap-2"
-                        >
-                          <Smartphone className="h-4 w-4" />
-                          M-Pesa
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between p-2 bg-success/10 rounded border border-success/20">
-                        <span className="text-sm text-success font-medium">
-                          ✅ Fee collected via {application.feePaymentType.toUpperCase()}
-                        </span>
-                        <Badge variant="secondary" className="text-xs">
-                          KES 10
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Advance Info */}
-                  <div className="p-3 bg-accent/10 rounded-lg border border-accent/20">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Advance Amount:</span>
-                        <span className="font-bold text-accent">
-                          {formatAmount(application.advanceAmount)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">Zero Processing Fee:</span>
-                        <span className="text-sm font-medium">
-                          {formatAmount(application.advanceAmount)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center border-t pt-2">
-                        <span className="text-sm font-medium">Net Amount:</span>
-                        <span className="font-bold text-success">
-                          {formatAmount(application.advanceAmount)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         ))}
