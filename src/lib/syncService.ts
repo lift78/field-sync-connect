@@ -209,8 +209,9 @@ export class SyncService {
     let success = 0;
     let failed = 0;
     const errors: string[] = [];
-  
-    for (const record of records) {
+    
+    // Helper function to sync a single record
+    const syncSingleRecord = async (record: CashCollection) => {
       try {
         let cashSyncSuccess = true;
         let cashResult = null;
@@ -312,13 +313,7 @@ export class SyncService {
           if (!allocRes.ok || !allocJson.success) {
             console.warn(`⚠️ Allocation sync failed for ${record.id}`, allocJson);
             const errorMsg = `${allocJson.error || 'Unknown error'}`;
-            errors.push(`Allocation failed for ${record.id}: ${errorMsg}`);
-            // Mark record as failed
-            if (record.id) {
-              await dbOperations.markCashCollectionFailed(record.id, errorMsg);
-            }
-            failed++;
-            continue; // Skip marking as synced
+            throw new Error(`Allocation failed for ${record.id}: ${errorMsg}`);
           } else {
             console.log(`✅ Allocations synced successfully for ${record.id}`);
           }
@@ -329,27 +324,50 @@ export class SyncService {
           if (record.id) {
             await dbOperations.markCashCollectionSynced(record.id);
           }
-          success++;
           console.log(`✅ Record ${record.id} marked as synced`);
+          return { success: true, error: null };
         } else {
-          failed++;
           const errorMsg = `Cash sync failed for ${record.id}: ${cashResult?.error || 'Unknown error'}`;
-          errors.push(errorMsg);
-          // Mark record as failed
           if (record.id) {
             await dbOperations.markCashCollectionFailed(record.id, cashResult?.error || 'Unknown error');
           }
+          return { success: false, error: errorMsg };
         }
   
       } catch (error: any) {
-        failed++;
-        errors.push(`Exception for ${record.id}: ${error.message}`);
         console.error(`💥 Exception during sync for ${record.id}:`, error);
         // Mark record as failed
         if (record.id) {
           await dbOperations.markCashCollectionFailed(record.id, error.message);
         }
+        return { success: false, error: `Exception for ${record.id}: ${error.message}` };
       }
+    };
+
+    // Process records in batches of 5
+    const batchSize = 5;
+    for (let i = 0; i < records.length; i += batchSize) {
+      const batch = records.slice(i, i + batchSize);
+      console.log(`🔄 Processing batch ${Math.floor(i / batchSize) + 1} (${batch.length} records)`);
+      
+      // Process batch in parallel using Promise.all
+      const batchResults = await Promise.all(
+        batch.map(record => syncSingleRecord(record))
+      );
+      
+      // Aggregate results from this batch
+      batchResults.forEach(result => {
+        if (result.success) {
+          success++;
+        } else {
+          failed++;
+          if (result.error) {
+            errors.push(result.error);
+          }
+        }
+      });
+      
+      console.log(`✅ Batch ${Math.floor(i / batchSize) + 1} completed: ${batchResults.filter(r => r.success).length} succeeded, ${batchResults.filter(r => !r.success).length} failed`);
     }
   
     return { success, failed, errors };
