@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ const ADVANCE_FIXED_FINE = 10; // 10 KES fixed fine
 interface AdvanceCalculatorProps {
   onAmountSelect?: (amount: number) => void;
   currentAmount?: number;
+  currentBalance?: number;
 }
 
 interface CalculatorDialogProps extends AdvanceCalculatorProps {
@@ -150,11 +151,21 @@ function calculateAdvancePaymentSplit(currentBalance: number, amountForAdvancePa
   };
 }
 
-function CalculatorContent({ onAmountSelect, currentAmount }: AdvanceCalculatorProps) {
-  const [currentBalance, setCurrentBalance] = useState<string>('');
+function CalculatorContent({ onAmountSelect, currentAmount, currentBalance }: AdvanceCalculatorProps) {
+  // Pre-fill current balance if provided
+  const [currentBalanceState, setCurrentBalanceState] = useState<string>(
+    currentBalance && currentBalance > 0 ? currentBalance.toString() : ''
+  );
   const [paymentAmount, setPaymentAmount] = useState<string>(currentAmount?.toString() || '');
 
-  const currentBalanceNum = parseFloat(currentBalance) || 0;
+  // Update current balance when prop changes
+  useEffect(() => {
+    if (currentBalance && currentBalance > 0 && !currentBalanceState) {
+      setCurrentBalanceState(currentBalance.toString());
+    }
+  }, [currentBalance, currentBalanceState]);
+
+  const currentBalanceNum = parseFloat(currentBalanceState) || 0;
   const paymentAmountNum = parseFloat(paymentAmount) || 0;
 
   // Calculate the split using the local utility function
@@ -200,8 +211,8 @@ function CalculatorContent({ onAmountSelect, currentAmount }: AdvanceCalculatorP
                 id="current-balance"
                 type="number"
                 placeholder="Enter current balance..."
-                value={currentBalance}
-                onChange={(e) => setCurrentBalance(e.target.value)}
+                value={currentBalanceState}
+                onChange={(e) => setCurrentBalanceState(e.target.value)}
                 className="text-lg"
               />
             </div>
@@ -363,7 +374,7 @@ function CalculatorContent({ onAmountSelect, currentAmount }: AdvanceCalculatorP
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Enter the current advance loan balance to see payment calculations. This calculator helps you understand how your payment will be split between principal and interest using the same logic as the backend system.
+            Enter the current advance loan balance to see payment calculations. This calculator helps you understand how your payment will be split between principal(adva paid) and interest(int paid) using the same logic as the backend system.
           </AlertDescription>
         </Alert>
       )}
@@ -371,11 +382,11 @@ function CalculatorContent({ onAmountSelect, currentAmount }: AdvanceCalculatorP
   );
 }
 
-export function AdvanceCalculator({ onAmountSelect, currentAmount }: AdvanceCalculatorProps) {
-  return <CalculatorContent onAmountSelect={onAmountSelect} currentAmount={currentAmount} />;
+export function AdvanceCalculator({ onAmountSelect, currentAmount, currentBalance }: AdvanceCalculatorProps) {
+  return <CalculatorContent onAmountSelect={onAmountSelect} currentAmount={currentAmount} currentBalance={currentBalance} />;
 }
 
-export function AdvanceCalculatorDialog({ trigger, onAmountSelect, currentAmount }: CalculatorDialogProps) {
+export function AdvanceCalculatorDialog({ trigger, onAmountSelect, currentAmount, currentBalance }: CalculatorDialogProps) {
   const [open, setOpen] = useState(false);
 
   const handleAmountSelect = (amount: number) => {
@@ -400,7 +411,8 @@ export function AdvanceCalculatorDialog({ trigger, onAmountSelect, currentAmount
         </DialogHeader>
         <CalculatorContent 
           onAmountSelect={handleAmountSelect} 
-          currentAmount={currentAmount} 
+          currentAmount={currentAmount}
+          currentBalance={currentBalance}
         />
       </DialogContent>
     </Dialog>

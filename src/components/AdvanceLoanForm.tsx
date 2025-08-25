@@ -1,48 +1,176 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Save, Zap } from "lucide-react";
-import { dbOperations } from "@/lib/database";
+import { Plus, Trash2, Save, Zap, Banknote, Smartphone } from "lucide-react";
+import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
+import { Keyboard } from "@capacitor/keyboard";
 
-// Mock member data - replace with actual member data from your system
-const mockMembers = Array.from({ length: 50 }, (_, i) => ({
+
+// Mock member data - fallback when no real data exists
+const mockMembers = Array.from({ length: 9999 }, (_, i) => ({
   id: String(i + 1).padStart(4, '0'),
   name: `Member ${i + 1}`,
 }));
+
+// Helper function to extract member ID from member_id field (e.g., "MEM/2025/0007" -> "0007")
+const extractMemberId = (memberIdField: string): string => {
+  const parts = memberIdField.split('/');
+  return parts[parts.length - 1] || memberIdField;
+};
 
 interface AdvanceLoanApplication {
   id: string;
   memberId: string;
   memberName: string;
   advanceAmount: number;
+  feePaymentType?: 'cash' | 'mpesa' | null;
+  feeCollectionId?: string;
 }
 
 export function AdvanceLoanForm() {
   const [applications, setApplications] = useState<AdvanceLoanApplication[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [selectedMemberName, setSelectedMemberName] = useState('');
+  const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
   const { toast } = useToast();
 
-  // Filter members based on search query - exact padded match only
+  // Load real member data on component mount
+  useEffect(() => {
+    const loadRealMembers = async () => {
+      try {
+        const members = await dbOperations.getAllMembers();
+        setRealMembers(members);
+        console.log(`Loaded ${members.length} real members for advance loans`);
+      } catch (error) {
+        console.error('Error loading real members:', error);
+        setRealMembers([]);
+      }
+    };
+
+    loadRealMembers();
+  }, []);
+
+
+  useEffect(() => {
+    const handleKeyboardShow = () => {
+      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
+      if (navbar) {
+        (navbar as HTMLElement).style.transform = 'translateY(100%)';
+        (navbar as HTMLElement).style.transition = 'transform 0.3s ease-in-out';
+      }
+    };
+  
+    const handleKeyboardHide = () => {
+      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
+      if (navbar) {
+        (navbar as HTMLElement).style.transform = 'translateY(0)';
+      }
+    };
+  
+    Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
+    Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
+  
+    return () => {
+      Keyboard.removeAllListeners();
+    };
+  }, []);
+
+  // Search and filter members based on query
   const filteredMembers = useMemo(() => {
     if (!memberQuery) return [];
     
-    // If input is numeric, pad with zeros and find exact match
-    if (/^\d+$/.test(memberQuery.trim())) {
-      const paddedId = memberQuery.trim().padStart(4, '0');
-      const exactMatch = mockMembers.find(member => member.id === paddedId);
-      return exactMatch ? [exactMatch] : [];
+    const query = memberQuery.trim().toLowerCase();
+    const results: Array<{
+      id: string;
+      name: string;
+      isReal: boolean;
+    }> = [];
+
+    // First, search in real member data
+    if (realMembers.length > 0) {
+      const realMatches = realMembers.filter(member => {
+        const memberId = extractMemberId(member.member_id);
+        return (
+          memberId.toLowerCase().includes(query) ||
+          member.name.toLowerCase().includes(query) ||
+          member.phone.includes(memberQuery.trim()) ||
+          member.member_id.toLowerCase().includes(query)
+        );
+      }).slice(0, 10);
+
+      // Add real members to results
+      realMatches.forEach(member => {
+        const memberId = extractMemberId(member.member_id);
+        results.push({
+          id: memberId,
+          name: member.name,
+          isReal: true
+        });
+      });
     }
-    
-    // If input contains letters, search by name
-    return mockMembers.filter(member => 
-      member.name.toLowerCase().includes(memberQuery.toLowerCase())
-    ).slice(0, 5);
-  }, [memberQuery]);
+
+    // If no real members found or query looks like numeric ID, also search mock data
+    if (results.length === 0 || /^\d+$/.test(query)) {
+      const mockQuery = memberQuery.trim();
+      
+      // If input is numeric, handle ID searching in mock data
+      if (/^\d+$/.test(mockQuery)) {
+        // 1. Try exact padded match first (e.g., "345" -> "0345")
+        const paddedId = mockQuery.padStart(4, '0');
+        
+        // Skip if we already have this ID from real data
+        const alreadyHasThisId = results.some(r => r.id === paddedId);
+        
+        if (!alreadyHasThisId) {
+          const exactMatch = mockMembers.find(member => member.id === paddedId);
+          if (exactMatch) {
+            results.push({
+              id: exactMatch.id,
+              name: exactMatch.name,
+              isReal: false
+            });
+          }
+          
+          // 2. If no exact match and query is shorter than 4 digits, search for IDs that start with the query
+          if (!exactMatch && mockQuery.length < 4) {
+            const startMatches = mockMembers.filter(member => 
+              member.id.startsWith(mockQuery.padStart(mockQuery.length, '0')) &&
+              !results.some(r => r.id === member.id) // Avoid duplicates
+            ).slice(0, 5);
+            startMatches.forEach(member => {
+              results.push({
+                id: member.id,
+                name: member.name,
+                isReal: false
+              });
+            });
+          }
+          
+          // 3. If query is 4+ digits and no exact match, search for partial matches
+          if (!exactMatch && mockQuery.length >= 4) {
+            const partialMatches = mockMembers.filter(member => 
+              (member.id.includes(mockQuery) || member.id === mockQuery) &&
+              !results.some(r => r.id === member.id) // Avoid duplicates
+            ).slice(0, 5);
+            partialMatches.forEach(member => {
+              results.push({
+                id: member.id,
+                name: member.name,
+                isReal: false
+              });
+            });
+          }
+        }
+      }
+    }
+
+    return results.slice(0, 10); // Limit total results
+  }, [memberQuery, realMembers]);
 
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
@@ -53,18 +181,18 @@ export function AdvanceLoanForm() {
   };
 
   const addMember = () => {
-    const selectedMember = mockMembers.find(m => m.id === selectedMemberId);
-    if (!selectedMember) return;
+    if (!selectedMemberId || !selectedMemberName) return;
 
     const newApplication: AdvanceLoanApplication = {
       id: Date.now().toString(),
-      memberId: selectedMember.id,
-      memberName: selectedMember.name,
+      memberId: selectedMemberId,
+      memberName: selectedMemberName,
       advanceAmount: 0,
     };
 
     setApplications([...applications, newApplication]);
     setSelectedMemberId('');
+    setSelectedMemberName('');
     setMemberQuery('');
   };
 
@@ -74,11 +202,85 @@ export function AdvanceLoanForm() {
     ));
   };
 
-  const removeApplication = (id: string) => {
+  const removeApplication = async (id: string) => {
+    const application = applications.find(app => app.id === id);
+    
+    // If there's a fee collection record, delete it first
+    if (application?.feeCollectionId) {
+      try {
+        await dbOperations.deleteCashCollection(application.feeCollectionId);
+      } catch (error) {
+        console.error('Error deleting fee collection:', error);
+      }
+    }
+    
     setApplications(applications.filter(app => app.id !== id));
   };
 
+  const handleMemberSelect = (member: { id: string; name: string; isReal: boolean }) => {
+    setSelectedMemberId(member.id);
+    setSelectedMemberName(member.name);
+    setMemberQuery('');
+  };
+
+  const handleFeePayment = async (applicationId: string, paymentType: 'cash' | 'mpesa') => {
+    const application = applications.find(app => app.id === applicationId);
+    if (!application) return;
+
+    try {
+      // Create cash collection record for the fee
+      const feeCollection = {
+        memberId: application.memberId,
+        memberName: application.memberName,
+        totalAmount: 10,
+        cashAmount: paymentType === 'cash' ? 10 : 0,
+        mpesaAmount: paymentType === 'mpesa' ? 10 : 0,
+        allocations: [{
+          memberId: application.memberId,
+          type: 'other' as const,
+          amount: 10,
+          reason: 'Advance fine(kes 10)'
+        }],
+        timestamp: new Date()
+      };
+
+      const feeCollectionId = await dbOperations.addCashCollection(feeCollection);
+      
+      // Update application with fee payment info
+      updateApplication(applicationId, {
+        feePaymentType: paymentType,
+        feeCollectionId: feeCollectionId
+      });
+
+      toast({
+        title: "✅ Fee Collected",
+        description: `10 KES advance fee collected via ${paymentType.toUpperCase()}`,
+      });
+    } catch (error) {
+      console.error('Error collecting fee:', error);
+      toast({
+        title: "❌ Fee Collection Failed",
+        description: "Failed to record advance fee payment",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleSave = async () => {
+    // Check if all applications have fee payment type selected
+    const applicationsWithoutFee = applications.filter(app => 
+      app.advanceAmount > 0 && !app.feePaymentType
+    );
+
+    if (applicationsWithoutFee.length > 0) {
+      toast({
+        title: "❌ Fee Payment Required",
+        description: "Please collect the 10 KES advance fee for all members before saving",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       for (const application of applications) {
         await dbOperations.addAdvanceLoan({
@@ -98,6 +300,7 @@ export function AdvanceLoanForm() {
       setApplications([]);
       setMemberQuery('');
       setSelectedMemberId('');
+      setSelectedMemberName('');
     } catch (error) {
       toast({
         title: "❌ Save Failed",
@@ -122,7 +325,7 @@ export function AdvanceLoanForm() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="member-search">Search Member</Label>
+            <Label htmlFor="member-search">Search Member ID or Name</Label>
             <Input
               id="member-search"
               placeholder="Type member ID or name..."
@@ -137,17 +340,23 @@ export function AdvanceLoanForm() {
               <div className="grid gap-2 max-h-48 overflow-y-auto">
                 {filteredMembers
                   .filter(member => !applications.some(app => app.memberId === member.id))
-                  .map((member) => (
+                  .map((member, index) => (
                   <Button
-                    key={member.id}
+                    key={`${member.id}-${index}`}
                     variant={selectedMemberId === member.id ? "default" : "outline"}
-                    onClick={() => {
-                      setSelectedMemberId(member.id);
-                      setMemberQuery('');
-                    }}
-                    className="justify-start"
+                    onClick={() => handleMemberSelect(member)}
+                    className="justify-start p-3 h-auto text-left"
                   >
-                    {member.id} - {member.name}
+                    <div className="flex flex-col items-start w-full">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{member.id} - {member.name}</span>
+                        {member.isReal && (
+                          <Badge variant="secondary" className="text-xs">
+                            REAL DATA
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   </Button>
                 ))}
               </div>
@@ -159,13 +368,14 @@ export function AdvanceLoanForm() {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="font-medium text-success">Selected Member:</p>
-                  <p className="text-sm">{mockMembers.find(m => m.id === selectedMemberId)?.id} - {mockMembers.find(m => m.id === selectedMemberId)?.name}</p>
+                  <p className="text-sm">{selectedMemberId} - {selectedMemberName}</p>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
                     setSelectedMemberId('');
+                    setSelectedMemberName('');
                     setMemberQuery('');
                   }}
                   className="text-muted-foreground hover:text-destructive"
@@ -239,7 +449,7 @@ export function AdvanceLoanForm() {
               <div className="space-y-2">
                 <Label className="text-sm">Quick Select</Label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[5000, 10000, 15000, 20000, 25000, 30000].map((amount) => (
+                  {[2000, 5000, 8000, 10000, 15000, 20000].map((amount) => (
                     <Button
                       key={amount}
                       variant="outline"
@@ -255,27 +465,72 @@ export function AdvanceLoanForm() {
                 </div>
               </div>
 
-              {/* Advance Info */}
+              {/* Advance Fee Collection */}
               {application.advanceAmount > 0 && (
-                <div className="p-3 bg-accent/10 rounded-lg border border-accent/20">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Advance Amount:</span>
-                      <span className="font-bold text-accent">
-                        {formatAmount(application.advanceAmount)}
-                      </span>
+                <div className="space-y-3">
+                  <div className="p-3 bg-warning/10 rounded-lg border border-warning/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-warning">Advance Fee Required:</span>
+                      <span className="font-bold">KES 10</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">Processing Fee (5%):</span>
-                      <span className="text-sm font-medium">
-                        {formatAmount(application.advanceAmount * 0.05)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center border-t pt-2">
-                      <span className="text-sm font-medium">Net Amount:</span>
-                      <span className="font-bold text-success">
-                        {formatAmount(application.advanceAmount * 0.95)}
-                      </span>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Member must pay an additional 10 KES fee for advance loan processing
+                    </p>
+                    
+                    {!application.feePaymentType ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleFeePayment(application.id, 'cash')}
+                          className="flex items-center gap-2"
+                        >
+                          <Banknote className="h-4 w-4" />
+                          Cash
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleFeePayment(application.id, 'mpesa')}
+                          className="flex items-center gap-2"
+                        >
+                          <Smartphone className="h-4 w-4" />
+                          M-Pesa
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between p-2 bg-success/10 rounded border border-success/20">
+                        <span className="text-sm text-success font-medium">
+                          ✅ Fee collected via {application.feePaymentType.toUpperCase()}
+                        </span>
+                        <Badge variant="secondary" className="text-xs">
+                          KES 10
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Advance Info */}
+                  <div className="p-3 bg-accent/10 rounded-lg border border-accent/20">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Advance Amount:</span>
+                        <span className="font-bold text-accent">
+                          {formatAmount(application.advanceAmount)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Zero Processing Fee:</span>
+                        <span className="text-sm font-medium">
+                          {formatAmount(application.advanceAmount)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center border-t pt-2">
+                        <span className="text-sm font-medium">Net Amount:</span>
+                        <span className="font-bold text-success">
+                          {formatAmount(application.advanceAmount)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -302,12 +557,12 @@ export function AdvanceLoanForm() {
                   </div>
                   <div className="text-sm text-muted-foreground">
                     Total Processing Fees: {formatAmount(
-                      applications.reduce((sum, app) => sum + (app.advanceAmount * 0.05), 0)
+                      applications.reduce((sum, app) => sum + (app.advanceAmount), 0)
                     )}
                   </div>
                   <div className="text-base font-semibold text-success">
                     Net Disbursement: {formatAmount(
-                      applications.reduce((sum, app) => sum + (app.advanceAmount * 0.95), 0)
+                      applications.reduce((sum, app) => sum + (app.advanceAmount), 0)
                     )}
                   </div>
                 </div>
@@ -335,7 +590,7 @@ export function AdvanceLoanForm() {
               No advance loan applications yet. Add members to get started.
             </p>
             <p className="text-sm text-muted-foreground mt-2">
-              Advance loans are processed quickly with a 5% processing fee
+              Advance loans are processed quickly with no processing fee
             </p>
           </CardContent>
         </Card>

@@ -56,9 +56,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           {/* Logo */}
           <div className="flex justify-center mb-6">
             <img 
-              src="/lovable-uploads/logo1.png" 
+              src={theme === 'dark' ? "/lovable-uploads/logo2.png" : "/lovable-uploads/logo1.png"}
               alt="LIFT Company Logo" 
-              className="h-16 w-16"
+              className="h-32 w-32"
             />
           </div>
 

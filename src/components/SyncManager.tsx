@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label"; // Added missing import
-import { Input } from "@/components/ui/input"; // Added missing import
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { RecordsList } from "./RecordsList";
 import { dbOperations } from "@/lib/database";
+import { syncService } from "@/lib/syncService"; // Import syncService for member data updates
 import { 
   RefreshCw, 
   Wifi, 
@@ -21,25 +22,29 @@ import {
   Settings,
   User,
   Key,
-  X // Added missing icon
+  X,
+  Users // New icon for member data
 } from "lucide-react";
 
 interface SyncData {
-  type: 'cash' | 'loan' | 'advance';
+  type: 'cash' | 'loan' | 'advance' | 'disbursement';
   count: number;
   lastUpdated: string;
 }
 
 interface SyncManagerProps {
-  onEditRecord?: (type: 'cash' | 'loan' | 'advance', recordData: any) => void;
+  onEditRecord?: (type: 'cash' | 'loan' | 'advance' | 'disbursement', recordData: any) => void;
 }
 
 export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isUpdatingMembers, setIsUpdatingMembers] = useState(false); // New state for member updates
   const [syncProgress, setSyncProgress] = useState(0);
+  const [memberUpdateProgress, setMemberUpdateProgress] = useState(0); // New state for member update progress
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | null>(null);
+  const [lastMemberUpdateTime, setLastMemberUpdateTime] = useState<string | null>(null); // New state for last member update
+  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | null>(null);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [offlineData, setOfflineData] = useState<SyncData[]>([]);
   const [credentials, setCredentials] = useState({ username: "", password: "" });
@@ -59,10 +64,12 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     
     const loadOfflineData = async () => {
       try {
-        const [cash, loans, advances] = await Promise.all([
-          dbOperations.getCashCollections(),  // All records
-          dbOperations.getLoanApplications(), // All records  
-          dbOperations.getAdvanceLoans()      // All records
+        // FIX: Load UNSYNCED records instead of all records
+        const [cash, loans, advances, disbursements] = await Promise.all([
+          dbOperations.getUnsyncedCashCollections(),      // ✅ Only unsynced
+          dbOperations.getUnsyncedLoanApplications(),     // ✅ Only unsynced
+          dbOperations.getUnsyncedAdvanceLoans(),         // ✅ Only unsynced
+          dbOperations.getUnsyncedLoanDisbursements()     // ✅ Only unsynced
         ]);
 
         setOfflineData([
@@ -80,6 +87,11 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
             type: 'advance', 
             count: advances.length, 
             lastUpdated: advances.length > 0 ? advances[0].timestamp.toISOString() : new Date().toISOString()
+          },
+          { 
+            type: 'disbursement', 
+            count: disbursements.length, 
+            lastUpdated: disbursements.length > 0 ? disbursements[0].timestamp.toISOString() : new Date().toISOString()
           },
         ]);
       } catch (error) {
@@ -182,8 +194,53 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
       setSyncProgress(0);
     }
   };
-  
 
+  // NEW: Handle member data update
+  const handleMemberDataUpdate = async () => {
+    if (!isOnline) {
+      alert('No internet connection. Please check your connection and try again.');
+      return;
+    }
+
+    setIsUpdatingMembers(true);
+    setMemberUpdateProgress(0);
+
+    try {
+      // Simulate progress visually
+      const progressInterval = setInterval(() => {
+        setMemberUpdateProgress(prev => {
+          if (prev >= 90) return prev; // Stop at 90% until actual completion
+          return prev + 10;
+        });
+      }, 200);
+
+      const result = await syncService.syncMemberDataOnly();
+
+      // Clear progress interval and complete
+      clearInterval(progressInterval);
+      setMemberUpdateProgress(100);
+
+      // Wait a moment to show 100%
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      setLastMemberUpdateTime(new Date().toISOString());
+
+      if (result.success) {
+        alert(`✅ Member data updated successfully!\n📊 ${result.totalMembers} members across ${result.totalMeetings} meetings`);
+      } else {
+        alert(`⚠️ Member data update failed: ${result.error}`);
+      }
+
+    } catch (error: any) {
+      console.error('Member data update failed:', error);
+      alert('❌ Member data update failed. Please try again.');
+    } finally {
+      setIsUpdatingMembers(false);
+      setMemberUpdateProgress(0);
+    }
+  };
+  
+  // FIX: Updated getTypeIcon to include disbursement
   const getTypeIcon = (type: SyncData['type']) => {
     switch (type) {
       case 'cash':
@@ -192,11 +249,14 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         return '🏦';
       case 'advance':
         return '⚡';
+      case 'disbursement':
+        return '💸'; // Added disbursement icon
       default:
         return '📄';
     }
   };
 
+  // FIX: Updated getTypeLabel to include disbursement
   const getTypeLabel = (type: SyncData['type']) => {
     switch (type) {
       case 'cash':
@@ -205,6 +265,8 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         return 'Loan Applications';
       case 'advance':
         return 'Advance Loans';
+      case 'disbursement':
+        return 'Loan Disbursements'; // Added disbursement label
       default:
         return 'Unknown';
     }
@@ -296,7 +358,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <Database className="h-5 w-5 mr-2" />
-            Local Data Summary
+            Unsynced Data Summary
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -311,21 +373,27 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
                 <div>
                   <p className="font-medium">{getTypeLabel(data.type)}</p>
                   <p className="text-sm text-muted-foreground">
-                    Last updated: {formatDateTime(data.lastUpdated)}
+                    {data.count > 0 
+                      ? `Last updated: ${formatDateTime(data.lastUpdated)}`
+                      : "All records synced"
+                    }
                   </p>
                 </div>
               </div>
-              <Badge variant="secondary">
-                {data.count} record{data.count !== 1 ? 's' : ''}
+              <Badge variant={data.count > 0 ? "destructive" : "default"} className={data.count > 0 ? "" : "bg-success text-success-foreground"}>
+                {data.count > 0 
+                  ? `${data.count} unsynced`
+                  : "✅ All synced"
+                }
               </Badge>
             </div>
           ))}
 
           <div className="border-t pt-4">
             <div className="flex justify-between items-center">
-              <span className="font-semibold">Total Records:</span>
-              <Badge variant="default" className="text-lg px-3 py-1">
-                {totalRecords}
+              <span className="font-semibold">Total Unsynced Records:</span>
+              <Badge variant={totalRecords > 0 ? "destructive" : "default"} className={totalRecords > 0 ? "text-lg px-3 py-1" : "bg-success text-success-foreground text-lg px-3 py-1"}>
+                {totalRecords > 0 ? totalRecords : "✅ All synced"}
               </Badge>
             </div>
           </div>
@@ -350,18 +418,53 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         </Card>
       )}
 
+      {/* NEW: Member Data Update Progress */}
+      {isUpdatingMembers && (
+        <Card className="shadow-card bg-gradient-card">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center">
+              <Users className="h-5 w-5 mr-2 animate-pulse" />
+              Updating Member Data...
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Progress value={memberUpdateProgress} className="w-full" />
+            <p className="text-center text-sm text-muted-foreground">
+              {memberUpdateProgress}% complete
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Last Sync Info */}
-      {lastSyncTime && (
+      {(lastSyncTime || lastMemberUpdateTime) && (
         <Card className="shadow-card">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-center space-x-2 text-success">
-              <CheckCircle className="h-5 w-5" />
-              <div className="text-center">
-                <p className="font-medium">Last successful sync</p>
-                <p className="text-sm text-muted-foreground">
-                  {formatDateTime(lastSyncTime)}
-                </p>
-              </div>
+            <div className="space-y-3">
+              {lastSyncTime && (
+                <div className="flex items-center justify-center space-x-2 text-success">
+                  <CheckCircle className="h-5 w-5" />
+                  <div className="text-center">
+                    <p className="font-medium">Last successful sync</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDateTime(lastSyncTime)}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {/* NEW: Last member update info */}
+              {lastMemberUpdateTime && (
+                <div className="flex items-center justify-center space-x-2 text-blue-600">
+                  <Users className="h-5 w-5" />
+                  <div className="text-center">
+                    <p className="font-medium">Last member data update</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDateTime(lastMemberUpdateTime)}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -403,46 +506,81 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         </CardContent>
       </Card>
 
-      {/* Sync Button */}
+      {/* NEW: Updated Sync Buttons Section */}
       <Card className="shadow-card">
         <CardContent className="pt-6">
           <div className="text-center space-y-4">
+            {/* Member Data Update Button */}
+            <div className="border-b pb-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                Update member balances and group data from the server
+              </p>
+              <Button 
+                variant="outline" 
+                size="mobile"
+                onClick={handleMemberDataUpdate}
+                disabled={!isOnline || isUpdatingMembers || isSyncing}
+                className="w-full"
+              >
+                {isUpdatingMembers ? (
+                  <>
+                    <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                    Updating Members...
+                  </>
+                ) : (
+                  <>
+                    <Users className="h-5 w-5 mr-2" />
+                    Update Member Data
+                  </>
+                )}
+              </Button>
+              {!isOnline && (
+                <p className="text-sm text-warning mt-2">
+                  ⚠️ Internet connection required for member data update
+                </p>
+              )}
+            </div>
+
+            {/* Main Sync Button */}
             <div>
               <p className="text-sm text-muted-foreground mb-2">
-                Ready to sync {totalRecords} records to the server
+                {totalRecords > 0 
+                  ? `Ready to sync ${totalRecords} unsynced records to the server`
+                  : "All records are synced to the server"
+                }
               </p>
-              {!isOnline && (
+              {!isOnline && totalRecords > 0 && (
                 <p className="text-sm text-warning mb-4">
                   ⚠️ Internet connection required for syncing
                 </p>
               )}
-            </div>
-            
-            <Button 
-              variant="mobile" 
-              size="mobile"
-              onClick={handleSync}
-              disabled={!isOnline || isSyncing || totalRecords === 0}
-              className="w-full"
-            >
-              {isSyncing ? (
-                <>
-                  <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-5 w-5 mr-2" />
-                  {autoSyncEnabled ? "Manual Sync" : "Sync All Data"}
-                </>
-              )}
-            </Button>
+              
+              <Button 
+                variant="mobile" 
+                size="mobile"
+                onClick={handleSync}
+                disabled={!isOnline || isSyncing || totalRecords === 0 || isUpdatingMembers}
+                className="w-full"
+              >
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-5 w-5 mr-2" />
+                    {autoSyncEnabled ? "Manual Sync" : "Sync All Data"}
+                  </>
+                )}
+              </Button>
 
-            {totalRecords === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No offline data to sync
-              </p>
-            )}
+              {totalRecords === 0 && (
+                <p className="text-sm text-success mt-2">
+                  ✅ All data is synced to the server
+                </p>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -457,6 +595,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
         </CardHeader>
         <CardContent>
           <ul className="text-sm text-muted-foreground space-y-2">
+            <li>• Use "Update Member Data" to refresh balances before transactions</li>
             <li>• Sync regularly when you have internet connection</li>
             <li>• Data is safely stored offline until synced</li>
             <li>• All records are backed up locally</li>

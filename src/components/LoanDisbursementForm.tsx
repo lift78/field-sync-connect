@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
-import { Banknote, Plus, Trash2 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { Banknote, Plus, Trash2, Save } from "lucide-react";
+import { dbOperations } from "@/lib/database"; // Import database operations
+import { useToast } from "@/hooks/use-toast"; // Fix import
 
 interface DisbursementRecord {
   id: string;
@@ -21,6 +22,7 @@ export function LoanDisbursementForm() {
   const [loanId, setLoanId] = useState("");
   const [amountType, setAmountType] = useState<'all' | 'custom'>('all');
   const [customAmount, setCustomAmount] = useState("");
+  const { toast } = useToast(); // Fix toast usage
 
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
@@ -78,7 +80,8 @@ export function LoanDisbursementForm() {
     });
   };
 
-  const handleSave = () => {
+  // FIX: Actually save to database instead of just logging
+  const handleSave = async () => {
     if (disbursements.length === 0) {
       toast({
         title: "No Records",
@@ -88,20 +91,38 @@ export function LoanDisbursementForm() {
       return;
     }
 
-    console.log('Saving disbursements:', disbursements);
-    toast({
-      title: "Saved",
-      description: `${disbursements.length} disbursement(s) saved for sync`,
-    });
-    
-    // Reset after saving
-    setDisbursements([]);
+    try {
+      // Save each disbursement to the database
+      for (const disbursement of disbursements) {
+        await dbOperations.addLoanDisbursement({
+          loanId: disbursement.loanId,
+          amountType: disbursement.amountType,
+          customAmount: disbursement.customAmount,
+          timestamp: disbursement.timestamp
+        });
+      }
+
+      toast({
+        title: "✅ Disbursements Saved",
+        description: `${disbursements.length} disbursement(s) saved successfully`,
+      });
+      
+      // Reset after successful save
+      setDisbursements([]);
+    } catch (error) {
+      console.error('Failed to save disbursements:', error);
+      toast({
+        title: "❌ Save Failed",
+        description: "Failed to save loan disbursements",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
     <div className="space-y-6">
       {/* Add Disbursement Form */}
-      <Card>
+      <Card className="shadow-card bg-gradient-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Banknote className="h-5 w-5" />
@@ -149,7 +170,7 @@ export function LoanDisbursementForm() {
             )}
           </div>
 
-          <Button onClick={addDisbursement} className="w-full">
+          <Button onClick={addDisbursement} className="w-full" variant="mobile">
             <Plus className="h-4 w-4 mr-2" />
             Add Disbursement
           </Button>
@@ -158,7 +179,7 @@ export function LoanDisbursementForm() {
 
       {/* Disbursement Records */}
       {disbursements.length > 0 && (
-        <Card>
+        <Card className="shadow-card bg-gradient-card">
           <CardHeader>
             <CardTitle>Disbursement Records ({disbursements.length})</CardTitle>
           </CardHeader>
@@ -167,7 +188,7 @@ export function LoanDisbursementForm() {
               {disbursements.map((disbursement) => (
                 <div
                   key={disbursement.id}
-                  className="flex items-center justify-between p-3 border rounded-lg"
+                  className="flex items-center justify-between p-3 bg-background/50 rounded-lg"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -199,15 +220,38 @@ export function LoanDisbursementForm() {
 
       {/* Save Button */}
       {disbursements.length > 0 && (
-        <Button onClick={handleSave} className="w-full" size="lg">
-          Save {disbursements.length} Disbursement{disbursements.length !== 1 ? 's' : ''} for Sync
-        </Button>
+        <Card className="shadow-card">
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-2">
+                  {disbursements.length} disbursement{disbursements.length !== 1 ? 's' : ''} ready to save
+                </p>
+              </div>
+              
+              <Button 
+                variant="success" 
+                size="mobile" 
+                onClick={handleSave}
+                className="w-full"
+              >
+                <Save className="h-5 w-5 mr-2" />
+                Save All Disbursements
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {disbursements.length === 0 && (
-        <div className="text-center py-8 text-muted-foreground">
-          No disbursement records yet. Add your first disbursement above.
-        </div>
+        <Card className="shadow-card">
+          <CardContent className="text-center py-12">
+            <Banknote className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">
+              No disbursement records yet. Add your first disbursement above.
+            </p>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

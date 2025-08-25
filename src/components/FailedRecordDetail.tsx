@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,8 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Keyboard } from "@capacitor/keyboard";
-
 import { 
   ArrowLeft, 
   Edit3, 
@@ -46,7 +44,6 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   const allocationTypes = ['savings', 'loan', 'advance', 'other'];
   const allocationReasons = [
     'Monthly Contribution',
-    'Advance fine(kes 10)',
     'Loan Repayment',
     'Interest Payment',
     'Penalty Fee',
@@ -61,30 +58,6 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     'Welfare Fund',
     'Other'
   ];
-
-  useEffect(() => {
-    const handleKeyboardShow = () => {
-      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
-      if (navbar) {
-        (navbar as HTMLElement).style.transform = 'translateY(100%)';
-        (navbar as HTMLElement).style.transition = 'transform 0.3s ease-in-out';
-      }
-    };
-  
-    const handleKeyboardHide = () => {
-      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
-      if (navbar) {
-        (navbar as HTMLElement).style.transform = 'translateY(0)';
-      }
-    };
-  
-    Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
-    Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
-  
-    return () => {
-      Keyboard.removeAllListeners();
-    };
-  }, []);
 
   // Helper function to get display name for allocation type
   const getDisplayName = (allocationType: string): string => {

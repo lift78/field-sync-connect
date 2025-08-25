@@ -2,6 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile viewport handling for keyboard */
+@supports (height: 100dvh) {
+  html {
+    height: 100dvh;
+  }
+}
+
+/* Prevent mobile keyboard from affecting fixed elements */
+@media (max-width: 768px) {
+  .mobile-fixed-nav {
+    position: fixed;
+    bottom: env(keyboard-inset-height, 0);
+    transition: bottom 0.3s ease-in-out;
+  }
+  
+  /* Ensure content doesn't overlap with nav when keyboard is open */
+  .mobile-content {
+    padding-bottom: calc(5rem + env(keyboard-inset-height, 0));
+  }
+}
+
 /* Field Officer App Design System - Professional fintech theme */
 
 @layer base {

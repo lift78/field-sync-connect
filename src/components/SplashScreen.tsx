@@ -9,7 +9,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
       onComplete();
-    }, 5000); // Show for 2.5 seconds
+    }, 2500); // Show for 2.5 seconds
 
     return () => clearTimeout(timer);
   }, [onComplete]);
@@ -30,7 +30,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           <div className="relative">
             <div className="absolute inset-0 bg-white/20 rounded-full blur-xl animate-pulse"></div>
             <img 
-              src="/lovable-uploads/logo1.png" 
+              src="/lovable-uploads/1a913f01-4cbe-458f-b154-186d6ef7d8e3.png" 
               alt="LIFT Company Logo" 
               className="relative h-24 w-24 mx-auto mb-4 drop-shadow-lg"
             />

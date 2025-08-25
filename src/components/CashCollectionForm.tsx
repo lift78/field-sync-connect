@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,13 +6,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Save } from "lucide-react";
-import { dbOperations } from "@/lib/database";
+import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
 import { Calculator } from "lucide-react";
+import { Plus, Trash2, Save, User, Phone, Users, Banknote, Smartphone, AlertCircle, DollarSign } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Keyboard } from "@capacitor/keyboard";
 
-// Mock member data - replace with actual member data from your system
+
+// Mock member data - fallback when no real data exists
 const mockMembers = Array.from({ length: 9999 }, (_, i) => ({
   id: String(i + 1).padStart(4, '0'),
   name: `Member ${i + 1}`,
@@ -26,6 +29,7 @@ interface Allocation {
 
 const allocationReasons = [
   'Lateness Fine',
+  'Advance fine(kes 10)',
   'Loan Processing Fees',
   'Advocate Fees',
   'Insurance Risk Fund',
@@ -33,6 +37,7 @@ const allocationReasons = [
   'Registration Fee',
   'Meeting Absence Fine',
   'Administrative Fees',
+  'Fines and Penalties',
   'Custom (Other)'
 ];
 
@@ -48,58 +53,235 @@ const toPreciseNumber = (value: string | number): number => {
   return Math.round(value * 100) / 100;
 };
 
+// Helper function to extract member ID from member_id field (e.g., "MEM/2025/0007" -> "0007")
+const extractMemberId = (memberIdField: string): string => {
+  const parts = memberIdField.split('/');
+  return parts[parts.length - 1] || memberIdField;
+};
+
 export function CashCollectionForm() {
   const [memberId, setMemberId] = useState('');
   const [cashAmount, setCashAmount] = useState('');
   const [mpesaAmount, setMpesaAmount] = useState('');
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
+  const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
+  const [selectedRealMember, setSelectedRealMember] = useState<MemberBalance | null>(null);
+  const [showFinesDialog, setShowFinesDialog] = useState(false);
+  const [finesMemberId, setFinesMemberId] = useState('');
+  const [finesMemberQuery, setFinesMemberQuery] = useState('');
+  const [finesAmount, setFinesAmount] = useState('');
+  const [finesPaymentType, setFinesPaymentType] = useState<'cash' | 'mpesa' | ''>('');
   const { toast } = useToast();
 
-  // Filter members based on search query
+
+  // Add this useEffect in your component
+  useEffect(() => {
+    const handleKeyboardShow = () => {
+      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
+      if (navbar) {
+        (navbar as HTMLElement).style.transform = 'translateY(100%)';
+        (navbar as HTMLElement).style.transition = 'transform 0.3s ease-in-out';
+      }
+    };
+  
+    const handleKeyboardHide = () => {
+      const navbar = document.querySelector('nav[class*="fixed bottom-0"]');
+      if (navbar) {
+        (navbar as HTMLElement).style.transform = 'translateY(0)';
+      }
+    };
+  
+    Keyboard.addListener('keyboardDidShow', handleKeyboardShow);
+    Keyboard.addListener('keyboardDidHide', handleKeyboardHide);
+  
+    return () => {
+      Keyboard.removeAllListeners();
+    };
+  }, []);
+
+  // Load real member data on component mount
+  useEffect(() => {
+    const loadRealMembers = async () => {
+      try {
+        const members = await dbOperations.getAllMembers();
+        setRealMembers(members);
+        console.log(`Loaded ${members.length} real members from database`);
+      } catch (error) {
+        console.error('Error loading real members:', error);
+        setRealMembers([]);
+      }
+    };
+
+    loadRealMembers();
+  }, []);
+
+  // Search and filter members for fines
+  const filteredFinesMembers = useMemo(() => {
+    if (!finesMemberQuery) return [];
+    
+    const query = finesMemberQuery.trim().toLowerCase();
+    const results: Array<{
+      id: string;
+      name: string;
+      phone?: string;
+      group?: string;
+      isReal: boolean;
+      memberData?: MemberBalance;
+    }> = [];
+
+    // Search in real member data
+    if (realMembers.length > 0) {
+      const realMatches = realMembers.filter(member => {
+        const memberId = extractMemberId(member.member_id);
+        return (
+          memberId.toLowerCase().includes(query) ||
+          member.name.toLowerCase().includes(query) ||
+          member.phone.includes(finesMemberQuery.trim()) ||
+          member.member_id.toLowerCase().includes(query)
+        );
+      }).slice(0, 10);
+
+      realMatches.forEach(member => {
+        const memberId = extractMemberId(member.member_id);
+        results.push({
+          id: memberId,
+          name: member.name,
+          phone: member.phone,
+          group: member.group_name,
+          isReal: true,
+          memberData: member
+        });
+      });
+    }
+
+    return results.slice(0, 10);
+  }, [finesMemberQuery, realMembers]);
+
+  // Search and filter members based on query
   const filteredMembers = useMemo(() => {
     if (!memberQuery) return [];
     
-    const query = memberQuery.trim();
-    
-    // If input is numeric, handle ID searching
-    if (/^\d+$/.test(query)) {
-      const results = [];
+    const query = memberQuery.trim().toLowerCase();
+    const results: Array<{
+      id: string;
+      name: string;
+      phone?: string;
+      group?: string;
+      isReal: boolean;
+      memberData?: MemberBalance;
+    }> = [];
+
+    // First, search in real member data
+    if (realMembers.length > 0) {
+      const realMatches = realMembers.filter(member => {
+        const memberId = extractMemberId(member.member_id);
+        return (
+          memberId.toLowerCase().includes(query) ||
+          member.name.toLowerCase().includes(query) ||
+          member.phone.includes(memberQuery.trim()) ||
+          member.member_id.toLowerCase().includes(query)
+        );
+      }).slice(0, 10);
+
+      // Add real members to results
+      realMatches.forEach(member => {
+        const memberId = extractMemberId(member.member_id);
+        results.push({
+          id: memberId,
+          name: member.name,
+          phone: member.phone,
+          group: member.group_name,
+          isReal: true,
+          memberData: member
+        });
+      });
+    }
+
+    // If no real members found or query looks like numeric ID, also search mock data
+    if (results.length === 0 || /^\d+$/.test(query)) {
+      const mockQuery = memberQuery.trim();
       
-      // 1. Try exact padded match first (e.g., "345" -> "0345")
-      const paddedId = query.padStart(4, '0');
-      const exactMatch = mockMembers.find(member => member.id === paddedId);
-      if (exactMatch) {
-        results.push(exactMatch);
+      // If input is numeric, handle ID searching in mock data
+      if (/^\d+$/.test(mockQuery)) {
+        // 1. Try exact padded match first (e.g., "345" -> "0345")
+        const paddedId = mockQuery.padStart(4, '0');
+        
+        // Skip if we already have this ID from real data
+        const alreadyHasThisId = results.some(r => r.id === paddedId);
+        
+        if (!alreadyHasThisId) {
+          const exactMatch = mockMembers.find(member => member.id === paddedId);
+          if (exactMatch) {
+            results.push({
+              id: exactMatch.id,
+              name: exactMatch.name,
+              isReal: false
+            });
+          }
+          
+          // 2. If no exact match and query is shorter than 4 digits, search for IDs that start with the query
+          if (!exactMatch && mockQuery.length < 4) {
+            const startMatches = mockMembers.filter(member => 
+              member.id.startsWith(mockQuery.padStart(mockQuery.length, '0')) &&
+              !results.some(r => r.id === member.id) // Avoid duplicates
+            ).slice(0, 5);
+            startMatches.forEach(member => {
+              results.push({
+                id: member.id,
+                name: member.name,
+                isReal: false
+              });
+            });
+          }
+          
+          // 3. If query is 4+ digits and no exact match, search for partial matches
+          if (!exactMatch && mockQuery.length >= 4) {
+            const partialMatches = mockMembers.filter(member => 
+              (member.id.includes(mockQuery) || member.id === mockQuery) &&
+              !results.some(r => r.id === member.id) // Avoid duplicates
+            ).slice(0, 5);
+            partialMatches.forEach(member => {
+              results.push({
+                id: member.id,
+                name: member.name,
+                isReal: false
+              });
+            });
+          }
+        }
       }
-      
-      // 2. If no exact match and query is shorter than 4 digits, 
-      //    also search for IDs that start with the query
-      if (!exactMatch && query.length < 4) {
-        const startMatches = mockMembers.filter(member => 
-          member.id.startsWith(query.padStart(query.length, '0'))
-        ).slice(0, 5);
-        results.push(...startMatches);
-      }
-      
-      // 3. If query is 4+ digits and no exact match, search for partial matches
-      if (!exactMatch && query.length >= 4) {
-        const partialMatches = mockMembers.filter(member => 
-          member.id.includes(query) || member.id === query
-        ).slice(0, 5);
-        results.push(...partialMatches);
-      }
-      
-      return results;
+    }
+
+    return results.slice(0, 10); // Limit total results
+  }, [memberQuery, realMembers]);
+
+  // Find selected member (real or mock)
+  const selectedMember = useMemo(() => {
+    if (selectedRealMember) {
+      return {
+        id: extractMemberId(selectedRealMember.member_id),
+        name: selectedRealMember.name,
+        phone: selectedRealMember.phone,
+        group: selectedRealMember.group_name,
+        isReal: true,
+        memberData: selectedRealMember
+      };
     }
     
-    // If input contains letters, search by name
-    return mockMembers.filter(member => 
-      member.name.toLowerCase().includes(query.toLowerCase())
-    ).slice(0, 5);
-  }, [memberQuery]);
-
-  const selectedMember = mockMembers.find(m => m.id === memberId);
+    if (memberId) {
+      const mockMember = mockMembers.find(m => m.id === memberId);
+      if (mockMember) {
+        return {
+          id: mockMember.id,
+          name: mockMember.name,
+          isReal: false
+        };
+      }
+    }
+    
+    return null;
+  }, [memberId, selectedRealMember]);
 
   // Use precise calculations to avoid floating point issues
   const cashAmountNum = toPreciseNumber(cashAmount);
@@ -112,6 +294,71 @@ export function CashCollectionForm() {
 
   // Check if form has meaningful data for save button
   const hasValidData = memberId && (totalCollected > 0 || totalAllocated > 0);
+
+  // Get current balances if real member is selected
+  const currentBalances = selectedRealMember ? selectedRealMember.balances : null;
+
+  // Calculate carry forward balances
+  const savingsAllocation = allocations.find(a => a.type === 'savings')?.amount || 0;
+  const loanAllocation = allocations.find(a => a.type === 'loan')?.amount || 0;
+  const advanceAllocation = allocations.find(a => a.type === 'amount_for_advance_payment')?.amount || 0;
+
+  // Calculate advance payment split to get the correct principal amount
+  const advancePaymentSplit = useMemo(() => {
+    if (currentBalances && advanceAllocation > 0) {
+      // Use the same logic from AdvanceCalculator to split the payment
+      const currentAdvanceBalance = currentBalances.advance_loan_balance;
+      
+      if (currentAdvanceBalance <= 0) {
+        return { pay_advance: 0, pay_advance_interest: 0 };
+      }
+      
+      if (advanceAllocation >= currentAdvanceBalance) {
+        // Full payment - no interest required
+        return {
+          pay_advance: currentAdvanceBalance,
+          pay_advance_interest: 0
+        };
+      }
+      
+      // Partial payment - calculate split using simultaneous equations
+      const ADVANCE_INTEREST_RATE = 0.1; // 10%
+      const ADVANCE_FIXED_FINE = 10; // 10 KES
+      
+      const interestComponent = currentAdvanceBalance * ADVANCE_INTEREST_RATE / (1 + ADVANCE_INTEREST_RATE);
+      let payAdvance = (advanceAllocation - interestComponent - ADVANCE_FIXED_FINE) * (1 + ADVANCE_INTEREST_RATE) / 1;
+      
+      // Ensure pay_advance doesn't exceed current_balance or go negative
+      payAdvance = Math.max(0, Math.min(payAdvance, currentAdvanceBalance));
+      
+      let payAdvanceInterest;
+      
+      if (payAdvance >= currentAdvanceBalance) {
+        payAdvance = currentAdvanceBalance;
+        payAdvanceInterest = 0;
+      } else {
+        // Calculate interest for remaining balance
+        const remainingBalance = currentAdvanceBalance - payAdvance;
+        const currentPrincipal = remainingBalance / (1 + ADVANCE_INTEREST_RATE);
+        payAdvanceInterest = currentPrincipal * ADVANCE_INTEREST_RATE + ADVANCE_FIXED_FINE;
+        payAdvanceInterest = Math.round(payAdvanceInterest);
+      }
+      
+      return {
+        pay_advance: Math.round(payAdvance * 100) / 100,
+        pay_advance_interest: payAdvanceInterest
+      };
+    }
+    return { pay_advance: 0, pay_advance_interest: 0 };
+  }, [currentBalances, advanceAllocation]);
+
+  const savingsCarryForward = currentBalances ? 
+    toPreciseNumber(currentBalances.savings_balance + savingsAllocation) : 0;
+  const loanCarryForward = currentBalances ? 
+    toPreciseNumber(currentBalances.loan_balance - loanAllocation) : 0;
+  // Use only the principal portion (pay_advance) to calculate advance carry forward
+  const advanceCarryForward = currentBalances ? 
+    toPreciseNumber(currentBalances.advance_loan_balance - advancePaymentSplit.pay_advance) : 0;
 
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
@@ -145,10 +392,95 @@ export function CashCollectionForm() {
     setAllocations(allocations.filter((_, i) => i !== index));
   };
 
+  const handleMemberSelect = (memberOption: any) => {
+    setMemberId(memberOption.id);
+    setMemberQuery('');
+    
+    if (memberOption.isReal && memberOption.memberData) {
+      setSelectedRealMember(memberOption.memberData);
+    } else {
+      setSelectedRealMember(null);
+    }
+  };
+
+  const handleFinesMemberSelect = (memberOption: any) => {
+    setFinesMemberId(memberOption.id);
+    setFinesMemberQuery(`${memberOption.id} - ${memberOption.name}`);
+  };
+
+  const handleSaveFines = async () => {
+    try {
+      if (!finesMemberId) {
+        toast({
+          title: "❌ Member Required",
+          description: "Please select a member for the fine",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!finesAmount || toPreciseNumber(finesAmount) <= 0) {
+        toast({
+          title: "❌ Fine Amount Required",
+          description: "Please enter a valid fine amount",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!finesPaymentType) {
+        toast({
+          title: "❌ Payment Type Required",
+          description: "Please select payment type (Cash or M-Pesa)",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const fineAmount = toPreciseNumber(finesAmount);
+      const selectedFinesMember = filteredFinesMembers.find(m => m.id === finesMemberId) || 
+        realMembers.find(m => extractMemberId(m.member_id) === finesMemberId);
+
+      const memberName = selectedFinesMember?.name || `Member ${finesMemberId}`;
+
+      await dbOperations.addCashCollection({
+        memberId: finesMemberId,
+        memberName: memberName,
+        totalAmount: fineAmount,
+        cashAmount: finesPaymentType === 'cash' ? fineAmount : 0,
+        mpesaAmount: finesPaymentType === 'mpesa' ? fineAmount : 0,
+        allocations: [{
+          memberId: finesMemberId,
+          type: 'other' as const,
+          amount: fineAmount,
+          reason: 'Fines and Penalties'
+        }],
+        timestamp: new Date()
+      });
+
+      toast({
+        title: "✅ Fine Recorded",
+        description: `${formatAmount(fineAmount)} fine saved for ${memberName} via ${finesPaymentType.toUpperCase()}`,
+      });
+
+      // Reset fines form
+      setShowFinesDialog(false);
+      setFinesMemberId('');
+      setFinesMemberQuery('');
+      setFinesAmount('');
+      setFinesPaymentType('');
+    } catch (error) {
+      toast({
+        title: "❌ Save Failed",
+        description: "Failed to save fine record",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleSave = async () => {
     try {
-      const selectedMemberData = mockMembers.find(m => m.id === memberId);
-      if (!selectedMemberData) {
+      if (!selectedMember) {
         toast({
           title: "❌ Member Required",
           description: "Please select a member first",
@@ -179,7 +511,7 @@ export function CashCollectionForm() {
 
       await dbOperations.addCashCollection({
         memberId,
-        memberName: selectedMemberData.name,
+        memberName: selectedMember.name,
         totalAmount: totalCollected,
         cashAmount: cashAmountNum,
         mpesaAmount: mpesaAmountNum,
@@ -189,7 +521,7 @@ export function CashCollectionForm() {
       
       toast({
         title: "✅ Cash Collection Saved",
-        description: `${formatAmount(totalCollected)} saved for ${selectedMemberData.name}${
+        description: `${formatAmount(totalCollected)} saved for ${selectedMember.name}${
           cashAmountNum > 0 ? ' (Cash reference generated)' : ''
         }`,
       });
@@ -200,6 +532,7 @@ export function CashCollectionForm() {
       setMpesaAmount('');
       setAllocations([]);
       setMemberQuery('');
+      setSelectedRealMember(null);
     } catch (error) {
       toast({
         title: "❌ Save Failed",
@@ -213,35 +546,60 @@ export function CashCollectionForm() {
     <div className="space-y-6">
       {/* Member Selection */}
       <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <CardTitle className="text-lg">Member Identification</CardTitle>
-        </CardHeader>
+        <Dialog open={showFinesDialog} onOpenChange={setShowFinesDialog}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-lg">Member Identification</CardTitle>
+            <DialogTrigger asChild>
+              <Button 
+                variant="default" 
+                size="sm"
+                className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                Quick Fines
+              </Button>
+            </DialogTrigger>
+          </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="member-search">Search Member ID or Name</Label>
+            <Label htmlFor="member-search">Search Member ID, Name, or Phone</Label>
             <Input
               id="member-search"
-              placeholder="Type member ID or name..."
+              placeholder="Type member ID, name, or phone..."
               value={memberQuery}
               onChange={(e) => setMemberQuery(e.target.value)}
             />
           </div>
           
-          {memberQuery && (
+          {memberQuery && filteredMembers.length > 0 && (
             <div className="space-y-2">
               <Label>Select Member</Label>
               <div className="grid gap-2 max-h-48 overflow-y-auto">
-                {filteredMembers.map((member) => (
+                {filteredMembers.map((member, index) => (
                   <Button
-                    key={member.id}
+                    key={`${member.id}-${index}`}
                     variant={memberId === member.id ? "default" : "outline"}
-                    onClick={() => {
-                      setMemberId(member.id);
-                      setMemberQuery('');
-                    }}
-                    className="justify-start"
+                    onClick={() => handleMemberSelect(member)}
+                    className="justify-start p-3 h-auto text-left"
                   >
-                    {member.id} - {member.name}
+                    <div className="flex flex-col items-start w-full">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{member.id} - {member.name}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        {member.phone && (
+                          <div className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            <span>{member.phone}</span>
+                          </div>
+                        )}
+                        {member.group && (
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            <span>{member.group}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </Button>
                 ))}
               </div>
@@ -250,10 +608,33 @@ export function CashCollectionForm() {
 
           {selectedMember && (
             <div className="p-3 bg-success/10 rounded-lg border border-success/20">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-medium text-success">Selected Member:</p>
-                  <p className="text-sm">{selectedMember.id} - {selectedMember.name}</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="font-medium text-success">Selected Member:</p>
+                    {selectedMember.isReal && (
+                      <Badge variant="secondary" className="text-xs">
+                        REAL DATA
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm mb-2">{selectedMember.id} - {selectedMember.name}</p>
+                  {selectedMember.isReal && (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      {selectedMember.phone && (
+                        <div className="flex items-center gap-1">
+                          <Phone className="h-3 w-3" />
+                          <span>{selectedMember.phone}</span>
+                        </div>
+                      )}
+                      {selectedMember.group && (
+                        <div className="flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          <span>{selectedMember.group}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <Button
                   variant="ghost"
@@ -261,64 +642,215 @@ export function CashCollectionForm() {
                   onClick={() => {
                     setMemberId('');
                     setMemberQuery('');
+                    setSelectedRealMember(null);
                   }}
                   className="text-muted-foreground hover:text-destructive"
                 >
-                  ×
+                  X
                 </Button>
               </div>
             </div>
           )}
         </CardContent>
-      </Card>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Member Fine</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Member Selection for Fines */}
+            <div className="space-y-2">
+              <Label htmlFor="fines-member-search">Select Member</Label>
+              <Input
+                id="fines-member-search"
+                placeholder="Type member ID or name..."
+                value={finesMemberQuery}
+                onChange={(e) => setFinesMemberQuery(e.target.value)}
+              />
+            </div>
+            
+            {finesMemberQuery && filteredFinesMembers.length > 0 && (
+  <div className="space-y-2 max-h-32 overflow-y-auto">
+    {filteredFinesMembers.map((member, index) => (
+      <Button
+        key={`${member.id}-${index}`}
+        variant={finesMemberId === member.id ? "default" : "outline"}
+        onClick={() => handleFinesMemberSelect(member)}
+        className="justify-start p-3 h-auto text-left w-full"
+      >
+        <div className="flex flex-col items-start w-full">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-medium">{member.id} - {member.name}</span>
+          </div>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            {member.phone && (
+              <div className="flex items-center gap-1">
+                <Phone className="h-3 w-3" />
+                <span>{member.phone}</span>
+              </div>
+            )}
+            {member.group && (
+              <div className="flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                <span>{member.group}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </Button>
+    ))}
+  </div>
+)}
+            {/* Fine Amount */}
+            <div className="space-y-2">
+              <Label>Fine Amount (KES)</Label>
+              <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-2">
+                  {[20, 50, 100].map((amount) => (
+                    <Button
+                      key={amount}
+                      variant={parseInt(finesAmount) === amount ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFinesAmount(amount.toString())}
+                    >
+                      {amount}
+                    </Button>
+                  ))}
+                </div>
+                <Input
+                  type="number"
+                  placeholder="Custom amount..."
+                  value={finesAmount}
+                  onChange={(e) => setFinesAmount(e.target.value)}
+                />
+              </div>
+            </div>
 
+            {/* Payment Type */}
+            <div className="space-y-2">
+              <Label>Payment Method</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={finesPaymentType === 'cash' ? "default" : "outline"}
+                  onClick={() => setFinesPaymentType('cash')}
+                  className="flex items-center gap-2"
+                >
+                  <Banknote className="h-4 w-4" />
+                  Cash
+                </Button>
+                <Button
+                  variant={finesPaymentType === 'mpesa' ? "default" : "outline"}
+                  onClick={() => setFinesPaymentType('mpesa')}
+                  className="flex items-center gap-2"
+                >
+                  <Smartphone className="h-4 w-4" />
+                  M-Pesa
+                </Button>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <Button 
+              onClick={handleSaveFines}
+              className="w-full"
+              disabled={!finesMemberId || !finesAmount || !finesPaymentType}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Record Fine
+            </Button>
+          </div>
+        </DialogContent>
+        </Dialog>
+      </Card>
+      
       {/* Cash Collection */}
       <Card className="shadow-card bg-gradient-card">
         <CardHeader>
           <CardTitle className="text-lg">Cash Collection</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="cash-amount">Cash Amount (KES)</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Enhanced Cash Field */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-success/10 rounded-lg border border-success/20">
+                <Banknote className="h-5 w-5 text-success" />
+                <div>
+                  <Label htmlFor="cash-amount" className="text-base font-semibold text-success">
+                    💵 CASH Amount (KES)
+                  </Label>
+                  <p className="text-xs text-success/80">Physical money received</p>
+                </div>
+              </div>
               <Input
                 id="cash-amount"
                 type="number"
                 step="0.01"
-                placeholder="0"
+                placeholder="0.00"
                 value={cashAmount}
                 onChange={(e) => setCashAmount(e.target.value)}
+                className="text-lg p-3 border-2 border-success/30 focus:border-success bg-success/5"
               />
               {cashAmountNum > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  📄 Cash reference will be generated automatically
-                </p>
+                <div className="flex items-center gap-2 text-sm text-success bg-success/10 p-2 rounded">
+                  <span>📄 Cash reference will be generated automatically</span>
+                </div>
               )}
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="mpesa-amount">M-Pesa Amount (KES)</Label>
+            {/* Enhanced M-Pesa Field */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/20">
+                <Smartphone className="h-5 w-5 text-primary" />
+                <div>
+                  <Label htmlFor="mpesa-amount" className="text-base font-semibold text-primary">
+                    📱 M-PESA Amount (KES)
+                  </Label>
+                  <p className="text-xs text-primary/80">Mobile money received</p>
+                </div>
+              </div>
               <Input
                 id="mpesa-amount"
                 type="number"
                 step="0.01"
-                placeholder="0"
+                placeholder="0.00"
                 value={mpesaAmount}
                 onChange={(e) => setMpesaAmount(e.target.value)}
+                className="text-lg p-3 border-2 border-primary/30 focus:border-primary bg-primary/5"
               />
+              {mpesaAmountNum > 0 && (
+                <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 p-2 rounded">
+                  <span>📱 M-Pesa transaction recorded</span>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="p-4 bg-primary/10 rounded-lg">
+          {/* Enhanced Total Summary */}
+          <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
             <div className="flex justify-between items-center">
               <span className="font-medium">Amount to Allocate:</span>
               <span className="text-xl font-bold text-primary">
                 {formatAmount(totalCollected)}
               </span>
             </div>
+            {/* Show breakdown if both amounts exist */}
+            {cashAmountNum > 0 && mpesaAmountNum > 0 && (
+              <div className="mt-2 pt-2 border-t border-primary/20 text-sm text-muted-foreground">
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-1">
+                    <Banknote className="h-3 w-3 text-success" />
+                    Cash: {formatAmount(cashAmountNum)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Smartphone className="h-3 w-3 text-primary" />
+                    M-Pesa: {formatAmount(mpesaAmountNum)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
+
 
       {/* Allocations */}
       <Card className="shadow-card bg-gradient-card">
@@ -330,7 +862,7 @@ export function CashCollectionForm() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Core Allocation Fields - Always Visible */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="savings-amount">Allocate to Savings (KES)</Label>
               <Input
@@ -350,6 +882,22 @@ export function CashCollectionForm() {
                   }
                 }}
               />
+              {currentBalances && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-muted/30 rounded border border-muted/50">
+                    <div className="text-muted-foreground">Current Savings</div>
+                    <div className="font-medium text-blue-400">
+                      {formatAmount(currentBalances.savings_balance)}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-green-500/10 rounded border border-green-500/20">
+                    <div className="text-muted-foreground">Savings CF</div>
+                    <div className="font-medium text-green-400">
+                      {formatAmount(savingsCarryForward)}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -371,6 +919,22 @@ export function CashCollectionForm() {
                   }
                 }}
               />
+              {currentBalances && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-muted/30 rounded border border-muted/50">
+                    <div className="text-muted-foreground">Current Balance</div>
+                    <div className="font-medium text-red-400">
+                      {formatAmount(currentBalances.loan_balance)}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-green-500/10 rounded border border-green-500/20">
+                    <div className="text-muted-foreground">Loan CF</div>
+                    <div className="font-medium text-green-400">
+                      {formatAmount(Math.max(0, loanCarryForward))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -392,7 +956,7 @@ export function CashCollectionForm() {
                       setAllocations(prev => [...prev, { type: 'amount_for_advance_payment', amount }]);
                     }
                   }}
-                  className="pr-12" // Add padding for the calculator button
+                  className="pr-12"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2">
                   <AdvanceCalculatorDialog
@@ -423,6 +987,22 @@ export function CashCollectionForm() {
                 <Calculator className="h-3 w-3" />
                 Click calculator to preview payment split
               </p>
+              {currentBalances && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-muted/30 rounded border border-muted/50">
+                    <div className="text-muted-foreground">Current Balance</div>
+                    <div className="font-medium text-red-400">
+                      {formatAmount(currentBalances.advance_loan_balance)}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-green-500/10 rounded border border-green-500/20">
+                    <div className="text-muted-foreground">Advance CF</div>
+                    <div className="font-medium text-green-400">
+                      {formatAmount(Math.max(0, advanceCarryForward))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -520,17 +1100,17 @@ export function CashCollectionForm() {
           </div>
 
           <Button 
-            variant="mobile" 
-            size="mobile" 
-            onClick={handleSave}
-            disabled={!hasValidData}
-            className="w-full"
-          >
-            <Save className="h-5 w-5 mr-2" />
-            Save Record
-          </Button>
+          variant="mobile" 
+          size="mobile" 
+          onClick={handleSave}
+          disabled={!hasValidData}
+          className="w-full"
+        >
+          <Save className="h-5 w-5 mr-2" />
+          Save Record
+        </Button>
         </CardContent>
       </Card>
     </div>
   );
-}  
+}

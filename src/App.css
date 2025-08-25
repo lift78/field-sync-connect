@@ -1,3 +1,28 @@
+
+body {
+  height: 100vh;
+  height: 100svh; /* Use small viewport height for mobile */
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure your main content area is scrollable instead */
+.mobile-content {
+  height: calc(100vh - 140px); /* Adjust based on your header + navbar height */
+  height: calc(100svh - 140px); /* Use small viewport height for mobile */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix for bottom navigation to prevent keyboard push-up */
+nav[class*="fixed bottom-0"] {
+  position: fixed !important;
+  bottom: 0 !important;
+  transform: translateZ(0); /* Force hardware acceleration */
+}
+
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
