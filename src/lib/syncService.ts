@@ -1,5 +1,5 @@
 // Import the interfaces from your database file
-import { CashCollection, LoanApplication, LoanDisbursement, AdvanceLoan, Allocation } from './database';
+import { CashCollection, LoanApplication, LoanDisbursement, AdvanceLoan, GroupCollection, Allocation } from './database';
 import { dbOperations } from './database';
 import { memberDataService } from './memberDataService';
 
@@ -8,6 +8,7 @@ interface SyncEndpoints {
   loanApplications: string;
   loanDisbursements: string;
   advanceLoans: string;
+  groupCollections: string;
   allocations: string;
   login: string;
 }
@@ -60,6 +61,7 @@ export class SyncService {
       loanApplications: `${baseUrl}/api/loans/`,
       loanDisbursements: `${baseUrl}/api/loan-disbursements/`,
       advanceLoans: `${baseUrl}/api/advance-loans/`,
+      groupCollections: `${baseUrl}/api/diary/meetings/record_collections/`,
       allocations: `${baseUrl}/api/members/{memberId}/allocate_funds/`,
       login: `${baseUrl}/api/auth/login/`
     };
@@ -617,6 +619,119 @@ export class SyncService {
     return { success, failed, errors };
   }
 
+  private async syncGroupCollections(records: GroupCollection[]): Promise<{
+    success: number;
+    failed: number;
+    errors: string[];
+  }> {
+    if (records.length === 0) {
+      return { success: 0, failed: 0, errors: [] };
+    }
+
+    let success = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const record of records) {
+      try {
+        const payload = {
+          group_id: parseInt(record.groupId, 10),
+          cash_collected: record.cashCollected.toFixed(2),
+          fines_collected: record.finesCollected.toFixed(2)
+        };
+
+        console.log("📤 Syncing group collection:", payload);
+
+        const response = await this.authenticatedFetch(this.endpoints.groupCollections, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        // Check if response is OK first (HTTP 200-299)
+        if (response.ok) {
+          // Try to parse JSON response
+          let result: SyncResponse;
+          try {
+            result = await response.json();
+          } catch (jsonError) {
+            // If JSON parsing fails but HTTP response was OK, assume success
+            console.log(`✅ Group collection ${record.id} synced successfully (no JSON response)`);
+            if (record.id) {
+              await dbOperations.markGroupCollectionSynced(record.id);
+            }
+            success++;
+            continue;
+          }
+
+          // If we have JSON response, check success field
+          if (result.success !== false) {
+            console.log(`✅ Group collection ${record.id} synced successfully`);
+            if (record.id) {
+              await dbOperations.markGroupCollectionSynced(record.id);
+            }
+            success++;
+          } else {
+            console.error(`❌ Group collection sync failed for ${record.id}:`, result.error);
+            failed++;
+            const errorMsg = result.error || 'Unknown error from server';
+            errors.push(`GroupCollection ${record.id}: ${errorMsg}`);
+            if (record.id) {
+              await dbOperations.markGroupCollectionFailed(record.id, errorMsg);
+            }
+          }
+        } else {
+          // HTTP error occurred
+          let result: SyncResponse;
+          try {
+            result = await response.json();
+          } catch (jsonError) {
+            console.error(`❌ Group collection sync failed for ${record.id}: HTTP ${response.status}`);
+            failed++;
+            const errorMsg = `HTTP ${response.status} ${response.statusText}`;
+            errors.push(`GroupCollection ${record.id}: ${errorMsg}`);
+            if (record.id) {
+              await dbOperations.markGroupCollectionFailed(record.id, errorMsg);
+            }
+            continue;
+          }
+
+          // Check for duplicate errors
+          const isDuplicateError = result.error && (
+            result.error.includes('UNIQUE constraint failed') ||
+            result.error.includes('duplicate') ||
+            result.error.toLowerCase().includes('already exists')
+          );
+
+          if (isDuplicateError) {
+            console.log(`⚠️ Group collection ${record.id} already exists on server`);
+            if (record.id) {
+              await dbOperations.markGroupCollectionSynced(record.id);
+            }
+            success++;
+          } else {
+            console.error(`❌ Group collection sync failed for ${record.id}:`, result.error);
+            failed++;
+            const errorMsg = result.error || `HTTP ${response.status}`;
+            errors.push(`GroupCollection ${record.id}: ${errorMsg}`);
+            if (record.id) {
+              await dbOperations.markGroupCollectionFailed(record.id, errorMsg);
+            }
+          }
+        }
+
+      } catch (error: any) {
+        failed++;
+        errors.push(`GroupCollection ${record.id}: ${error.message}`);
+        console.error(`💥 Exception during group collection sync for ${record.id}:`, error);
+        if (record.id) {
+          await dbOperations.markGroupCollectionFailed(record.id, error.message);
+        }
+      }
+    }
+
+    return { success, failed, errors };
+  }
+
   private async syncLoanDisbursements(records: LoanDisbursement[]): Promise<{
     success: number;
     failed: number;
@@ -780,6 +895,7 @@ export class SyncService {
       loanApplications: { success: number; failed: number };
       loanDisbursements: { success: number; failed: number };
       advanceLoans: { success: number; failed: number };
+      groupCollections: { success: number; failed: number };
       memberData?: { success: boolean; totalMembers: number; totalMeetings: number; error?: string };
     };
     errors: string[];
@@ -809,6 +925,7 @@ export class SyncService {
     console.log("🧾 Unsynced cashCollections count:", unsynced.cashCollections?.length);
     console.log("🧾 Unsynced loanApplications count:", unsynced.loanApplications?.length);
     console.log("🧾 Unsynced advanceLoans count:", unsynced.advanceLoans?.length);
+    console.log("🧾 Unsynced groupCollections count:", unsynced.groupCollections?.length);
     console.log("🧾 Unsynced object:", unsynced);
   
     
@@ -818,6 +935,7 @@ export class SyncService {
       loanApplications: { success: 0, failed: 0 },
       loanDisbursements: { success: 0, failed: 0 },
       advanceLoans: { success: 0, failed: 0 },
+      groupCollections: { success: 0, failed: 0 },
       memberData: memberDataResult
     };
   
@@ -837,12 +955,16 @@ export class SyncService {
   
     const disbursementsResult = await this.syncLoanDisbursements(unsynced.loanDisbursements || []);
     summary.loanDisbursements = { success: disbursementsResult.success, failed: disbursementsResult.failed };
-  
+
+    const groupCollectionsResult = await this.syncGroupCollections(unsynced.groupCollections || []);
+    summary.groupCollections = { success: groupCollectionsResult.success, failed: groupCollectionsResult.failed };
+
     const errors = [
       ...cashCollectionsResult.errors,
       ...loanApplicationsResult.errors,
       ...advanceLoansResult.errors,
-      ...disbursementsResult.errors
+      ...disbursementsResult.errors,
+      ...groupCollectionsResult.errors
     ];
   
     // Add member data error if it failed
@@ -854,7 +976,8 @@ export class SyncService {
       cashCollectionsResult.failed + 
       loanApplicationsResult.failed + 
       advanceLoansResult.failed + 
-      disbursementsResult.failed;
+      disbursementsResult.failed +
+      groupCollectionsResult.failed;
   
     return {
       success: totalFailed === 0 && memberDataResult.success,
@@ -1073,6 +1196,7 @@ export class SyncService {
       loanApplications: number;
       loanDisbursements: number;
       advanceLoans: number;
+      groupCollections: number;
       total: number;
     };
   }> {
@@ -1088,6 +1212,7 @@ export class SyncService {
         loanApplications: unsynced.loanApplications?.length || 0,
         loanDisbursements: unsynced.loanDisbursements?.length || 0,
         advanceLoans: unsynced.advanceLoans?.length || 0,
+        groupCollections: unsynced.groupCollections?.length || 0,
         total: unsynced.total
       }
     };

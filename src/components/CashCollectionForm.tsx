@@ -407,26 +407,12 @@ export function CashCollectionForm() {
       // TODO: Replace with actual API call to POST /diary/meetings/record_collections/
       console.log('Group collections data to send:', collectionData);
       
-      // For now, save to local cash collections with group name
-      const totalAmount = cashAmount + finesAmount;
-      const allocations = [];
-      
-      if (finesAmount > 0) {
-        allocations.push({
-          memberId: selectedGroupId,
-          type: 'other' as const,
-          amount: finesAmount,
-          reason: 'Fines and Penalties'
-        });
-      }
-
-      await dbOperations.addCashCollection({
-        memberId: selectedGroupId,
-        memberName: selectedGroupName,
-        totalAmount: totalAmount,
-        cashAmount: totalAmount,
-        mpesaAmount: 0,
-        allocations: allocations,
+      // Save to group collections (not cash collections)
+      await dbOperations.addGroupCollection({
+        groupId: selectedGroupId,
+        groupName: selectedGroupName,
+        cashCollected: cashAmount,
+        finesCollected: finesAmount,
         timestamp: new Date()
       });
 

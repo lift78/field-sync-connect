@@ -89,23 +89,37 @@ export interface AdvanceLoan {
   syncError?: string;
 }
 
+export interface GroupCollection {
+  id?: number;
+  groupId: string;
+  groupName: string;
+  cashCollected: number;
+  finesCollected: number;
+  timestamp: Date;
+  synced: boolean;
+  syncStatus?: 'pending' | 'failed' | 'synced';
+  syncError?: string;
+}
+
 // Database class
 export class FieldOfficerDB extends Dexie {
   cashCollections!: Table<CashCollection>;
   loanApplications!: Table<LoanApplication>;
   loanDisbursements!: Table<LoanDisbursement>;
   advanceLoans!: Table<AdvanceLoan>;
+  groupCollections!: Table<GroupCollection>;
   userCredentials!: Table<UserCredentials>;
   memberBalances!: Table<MemberBalance>;
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(6).stores({
+    this.version(7).stores({
       // Enhanced indexing for better search performance
       cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp',
       loanDisbursements: '++id, loanId, amountType, customAmount, timestamp',
       advanceLoans: '++id, memberId, memberName, amount, timestamp',
+      groupCollections: '++id, groupId, groupName, cashCollected, finesCollected, timestamp',
       userCredentials: '++id, username, lastLogin',
       memberBalances: '++id, member_id, name, phone, group_name, last_updated'
     });
@@ -307,6 +321,53 @@ export const dbOperations = {
       syncStatus: 'pending', 
       syncError: undefined 
     });
+  },
+
+  // =============================================================================
+  // GROUP COLLECTIONS
+  // =============================================================================
+  async addGroupCollection(data: Omit<GroupCollection, 'id' | 'synced'>) {
+    return await db.groupCollections.add({
+      ...data,
+      synced: false,
+      syncStatus: 'pending'
+    });
+  },
+
+  async getGroupCollections() {
+    return await db.groupCollections.orderBy('timestamp').reverse().toArray();
+  },
+
+  async getUnsyncedGroupCollections() {
+    return await db.groupCollections.filter(record => record.synced === false).toArray();
+  },
+
+  async markGroupCollectionSynced(id: number): Promise<number> {
+    return await db.groupCollections.update(id, {
+      synced: true,
+      syncStatus: 'synced',
+      syncError: undefined
+    });
+  },
+
+  async markGroupCollectionFailed(id: number, error: string): Promise<number> {
+    return await db.groupCollections.update(id, {
+      syncStatus: 'failed',
+      syncError: error
+    });
+  },
+
+  async updateGroupCollection(id: string, data: GroupCollection) {
+    return await db.groupCollections.update(Number(id), {
+      ...data,
+      synced: false,
+      syncStatus: 'pending',
+      syncError: undefined
+    });
+  },
+
+  async deleteGroupCollection(id: string | number) {
+    return await db.groupCollections.delete(Number(id));
   },
 
   // =============================================================================
@@ -594,13 +655,15 @@ export const dbOperations = {
     loanApplications: LoanApplication[];
     loanDisbursements: LoanDisbursement[];
     advanceLoans: AdvanceLoan[];
+    groupCollections: GroupCollection[];
     total: number;
   }> {
-    const [cashCollections, loanApplications, loanDisbursements, advanceLoans] = await Promise.all([
+    const [cashCollections, loanApplications, loanDisbursements, advanceLoans, groupCollections] = await Promise.all([
       this.getUnsyncedCashCollections(),
       this.getUnsyncedLoanApplications(),
       this.getUnsyncedLoanDisbursements(),
-      this.getUnsyncedAdvanceLoans()
+      this.getUnsyncedAdvanceLoans(),
+      this.getUnsyncedGroupCollections()
     ]);
 
     return {
@@ -608,7 +671,8 @@ export const dbOperations = {
       loanApplications,
       loanDisbursements,
       advanceLoans,
-      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length
+      groupCollections,
+      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length + groupCollections.length
     };
   },
 
@@ -620,13 +684,15 @@ export const dbOperations = {
     loanApplications: LoanApplication[];
     loanDisbursements: LoanDisbursement[];
     advanceLoans: AdvanceLoan[];
+    groupCollections: GroupCollection[];
     total: number;
   }> {
-    const [cashCollections, loanApplications, loanDisbursements, advanceLoans] = await Promise.all([
+    const [cashCollections, loanApplications, loanDisbursements, advanceLoans, groupCollections] = await Promise.all([
       db.cashCollections.filter(record => record.syncStatus === 'failed').toArray(),
       db.loanApplications.filter(record => record.syncStatus === 'failed').toArray(),
       db.loanDisbursements.filter(record => record.syncStatus === 'failed').toArray(),
-      db.advanceLoans.filter(record => record.syncStatus === 'failed').toArray()
+      db.advanceLoans.filter(record => record.syncStatus === 'failed').toArray(),
+      db.groupCollections.filter(record => record.syncStatus === 'failed').toArray()
     ]);
 
     return {
@@ -634,7 +700,8 @@ export const dbOperations = {
       loanApplications,
       loanDisbursements,
       advanceLoans,
-      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length
+      groupCollections,
+      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length + groupCollections.length
     };
   },
 
@@ -646,7 +713,8 @@ export const dbOperations = {
       db.cashCollections.filter(record => record.synced === true).delete(),
       db.loanApplications.filter(record => record.synced === true).delete(),
       db.loanDisbursements.filter(record => record.synced === true).delete(),
-      db.advanceLoans.filter(record => record.synced === true).delete()
+      db.advanceLoans.filter(record => record.synced === true).delete(),
+      db.groupCollections.filter(record => record.synced === true).delete()
     ]);
     
     return results.reduce((sum, count) => sum + count, 0);
