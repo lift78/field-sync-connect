@@ -19,9 +19,10 @@ import {
   Banknote,
   CreditCard,
   Plus,
-  Trash2
+  Trash2,
+  Loader2
 } from "lucide-react";
-import { dbOperations, CashCollection, LoanApplication, AdvanceLoan } from "@/lib/database";
+import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, GroupCollection } from "@/lib/database";
 
 interface RecordDetailViewProps {
   record: {
@@ -30,9 +31,9 @@ interface RecordDetailViewProps {
     amount?: number;
     status: 'synced' | 'pending' | 'failed';
     lastUpdated: string;
-    data: CashCollection | LoanApplication | AdvanceLoan;
+    data: CashCollection | LoanApplication | AdvanceLoan | GroupCollection;
   };
-  type: 'cash' | 'loan' | 'advance';
+  type: 'cash' | 'loan' | 'advance' | 'group';
   onBack: () => void;
 }
 
@@ -40,6 +41,7 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   // Available allocation types and reasons
@@ -99,6 +101,8 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
         return 'Loan Application Details';
       case 'advance':
         return 'Advance Loan Details';
+      case 'group':
+        return 'Group Collection Details';
       default:
         return 'Record Details';
     }
@@ -159,11 +163,16 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
       return `Member ${record.memberId}`;
     }
     
-    const memberName = record.data?.memberName;
-    if (memberName) {
-      return `${memberName} (${record.memberId})`;
+    if (type === 'group') {
+      const groupData = record.data as GroupCollection;
+      return `${groupData.groupName || 'Unknown Group'} (${record.memberId})`;
+    } else {
+      const memberName = (record.data as any)?.memberName;
+      if (memberName) {
+        return `${memberName} (${record.memberId})`;
+      }
+      return `Member ${record.memberId}`;
     }
-    return `Member ${record.memberId}`;
   };
 
   const handleEdit = (fieldName: string, currentValue: any) => {
@@ -196,6 +205,9 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
         case 'advance':
           await dbOperations.updateAdvanceLoan(record.id, updatedData as AdvanceLoan);
           break;
+        case 'group':
+          await dbOperations.updateGroupCollection(record.id, updatedData as GroupCollection);
+          break;
       }
 
       toast({
@@ -214,6 +226,55 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!confirm('Are you sure you want to delete this record? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      
+      switch (type) {
+        case 'cash':
+          await dbOperations.deleteCashCollection(record.id);
+          break;
+        case 'loan':
+          await dbOperations.deleteLoanApplication(record.id);
+          break;
+        case 'advance':
+          await dbOperations.deleteAdvanceLoan(record.id);
+          break;
+        case 'group':
+          await dbOperations.deleteGroupCollection(record.id);
+          break;
+        default:
+          toast({
+            title: "Not Implemented",
+            description: `Delete functionality for ${type} records is not yet implemented`,
+            variant: "destructive",
+          });
+          return;
+      }
+
+      toast({
+        title: "Success",
+        description: "Record deleted successfully",
+      });
+
+      onBack(); // Go back to the list
+      
+    } catch (error) {
+      console.error('Failed to delete record:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete record",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -505,6 +566,22 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     );
   };
 
+  const renderGroupCollectionDetails = () => {
+    const data = record.data as GroupCollection;
+    if (!data) {
+      return <p className="text-muted-foreground">No data available</p>;
+    }
+    
+    return (
+      <>
+        {renderEditableField('Group Name', 'groupName', data.groupName || '')}
+        {renderEditableField('Cash Collected', 'cashCollected', data.cashCollected || 0, 'number')}
+        {renderEditableField('Fines Collected', 'finesCollected', data.finesCollected || 0, 'number')}
+        {renderReadOnlyField('Total Collection', formatAmount((data.cashCollected || 0) + (data.finesCollected || 0)))}
+      </>
+    );
+  };
+
   const renderDetailsByType = () => {
     switch (type) {
       case 'cash':
@@ -513,6 +590,8 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
         return renderLoanApplicationDetails();
       case 'advance':
         return renderAdvanceLoanDetails();
+      case 'group':
+        return renderGroupCollectionDetails();
       default:
         return null;
     }
@@ -562,7 +641,25 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
                 </p>
               </div>
             </div>
-            {getStatusBadge(record.status)}
+            <div className="flex items-center gap-2">
+              {getStatusBadge(record.status)}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDeleteRecord}
+                disabled={isDeleting}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

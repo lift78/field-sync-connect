@@ -11,9 +11,10 @@ import {
   User,
   Loader2,
   AlertCircle,
-  RotateCcw
+  RotateCcw,
+  Trash2
 } from "lucide-react";
-import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement } from "@/lib/database";
+import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement, GroupCollection } from "@/lib/database";
 
 interface Record {
   id: string;
@@ -27,7 +28,7 @@ interface Record {
 }
 
 interface RecordsListProps {
-  type: 'cash' | 'loan' | 'advance' | 'disbursement'; // Added 'disbursement'
+  type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group';
   onBack: () => void;
   onEditRecord: (record: Record) => void;
 }
@@ -37,6 +38,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resolvingRecords, setResolvingRecords] = useState<Set<string>>(new Set());
+  const [deletingRecords, setDeletingRecords] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadRecords = async () => {
@@ -44,7 +46,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         setLoading(true);
         setError(null);
         
-        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement)[] = [];
+        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection)[] = [];
         
         switch (type) {
           case 'cash':
@@ -56,8 +58,11 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
           case 'advance':
             data = await dbOperations.getAdvanceLoans();
             break;
-          case 'disbursement': // Added disbursement case
+          case 'disbursement':
             data = await dbOperations.getLoanDisbursements();
+            break;
+          case 'group':
+            data = await dbOperations.getGroupCollections();
             break;
         }
 
@@ -73,15 +78,16 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
 
           return {
             id: item.id?.toString() || '',
-            memberId: 'memberId' in item ? item.memberId : undefined,
-            loanId: 'loanId' in item ? item.loanId : undefined, // Added for disbursements
+            memberId: 'memberId' in item ? item.memberId : 'groupId' in item ? item.groupId : undefined,
+            loanId: 'loanId' in item ? item.loanId : undefined,
             amount: 'amount' in item ? item.amount : 
                    'loanAmount' in item ? item.loanAmount : 
-                   'customAmount' in item ? item.customAmount : undefined, // Added customAmount for disbursements
+                   'customAmount' in item ? item.customAmount :
+                   'cashCollected' in item ? (item.cashCollected + (item.finesCollected || 0)) : undefined,
             status,
-            syncError: item.syncError, // Include sync error message
+            syncError: item.syncError,
             lastUpdated: item.timestamp.toISOString(),
-            data: item // Store full record for editing
+            data: item
           };
         });
 
@@ -105,8 +111,10 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         return 'Loan Application Records';
       case 'advance':
         return 'Advance Loan Records';
-      case 'disbursement': // Added disbursement title
+      case 'disbursement':
         return 'Loan Disbursement Records';
+      case 'group':
+        return 'Group Collection Records';
       default:
         return 'Records';
     }
@@ -152,15 +160,15 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     }).format(amount);
   };
 
-  // Updated to handle disbursements which have loanId instead of memberId
+  // Updated to handle disbursements and group collections
   const getRecordDisplayName = (record: Record) => {
     const fullData = record.data as any;
     
     if (type === 'disbursement') {
-      // For disbursements, show loan ID
       return `Loan ID: ${record.loanId || fullData?.loanId || 'Unknown'}`;
+    } else if (type === 'group') {
+      return `${fullData?.groupName || 'Unknown Group'} (${record.memberId})`;
     } else {
-      // For other types, show member info
       if (fullData?.memberName) {
         return `${fullData.memberName} (${record.memberId})`;
       }
@@ -172,15 +180,17 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     const fullData = record.data as any;
     
     if (type === 'disbursement') {
-      // For disbursements, show amount type and custom amount if applicable
       if (fullData?.amountType === 'custom' && fullData?.customAmount) {
         return `Custom Amount: ${formatAmount(fullData.customAmount)}`;
       } else if (fullData?.amountType === 'all') {
         return 'Full Loan Amount';
       }
       return 'Disbursement';
+    } else if (type === 'group') {
+      const cashCollected = fullData?.cashCollected || 0;
+      const finesCollected = fullData?.finesCollected || 0;
+      return `Cash: ${formatAmount(cashCollected)} | Fines: ${formatAmount(finesCollected)}`;
     } else {
-      // For other types, show amount
       if (record.amount) {
         return formatAmount(record.amount);
       }
@@ -219,6 +229,9 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         case 'disbursement':
           updateResult = await dbOperations.updateLoanDisbursementStatus(recordId, 'pending');
           break;
+        case 'group':
+          updateResult = await dbOperations.updateGroupCollectionStatus(recordId, 'pending');
+          break;
       }
 
       if (updateResult) {
@@ -233,6 +246,52 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
       console.error('Failed to resolve record:', err);
     } finally {
       setResolvingRecords(prev => {
+        const newSet = new Set([...prev]);
+        newSet.delete(recordId);
+        return newSet;
+      });
+    }
+  };
+
+  // Function to delete a record
+  const handleDeleteRecord = async (recordId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    
+    if (!confirm('Are you sure you want to delete this record? This action cannot be undone.')) {
+      return;
+    }
+    
+    setDeletingRecords(prev => new Set([...prev, recordId]));
+    
+    try {
+      let deleteResult;
+      switch (type) {
+        case 'cash':
+          deleteResult = await dbOperations.deleteCashCollection(recordId);
+          break;
+        case 'loan':
+          deleteResult = await dbOperations.deleteLoanApplication(recordId);
+          break;
+        case 'advance':
+          deleteResult = await dbOperations.deleteAdvanceLoan(recordId);
+          break;
+        case 'disbursement':
+          deleteResult = await dbOperations.deleteLoanDisbursement(recordId);
+          break;
+        case 'group':
+          deleteResult = await dbOperations.deleteGroupCollection(recordId);
+          break;
+      }
+
+      if (deleteResult !== undefined) {
+        // Remove from local state
+        setRecords(prev => prev.filter(r => r.id !== recordId));
+      }
+    } catch (err) {
+      console.error('Failed to delete record:', err);
+      alert('Failed to delete record. Please try again.');
+    } finally {
+      setDeletingRecords(prev => {
         const newSet = new Set([...prev]);
         newSet.delete(recordId);
         return newSet;
@@ -371,22 +430,40 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
                             <p className="text-xs text-muted-foreground italic">
                               Click to edit and retry sync
                             </p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => handleResolveRecord(record.id, e)}
-                              disabled={resolvingRecords.has(record.id)}
-                              className="h-6 px-2 text-xs"
-                            >
-                              {resolvingRecords.has(record.id) ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <>
-                                  <RotateCcw className="h-3 w-3 mr-1" />
-                                  Resolve
-                                </>
-                              )}
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => handleResolveRecord(record.id, e)}
+                                disabled={resolvingRecords.has(record.id)}
+                                className="h-6 px-2 text-xs"
+                              >
+                                {resolvingRecords.has(record.id) ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <>
+                                    <RotateCcw className="h-3 w-3 mr-1" />
+                                    Resolve
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => handleDeleteRecord(record.id, e)}
+                                disabled={deletingRecords.has(record.id)}
+                                className="h-6 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                {deletingRecords.has(record.id) ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Trash2 className="h-3 w-3 mr-1" />
+                                    Delete
+                                  </>
+                                )}
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -397,6 +474,19 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
                 <div className="flex items-center space-x-2">
                   {getStatusBadge(record.status)}
                   <Edit3 className="h-4 w-4 text-muted-foreground" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => handleDeleteRecord(record.id, e)}
+                    disabled={deletingRecords.has(record.id)}
+                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    {deletingRecords.has(record.id) ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
               </div>
             </CardContent>

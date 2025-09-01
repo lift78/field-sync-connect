@@ -246,6 +246,10 @@ export const dbOperations = {
     });
   },
 
+  async deleteLoanApplication(id: string | number) {
+    return await db.loanApplications.delete(Number(id));
+  },
+
   // =============================================================================
   // LOAN DISBURSEMENTS
   // =============================================================================
@@ -278,6 +282,19 @@ export const dbOperations = {
       syncStatus: 'failed', 
       syncError: error 
     });
+  },
+
+  async updateLoanDisbursement(id: string, data: LoanDisbursement) {
+    return await db.loanDisbursements.update(Number(id), { 
+      ...data, 
+      synced: false, 
+      syncStatus: 'pending', 
+      syncError: undefined 
+    });
+  },
+
+  async deleteLoanDisbursement(id: string | number) {
+    return await db.loanDisbursements.delete(Number(id));
   },
 
   // =============================================================================
@@ -321,6 +338,10 @@ export const dbOperations = {
       syncStatus: 'pending', 
       syncError: undefined 
     });
+  },
+
+  async deleteAdvanceLoan(id: string | number) {
+    return await db.advanceLoans.delete(Number(id));
   },
 
   // =============================================================================
@@ -859,6 +880,20 @@ export const dbOperations = {
       return true;
     } catch (error) {
       console.error('Failed to update loan disbursement status:', error);
+      return false;
+    }
+  },
+
+  async updateGroupCollectionStatus(id: string, status: 'pending' | 'failed' | 'synced'): Promise<boolean> {
+    try {
+      const numericId = parseInt(id);
+      await db.groupCollections.update(numericId, { 
+        syncStatus: status,
+        syncError: status === 'pending' ? undefined : undefined
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to update group collection status:', error);
       return false;
     }
   }
