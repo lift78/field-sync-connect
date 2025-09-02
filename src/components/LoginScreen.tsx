@@ -74,6 +74,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
+                name="username"
+                autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter your username"
@@ -85,7 +87,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"

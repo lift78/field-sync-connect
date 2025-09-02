@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useKeyboardHandler } from "@/hooks/useKeyboardHandler";
 import { dbOperations } from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,6 +166,9 @@ export function FieldOfficerApp() {
   const [recordView, setRecordView] = useState<RecordView | null>(null);
   const [showLogin, setShowLogin] = useState(true);
   const { theme, setTheme } = useTheme();
+  
+  // Initialize keyboard handler
+  useKeyboardHandler();
 
   const sections = [
     { id: 'cash' as const, title: 'Cash Collection', icon: Wallet, color: 'bg-gradient-primary' },
@@ -328,7 +332,7 @@ export function FieldOfficerApp() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 z-40">
+      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 z-40 mobile-fixed-nav">
         <div className="grid grid-cols-4 gap-1">
           {sections.map((section) => {
             const isActive = activeSection === section.id;
