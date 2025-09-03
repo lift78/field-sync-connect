@@ -1,27 +1,12 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { 
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-  useSidebar
-} from "@/components/ui/sidebar";
 import { dbOperations, MemberBalance, Allocation } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
-import { BalanceDisplay } from "./BalanceDisplay";
 import { 
   Users, 
   User, 
@@ -41,7 +26,7 @@ interface Group {
   memberCount: number;
 }
 
-interface QuickCollectionsContentProps {
+interface QuickCollectionsProps {
   onBack: () => void;
 }
 
@@ -70,11 +55,11 @@ const toPreciseNumber = (value: string | number): number => {
   return Math.round(value * 100) / 100;
 };
 
-function GroupSidebar() {
-  const { setOpen } = useSidebar();
+function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Group, members: MemberBalance[]) => void; onBack: () => void }) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [members, setMembers] = useState<MemberBalance[]>([]);
-  
+  const [isLoading, setIsLoading] = useState(true);
+
   useEffect(() => {
     loadGroupsAndMembers();
   }, []);
@@ -105,6 +90,8 @@ function GroupSidebar() {
       setGroups(groupsList);
     } catch (error) {
       console.error('Error loading groups:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -122,58 +109,78 @@ function GroupSidebar() {
         return getNumericId(a.member_id) - getNumericId(b.member_id);
       });
     
-    // Store selected group and members in parent component
-    window.dispatchEvent(new CustomEvent('groupSelected', { 
-      detail: { group, members: groupMembers } 
-    }));
-    
-    setOpen(false);
+    onGroupSelect(group, groupMembers);
   };
 
+  if (isLoading) {
+    return (
+      <div className="p-6 text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+        <p>Loading groups...</p>
+      </div>
+    );
+  }
+
   return (
-    <Sidebar className="w-80">
-      <SidebarContent>
-        <div className="p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Users className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Quick Collections</h2>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" onClick={onBack} className="flex items-center gap-2">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold">Quick Collections</h1>
+          <p className="text-muted-foreground">Select a group to start collecting from members</p>
         </div>
-        
-        <SidebarGroup>
-          <SidebarGroupLabel>Select a Group</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {groups.map((group) => (
-                <SidebarMenuItem key={group.id}>
-                  <SidebarMenuButton 
-                    onClick={() => handleGroupSelect(group)}
-                    className="flex items-center justify-between p-3 hover:bg-accent rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Users className="h-4 w-4 text-primary" />
-                      <div>
-                        <p className="font-medium">{group.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {group.memberCount} members
-                        </p>
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-    </Sidebar>
+      </div>
+
+      {/* Groups Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {groups.map((group) => (
+          <Card key={group.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => handleGroupSelect(group)}>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between text-lg">
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-primary" />
+                  {group.name}
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {group.memberCount} members
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {groups.length === 0 && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Groups Found</h3>
+            <p className="text-muted-foreground">
+              No member groups are available for quick collections.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 
-function QuickCollectionsContent({ onBack }: QuickCollectionsContentProps) {
-  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [groupMembers, setGroupMembers] = useState<MemberBalance[]>([]);
+function CollectionForm({ 
+  selectedGroup, 
+  groupMembers, 
+  onBack 
+}: { 
+  selectedGroup: Group; 
+  groupMembers: MemberBalance[]; 
+  onBack: () => void;
+}) {
   const [currentMemberIndex, setCurrentMemberIndex] = useState(0);
   const [cashAmount, setCashAmount] = useState('');
   const [mpesaAmount, setMpesaAmount] = useState('');
@@ -182,21 +189,6 @@ function QuickCollectionsContent({ onBack }: QuickCollectionsContentProps) {
   const { toast } = useToast();
 
   const currentMember = groupMembers[currentMemberIndex];
-
-  useEffect(() => {
-    const handleGroupSelected = (event: CustomEvent) => {
-      const { group, members } = event.detail;
-      setSelectedGroup(group);
-      setGroupMembers(members);
-      setCurrentMemberIndex(0);
-      resetForm();
-    };
-
-    window.addEventListener('groupSelected', handleGroupSelected as EventListener);
-    return () => {
-      window.removeEventListener('groupSelected', handleGroupSelected as EventListener);
-    };
-  }, []);
 
   const resetForm = () => {
     setCashAmount('');
@@ -269,13 +261,9 @@ function QuickCollectionsContent({ onBack }: QuickCollectionsContentProps) {
       } else {
         toast({
           title: "Group Complete",
-          description: `All collections for ${selectedGroup?.name} completed!`,
+          description: `All collections for ${selectedGroup.name} completed!`,
         });
-        // Reset to group selection
-        setSelectedGroup(null);
-        setGroupMembers([]);
-        setCurrentMemberIndex(0);
-        resetForm();
+        onBack();
       }
     } catch (error) {
       console.error('Error saving collection:', error);
@@ -303,25 +291,13 @@ function QuickCollectionsContent({ onBack }: QuickCollectionsContentProps) {
     }
   };
 
-  if (!selectedGroup || !currentMember) {
-    return (
-      <div className="p-6 text-center">
-        <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Select a Group</h2>
-        <p className="text-muted-foreground">
-          Use the sidebar to select a group and start quick collections
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={onBack} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
-          Back
+          Back to Groups
         </Button>
         <Badge variant="outline">
           {currentMemberIndex + 1} of {groupMembers.length}
@@ -532,24 +508,31 @@ function QuickCollectionsContent({ onBack }: QuickCollectionsContentProps) {
   );
 }
 
-export function QuickCollections({ onBack }: { onBack: () => void }) {
+export function QuickCollections({ onBack }: QuickCollectionsProps) {
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [groupMembers, setGroupMembers] = useState<MemberBalance[]>([]);
+
+  const handleGroupSelect = (group: Group, members: MemberBalance[]) => {
+    setSelectedGroup(group);
+    setGroupMembers(members);
+  };
+
+  const handleBackToGroups = () => {
+    setSelectedGroup(null);
+    setGroupMembers([]);
+  };
+
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <GroupSidebar />
-        <main className="flex-1 p-6">
-          <div className="max-w-4xl mx-auto">
-            <div className="mb-6">
-              <SidebarTrigger className="mb-4" />
-              <h1 className="text-2xl font-bold">Quick Collections</h1>
-              <p className="text-muted-foreground">
-                Streamlined group collection workflow
-              </p>
-            </div>
-            <QuickCollectionsContent onBack={onBack} />
-          </div>
-        </main>
-      </div>
-    </SidebarProvider>
+    <div className="p-6 max-w-6xl mx-auto">
+      {!selectedGroup ? (
+        <GroupSelection onGroupSelect={handleGroupSelect} onBack={onBack} />
+      ) : (
+        <CollectionForm 
+          selectedGroup={selectedGroup} 
+          groupMembers={groupMembers} 
+          onBack={handleBackToGroups} 
+        />
+      )}
+    </div>
   );
 }
