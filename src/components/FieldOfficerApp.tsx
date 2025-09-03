@@ -12,6 +12,7 @@ import { LoanSection } from "./LoanSection";
 import { AdvanceLoanForm } from "./AdvanceLoanForm";
 import { SyncManager } from "./SyncManager";
 import { RecordDetailView } from "./RecordDetailView";
+import { QuickCollections } from "./QuickCollections";
 import { 
   Wallet, 
   CreditCard, 
@@ -20,11 +21,12 @@ import {
   Menu,
   X,
   Moon,
-  Sun
+  Sun,
+  Users
 } from "lucide-react";
 import { CashCollection, LoanApplication, AdvanceLoan } from "@/lib/database";
 
-type AppSection = 'cash' | 'loan' | 'advance' | 'sync';
+type AppSection = 'cash' | 'loan' | 'advance' | 'sync' | 'quick';
 
 interface RecordView {
   type: 'cash' | 'loan' | 'advance';
@@ -165,6 +167,7 @@ export function FieldOfficerApp() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [recordView, setRecordView] = useState<RecordView | null>(null);
   const [showLogin, setShowLogin] = useState(true);
+  const [showQuickCollections, setShowQuickCollections] = useState(false);
   const { theme, setTheme } = useTheme();
   
   // Initialize keyboard handler
@@ -172,8 +175,9 @@ export function FieldOfficerApp() {
 
   const sections = [
     { id: 'cash' as const, title: 'Cash Collection', icon: Wallet, color: 'bg-gradient-primary' },
-    { id: 'loan' as const, title: 'Loan Management', icon: CreditCard, color: 'bg-gradient-success' },
-    { id: 'advance' as const, title: 'Advance Loan', icon: Zap, color: 'bg-gradient-accent' },
+    { id: 'quick' as const, title: 'Quick Collections', icon: Users, color: 'bg-gradient-success' },
+    { id: 'loan' as const, title: 'Loan Management', icon: CreditCard, color: 'bg-gradient-accent' },
+    { id: 'advance' as const, title: 'Advance Loan', icon: Zap, color: 'bg-gradient-warning' },
     { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-secondary' },
   ];
 
@@ -229,6 +233,11 @@ export function FieldOfficerApp() {
   };
 
   const renderActiveSection = () => {
+    // If showing quick collections, render it fullscreen
+    if (showQuickCollections) {
+      return <QuickCollections onBack={() => setShowQuickCollections(false)} />;
+    }
+
     // If viewing a record, show the record detail view
     if (recordView) {
       return (
@@ -244,6 +253,9 @@ export function FieldOfficerApp() {
     switch (activeSection) {
       case 'cash':
         return <CashCollectionForm />;
+      case 'quick':
+        setShowQuickCollections(true);
+        return null;
       case 'loan':
         return <LoanSection />;
       case 'advance':
@@ -258,6 +270,11 @@ export function FieldOfficerApp() {
   // Show splash screen first
   if (showLogin) {
     return <LoginScreen onLogin={() => setShowLogin(false)} />;
+  }
+
+  // Show quick collections fullscreen
+  if (showQuickCollections) {
+    return <QuickCollections onBack={() => setShowQuickCollections(false)} />;
   }
 
   return (
@@ -310,7 +327,11 @@ export function FieldOfficerApp() {
                   variant={activeSection === section.id ? "default" : "outline"}
                   size="xl"
                   onClick={() => {
-                    setActiveSection(section.id);
+                    if (section.id === 'quick') {
+                      setShowQuickCollections(true);
+                    } else {
+                      setActiveSection(section.id);
+                    }
                     setMenuOpen(false);
                   }}
                   className={`justify-start ${
@@ -333,15 +354,22 @@ export function FieldOfficerApp() {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 z-40 mobile-fixed-nav">
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-5 gap-1">
           {sections.map((section) => {
-            const isActive = activeSection === section.id;
+            const isActive = activeSection === section.id || (section.id === 'quick' && showQuickCollections);
             return (
               <Button
                 key={section.id}
                 variant="ghost"
                 size="sm"
-                onClick={() => setActiveSection(section.id)}
+                onClick={() => {
+                  if (section.id === 'quick') {
+                    setShowQuickCollections(true);
+                  } else {
+                    setActiveSection(section.id);
+                    setShowQuickCollections(false);
+                  }
+                }}
                 className={`flex-col h-16 p-2 ${
                   isActive 
                     ? 'text-primary bg-primary/10' 

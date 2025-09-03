@@ -77,6 +77,7 @@ export default {
 				'gradient-card': 'var(--gradient-card)',
 				'gradient-success': 'var(--gradient-success)',
 				'gradient-accent': 'var(--gradient-accent)',
+				'gradient-warning': 'var(--gradient-warning)',
 				'gradient-hero': 'var(--gradient-hero)'
 			},
 			boxShadow: {
