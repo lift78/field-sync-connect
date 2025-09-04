@@ -146,10 +146,10 @@ function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Grou
         </div>
       </div>
 
-      {/* Groups Grid */}
-      <div className="grid grid-cols-1 gap-4 max-w-full">
+      {/* Groups Grid - Full width cards like CashCollectionForm */}
+      <div className="space-y-4 h-[60vh] overflow-y-auto">
         {groups.map((group) => (
-          <Card key={group.id} className="cursor-pointer hover:shadow-lg transition-shadow w-full" onClick={() => handleGroupSelect(group)}>
+          <Card key={group.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => handleGroupSelect(group)}>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center justify-between text-lg">
                 <div className="flex items-center gap-2">
@@ -383,6 +383,8 @@ function CollectionForm({
       if (currentMemberIndex < groupMembers.length - 1) {
         setCurrentMemberIndex(currentMemberIndex + 1);
         resetForm();
+        // Scroll to top for next member
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         toast({
           title: "Group Complete",
@@ -406,6 +408,8 @@ function CollectionForm({
     if (currentMemberIndex > 0) {
       setCurrentMemberIndex(currentMemberIndex - 1);
       resetForm();
+      // Scroll to top for previous member
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -413,13 +417,15 @@ function CollectionForm({
     if (currentMemberIndex < groupMembers.length - 1) {
       setCurrentMemberIndex(currentMemberIndex + 1);
       resetForm();
+      // Scroll to top for skipped member
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const hasValidData = totalCollected > 0 || totalAllocated > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-h-screen overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={onBack} className="flex items-center gap-2">

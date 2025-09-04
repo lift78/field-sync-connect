@@ -293,12 +293,12 @@ export function FieldOfficerApp() {
             <p className="text-sm opacity-90 hidden sm:block">{activeTitle}</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Quick Collections Button - Desktop only */}
+            {/* Quick Collections Button - Both Desktop and Mobile */}
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setQuickDrawerOpen(true)}
-              className="hover:bg-accent hidden sm:flex"
+              className="hover:bg-accent"
               title="Quick Collections"
             >
               <Users className="h-5 w-5" />
