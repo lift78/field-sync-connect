@@ -1,12 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { dbOperations, MemberBalance, Allocation } from "@/lib/database";
+import { Separator } from "@/components/ui/separator";
+import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
+import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
 import { 
   Users, 
   User, 
@@ -17,7 +19,8 @@ import {
   Trash2, 
   Banknote, 
   Smartphone,
-  ArrowLeft
+  ArrowLeft,
+  Calculator
 } from "lucide-react";
 
 interface Group {
@@ -28,6 +31,12 @@ interface Group {
 
 interface QuickCollectionsProps {
   onBack: () => void;
+}
+
+interface Allocation {
+  type: 'savings' | 'loan' | 'amount_for_advance_payment' | 'other';
+  amount: number;
+  reason?: string;
 }
 
 const allocationReasons = [
@@ -196,19 +205,99 @@ function CollectionForm({
     setAllocations([]);
   };
 
-  const totalCollected = toPreciseNumber(cashAmount) + toPreciseNumber(mpesaAmount);
-  const totalAllocated = allocations.reduce((sum, allocation) => sum + toPreciseNumber(allocation.amount), 0);
+  // Use precise calculations to avoid floating point issues
+  const cashAmountNum = toPreciseNumber(cashAmount);
+  const mpesaAmountNum = toPreciseNumber(mpesaAmount);
+  const totalCollected = toPreciseNumber(cashAmountNum + mpesaAmountNum);
+  const totalAllocated = toPreciseNumber(
+    allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
+  );
   const remainingAmount = toPreciseNumber(totalCollected - totalAllocated);
 
-  const addAllocation = () => {
-    setAllocations([...allocations, { type: 'savings', amount: 0, memberId: currentMember?.member_id || '' }]);
+  // Get current balances if member is selected
+  const currentBalances = currentMember ? currentMember.balances : null;
+
+  // Calculate carry forward balances
+  const savingsAllocation = allocations.find(a => a.type === 'savings')?.amount || 0;
+  const loanAllocation = allocations.find(a => a.type === 'loan')?.amount || 0;
+  const advanceAllocation = allocations.find(a => a.type === 'amount_for_advance_payment')?.amount || 0;
+
+  // Calculate advance payment split
+  const advancePaymentSplit = useMemo(() => {
+    if (currentBalances && advanceAllocation > 0) {
+      const currentAdvanceBalance = currentBalances.advance_loan_balance;
+      
+      if (currentAdvanceBalance <= 0) {
+        return { pay_advance: 0, pay_advance_interest: 0 };
+      }
+      
+      if (advanceAllocation >= currentAdvanceBalance) {
+        return {
+          pay_advance: currentAdvanceBalance,
+          pay_advance_interest: 0
+        };
+      }
+      
+      const ADVANCE_INTEREST_RATE = 0.1; // 10%
+      const ADVANCE_FIXED_FINE = 10; // 10 KES
+      
+      const interestComponent = currentAdvanceBalance * ADVANCE_INTEREST_RATE / (1 + ADVANCE_INTEREST_RATE);
+      let payAdvance = (advanceAllocation - interestComponent - ADVANCE_FIXED_FINE) * (1 + ADVANCE_INTEREST_RATE) / 1;
+      
+      payAdvance = Math.max(0, Math.min(payAdvance, currentAdvanceBalance));
+      
+      let payAdvanceInterest;
+      
+      if (payAdvance >= currentAdvanceBalance) {
+        payAdvance = currentAdvanceBalance;
+        payAdvanceInterest = 0;
+      } else {
+        const remainingBalance = currentAdvanceBalance - payAdvance;
+        const currentPrincipal = remainingBalance / (1 + ADVANCE_INTEREST_RATE);
+        payAdvanceInterest = currentPrincipal * ADVANCE_INTEREST_RATE + ADVANCE_FIXED_FINE;
+        payAdvanceInterest = Math.round(payAdvanceInterest);
+      }
+      
+      return {
+        pay_advance: Math.round(payAdvance * 100) / 100,
+        pay_advance_interest: payAdvanceInterest
+      };
+    }
+    return { pay_advance: 0, pay_advance_interest: 0 };
+  }, [currentBalances, advanceAllocation]);
+
+  const savingsCarryForward = currentBalances ? 
+    toPreciseNumber(currentBalances.savings_balance + savingsAllocation) : 0;
+  const loanCarryForward = currentBalances ? 
+    toPreciseNumber(currentBalances.loan_balance - loanAllocation) : 0;
+  const advanceCarryForward = currentBalances ? 
+    toPreciseNumber(currentBalances.advance_loan_balance - advancePaymentSplit.pay_advance) : 0;
+
+  const formatAmount = (amount: number): string => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES',
+      minimumFractionDigits: 0,
+    }).format(amount);
   };
 
-  const updateAllocation = (index: number, field: keyof Allocation, value: any) => {
-    const updated = allocations.map((allocation, i) => 
-      i === index ? { ...allocation, [field]: value } : allocation
-    );
-    setAllocations(updated);
+  const addAllocation = (type: Allocation['type']) => {
+    const newAllocation: Allocation = {
+      type,
+      amount: 0,
+      reason: type === 'other' ? allocationReasons[0] : undefined,
+    };
+    setAllocations([...allocations, newAllocation]);
+  };
+
+  const updateAllocation = (index: number, updates: Partial<Allocation>) => {
+    setAllocations(allocations.map((alloc, i) => 
+      i === index ? { 
+        ...alloc, 
+        ...updates,
+        amount: updates.amount !== undefined ? toPreciseNumber(updates.amount) : alloc.amount
+      } : alloc
+    ));
   };
 
   const removeAllocation = (index: number) => {
@@ -218,10 +307,10 @@ function CollectionForm({
   const handleSave = async () => {
     if (!currentMember) return;
     
-    if (totalCollected <= 0) {
+    if (totalCollected === 0 && totalAllocated === 0) {
       toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid collection amount",
+        title: "No Data to Save",
+        description: "Please enter collection amounts or allocations",
         variant: "destructive"
       });
       return;
@@ -230,28 +319,39 @@ function CollectionForm({
     setIsLoading(true);
     
     try {
-      const collectionData = {
-        memberId: currentMember.member_id,
-        memberName: currentMember.name,
-        totalAmount: totalCollected,
-        cashAmount: toPreciseNumber(cashAmount),
-        mpesaAmount: toPreciseNumber(mpesaAmount),
-        allocationId: `ALLOC-${Date.now()}-${currentMember.member_id}`,
-        allocations: allocations.map(allocation => ({
-          ...allocation,
-          amount: toPreciseNumber(allocation.amount),
-          memberId: currentMember.member_id
-        })),
-        timestamp: new Date(),
-        synced: false,
-        syncStatus: 'pending' as const
+      // Extract member ID from member_id field
+      const extractMemberId = (memberIdField: string): string => {
+        const parts = memberIdField.split('/');
+        return parts[parts.length - 1] || memberIdField;
       };
 
-      await dbOperations.addCashCollection(collectionData);
+      const memberId = extractMemberId(currentMember.member_id);
+
+      // Prepare allocations without individual IDs
+      const formattedAllocations = allocations
+        .filter(allocation => allocation.amount > 0)
+        .map(allocation => ({
+          memberId: memberId,
+          type: allocation.type,
+          amount: allocation.amount,
+          reason: allocation.reason
+        }));
+
+      await dbOperations.addCashCollection({
+        memberId,
+        memberName: currentMember.name,
+        totalAmount: totalCollected,
+        cashAmount: cashAmountNum,
+        mpesaAmount: mpesaAmountNum,
+        allocations: formattedAllocations,
+        timestamp: new Date()
+      });
       
       toast({
         title: "Collection Saved",
-        description: `Collection for ${currentMember.name} saved successfully`,
+        description: `${formatAmount(totalCollected)} saved for ${currentMember.name}${
+          cashAmountNum > 0 ? ' (Cash reference generated)' : ''
+        }`,
       });
 
       // Move to next member or finish
@@ -291,6 +391,8 @@ function CollectionForm({
     }
   };
 
+  const hasValidData = totalCollected > 0 || totalAllocated > 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -305,7 +407,7 @@ function CollectionForm({
       </div>
 
       {/* Member Info */}
-      <Card>
+      <Card className="shadow-card bg-gradient-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
@@ -339,143 +441,339 @@ function CollectionForm({
         </CardContent>
       </Card>
 
-      {/* Collection Input */}
-      <Card>
+      {/* Cash Collection */}
+      <Card className="shadow-card bg-gradient-card">
         <CardHeader>
-          <CardTitle>Collection Amount</CardTitle>
+          <CardTitle className="text-lg">Cash Collection</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="cash" className="flex items-center gap-2">
-                <Banknote className="h-4 w-4" />
-                Cash Amount (KES)
-              </Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Enhanced Cash Field */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-success/10 rounded-lg border border-success/20">
+                <Banknote className="h-5 w-5 text-success" />
+                <div>
+                  <Label htmlFor="cash-amount" className="text-base font-semibold text-success">
+                    💵 CASH Amount (KES)
+                  </Label>
+                  <p className="text-xs text-success/80">Physical money received</p>
+                </div>
+              </div>
               <Input
-                id="cash"
+                id="cash-amount"
                 type="number"
                 step="0.01"
+                placeholder="0.00"
                 value={cashAmount}
                 onChange={(e) => setCashAmount(e.target.value)}
-                placeholder="0.00"
+                className="text-lg p-3 border-2 border-success/30 focus:border-success bg-success/5"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="mpesa" className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4" />
-                M-Pesa Amount (KES)
-              </Label>
-              <Input
-                id="mpesa"
-                type="number"
-                step="0.01"
-                value={mpesaAmount}
-                onChange={(e) => setMpesaAmount(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-          <div className="text-lg font-semibold">
-            Total Collected: KES {totalCollected.toLocaleString()}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Allocations */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            Member Allocations
-            <Button onClick={addAllocation} size="sm" className="flex items-center gap-1">
-              <Plus className="h-4 w-4" />
-              Add
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {allocations.map((allocation, index) => (
-            <div key={index} className="flex gap-2 items-end">
-              <div className="flex-1">
-                <Label>Type</Label>
-                <Select
-                  value={allocation.type}
-                  onValueChange={(value: any) => updateAllocation(index, 'type', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="savings">Savings</SelectItem>
-                    <SelectItem value="loan">Loan Payment</SelectItem>
-                    <SelectItem value="amount_for_advance_payment">Advance Payment</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1">
-                <Label>Amount (KES)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={allocation.amount}
-                  onChange={(e) => updateAllocation(index, 'amount', e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              {allocation.type === 'other' && (
-                <div className="flex-1">
-                  <Label>Reason</Label>
-                  <Select
-                    value={allocation.reason || ''}
-                    onValueChange={(value) => updateAllocation(index, 'reason', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select reason" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allocationReasons.map((reason) => (
-                        <SelectItem key={reason} value={reason}>
-                          {reason}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {cashAmountNum > 0 && (
+                <div className="flex items-center gap-2 text-sm text-success bg-success/10 p-2 rounded">
+                  <span>📄 Cash reference will be generated automatically</span>
                 </div>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeAllocation(index)}
-                className="text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
             </div>
-          ))}
+            
+            {/* Enhanced M-Pesa Field */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/20">
+                <Smartphone className="h-5 w-5 text-primary" />
+                <div>
+                  <Label htmlFor="mpesa-amount" className="text-base font-semibold text-primary">
+                    📱 M-PESA Amount (KES)
+                  </Label>
+                  <p className="text-xs text-primary/80">Mobile money received</p>
+                </div>
+              </div>
+              <Input
+                id="mpesa-amount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={mpesaAmount}
+                onChange={(e) => setMpesaAmount(e.target.value)}
+                className="text-lg p-3 border-2 border-primary/30 focus:border-primary bg-primary/5"
+              />
+              {mpesaAmountNum > 0 && (
+                <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 p-2 rounded">
+                  <span>📱 M-Pesa transaction recorded</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Enhanced Total Summary */}
+          <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
+            <div className="flex justify-between items-center">
+              <span className="font-medium">Amount to Allocate:</span>
+              <span className="text-xl font-bold text-primary">
+                {formatAmount(totalCollected)}
+              </span>
+            </div>
+            {/* Show breakdown if both amounts exist */}
+            {cashAmountNum > 0 && mpesaAmountNum > 0 && (
+              <div className="mt-2 pt-2 border-t border-primary/20 text-sm text-muted-foreground">
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-1">
+                    <Banknote className="h-3 w-3 text-success" />
+                    Cash: {formatAmount(cashAmountNum)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Smartphone className="h-3 w-3 text-primary" />
+                    M-Pesa: {formatAmount(mpesaAmountNum)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Summary */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-sm text-muted-foreground">Collected</p>
-              <p className="text-lg font-semibold text-green-600">
-                KES {totalCollected.toLocaleString()}
-              </p>
+      {/* Enhanced Allocations */}
+      <Card className="shadow-card bg-gradient-card">
+        <CardHeader>
+          <CardTitle className="text-lg">Member Allocations</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            All allocations will be saved under one allocation ID
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Core Allocation Fields - Always Visible */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="savings-amount">Allocate to Savings (KES)</Label>
+              <Input
+                id="savings-amount"
+                type="number"
+                step="0.01"
+                placeholder="0"
+                value={allocations.find(a => a.type === 'savings')?.amount || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const amount = toPreciseNumber(value);
+                  const existingIndex = allocations.findIndex(a => a.type === 'savings');
+                  if (existingIndex >= 0) {
+                    updateAllocation(existingIndex, { amount });
+                  } else if (amount > 0) {
+                    setAllocations(prev => [...prev, { type: 'savings', amount }]);
+                  }
+                }}
+              />
+              {currentBalances && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-muted/30 rounded border border-muted/50">
+                    <div className="text-muted-foreground">Current Savings</div>
+                    <div className="font-medium text-blue-400">
+                      {formatAmount(currentBalances.savings_balance)}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-green-500/10 rounded border border-green-500/20">
+                    <div className="text-muted-foreground">Savings CF</div>
+                    <div className="font-medium text-green-400">
+                      {formatAmount(savingsCarryForward)}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Allocated</p>
-              <p className="text-lg font-semibold text-blue-600">
-                KES {totalAllocated.toLocaleString()}
-              </p>
+            
+            <div className="space-y-2">
+              <Label htmlFor="loan-amount">Pay Loan Installments (KES)</Label>
+              <Input
+                id="loan-amount"
+                type="number"
+                step="0.01"
+                placeholder="0"
+                value={allocations.find(a => a.type === 'loan')?.amount || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const amount = toPreciseNumber(value);
+                  const existingIndex = allocations.findIndex(a => a.type === 'loan');
+                  if (existingIndex >= 0) {
+                    updateAllocation(existingIndex, { amount });
+                  } else if (amount > 0) {
+                    setAllocations(prev => [...prev, { type: 'loan', amount }]);
+                  }
+                }}
+              />
+              {currentBalances && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-muted/30 rounded border border-muted/50">
+                    <div className="text-muted-foreground">Current Balance</div>
+                    <div className="font-medium text-red-400">
+                      {formatAmount(currentBalances.loan_balance)}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-green-500/10 rounded border border-green-500/20">
+                    <div className="text-muted-foreground">Loan CF</div>
+                    <div className="font-medium text-green-400">
+                      {formatAmount(Math.max(0, loanCarryForward))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Remaining</p>
-              <p className={`text-lg font-semibold ${remainingAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                KES {remainingAmount.toLocaleString()}
+            
+            <div className="space-y-2">
+              <Label htmlFor="advance-payment-amount">Advance Payments (KES)</Label>
+              <div className="relative">
+                <Input
+                  id="advance-payment-amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="0"
+                  value={allocations.find(a => a.type === 'amount_for_advance_payment')?.amount || ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const amount = toPreciseNumber(value);
+                    const existingIndex = allocations.findIndex(a => a.type === 'amount_for_advance_payment');
+                    if (existingIndex >= 0) {
+                      updateAllocation(existingIndex, { amount });
+                    } else if (amount > 0) {
+                      setAllocations(prev => [...prev, { type: 'amount_for_advance_payment', amount }]);
+                    }
+                  }}
+                  className="pr-12"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <AdvanceCalculatorDialog
+                    currentAmount={allocations.find(a => a.type === 'amount_for_advance_payment')?.amount || 0}
+                    onAmountSelect={(amount) => {
+                      const preciseAmount = toPreciseNumber(amount);
+                      const existingIndex = allocations.findIndex(a => a.type === 'amount_for_advance_payment');
+                      if (existingIndex >= 0) {
+                        updateAllocation(existingIndex, { amount: preciseAmount });
+                      } else {
+                        setAllocations(prev => [...prev, { type: 'amount_for_advance_payment', amount: preciseAmount }]);
+                      }
+                    }}
+                    trigger={
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 hover:bg-accent"
+                        type="button"
+                      >
+                        <Calculator className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Calculator className="h-3 w-3" />
+                Click calculator to preview payment split
               </p>
+              {currentBalances && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-muted/30 rounded border border-muted/50">
+                    <div className="text-muted-foreground">Current Balance</div>
+                    <div className="font-medium text-red-400">
+                      {formatAmount(currentBalances.advance_loan_balance)}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-green-500/10 rounded border border-green-500/20">
+                    <div className="text-muted-foreground">Advance CF</div>
+                    <div className="font-medium text-green-400">
+                      {formatAmount(Math.max(0, advanceCarryForward))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Other Allocations - Add as needed */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Other Allocations</Label>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => addAllocation('other')}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Other
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              {allocations.filter(a => a.type === 'other').map((allocation, index) => {
+                const otherIndex = allocations.findIndex(a => a.type === 'other' && a === allocation);
+                return (
+                  <div key={index} className="p-3 border rounded-lg bg-background/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge variant="secondary">
+                        OTHER ALLOCATION
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeAllocation(otherIndex)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Amount (KES)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0"
+                          value={allocation.amount || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            updateAllocation(otherIndex, {
+                              amount: toPreciseNumber(value)
+                            });
+                          }}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label className="text-xs">Reason</Label>
+                        <Select
+                          value={allocation.reason}
+                          onValueChange={(value) => updateAllocation(otherIndex, { reason: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allocationReasons.map((reason) => (
+                              <SelectItem key={reason} value={reason}>
+                                {reason}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Summary */}
+          <Separator />
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span>Total Collected:</span>
+              <span className="font-medium">{formatAmount(totalCollected)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Total Allocated:</span>
+              <span className="font-medium">{formatAmount(totalAllocated)}</span>
+            </div>
+            <div className="flex justify-between font-bold">
+              <span>Remaining:</span>
+              <span className={remainingAmount < 0 ? 'text-destructive' : 'text-success'}>
+                {formatAmount(remainingAmount)}
+              </span>
             </div>
           </div>
         </CardContent>
@@ -496,8 +794,10 @@ function CollectionForm({
           )}
         </div>
         <Button 
+          variant="mobile" 
+          size="mobile" 
           onClick={handleSave} 
-          disabled={isLoading || totalCollected <= 0}
+          disabled={isLoading || !hasValidData}
           className="flex items-center gap-2"
         >
           <Save className="h-4 w-4" />
@@ -520,6 +820,7 @@ export function QuickCollections({ onBack }: QuickCollectionsProps) {
   const handleBackToGroups = () => {
     setSelectedGroup(null);
     setGroupMembers([]);
+    
   };
 
   return (
