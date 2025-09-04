@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { CashCollection, LoanApplication, AdvanceLoan } from "@/lib/database";
 
-type AppSection = 'cash' | 'loan' | 'advance' | 'sync' | 'quick';
+type AppSection = 'cash' | 'loan' | 'advance' | 'sync';
 
 interface RecordView {
   type: 'cash' | 'loan' | 'advance';
@@ -168,6 +168,7 @@ export function FieldOfficerApp() {
   const [recordView, setRecordView] = useState<RecordView | null>(null);
   const [showLogin, setShowLogin] = useState(true);
   const [showQuickCollections, setShowQuickCollections] = useState(false);
+  const [quickDrawerOpen, setQuickDrawerOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   
   // Initialize keyboard handler
@@ -175,7 +176,6 @@ export function FieldOfficerApp() {
 
   const sections = [
     { id: 'cash' as const, title: 'Cash Collection', icon: Wallet, color: 'bg-gradient-primary' },
-    { id: 'quick' as const, title: 'Quick Collections', icon: Users, color: 'bg-gradient-success' },
     { id: 'loan' as const, title: 'Loan Management', icon: CreditCard, color: 'bg-gradient-accent' },
     { id: 'advance' as const, title: 'Advance Loan', icon: Zap, color: 'bg-gradient-warning' },
     { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-secondary' },
@@ -253,9 +253,6 @@ export function FieldOfficerApp() {
     switch (activeSection) {
       case 'cash':
         return <CashCollectionForm />;
-      case 'quick':
-        setShowQuickCollections(true);
-        return null;
       case 'loan':
         return <LoanSection />;
       case 'advance':
@@ -327,11 +324,7 @@ export function FieldOfficerApp() {
                   variant={activeSection === section.id ? "default" : "outline"}
                   size="xl"
                   onClick={() => {
-                    if (section.id === 'quick') {
-                      setShowQuickCollections(true);
-                    } else {
-                      setActiveSection(section.id);
-                    }
+                    setActiveSection(section.id);
                     setMenuOpen(false);
                   }}
                   className={`justify-start ${
@@ -347,6 +340,24 @@ export function FieldOfficerApp() {
         </div>
       )}
 
+      {/* Quick Collections Drawer */}
+      {quickDrawerOpen && (
+        <div className="fixed inset-0 z-50 bg-background">
+          <QuickCollections onBack={() => setQuickDrawerOpen(false)} />
+        </div>
+      )}
+
+      {/* Swipe detector for left edge */}
+      <div 
+        className="fixed left-0 top-0 bottom-0 w-8 z-30"
+        onTouchStart={(e) => {
+          const touch = e.touches[0];
+          if (touch.clientX < 30) {
+            setQuickDrawerOpen(true);
+          }
+        }}
+      />
+
       {/* Main Content */}
       <main className="p-4 pb-20 mobile-content">
         {renderActiveSection()}
@@ -354,21 +365,17 @@ export function FieldOfficerApp() {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 z-40 mobile-fixed-nav">
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {sections.map((section) => {
-            const isActive = activeSection === section.id || (section.id === 'quick' && showQuickCollections);
+            const isActive = activeSection === section.id;
             return (
               <Button
                 key={section.id}
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  if (section.id === 'quick') {
-                    setShowQuickCollections(true);
-                  } else {
-                    setActiveSection(section.id);
-                    setShowQuickCollections(false);
-                  }
+                  setActiveSection(section.id);
+                  setShowQuickCollections(false);
                 }}
                 className={`flex-col h-16 p-2 ${
                   isActive 

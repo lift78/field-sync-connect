@@ -20,7 +20,9 @@ import {
   Banknote, 
   Smartphone,
   ArrowLeft,
-  Calculator
+  Calculator,
+  ChevronLeft,
+  SkipForward
 } from "lucide-react";
 
 interface Group {
@@ -145,9 +147,9 @@ function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Grou
       </div>
 
       {/* Groups Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 max-w-full">
         {groups.map((group) => (
-          <Card key={group.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => handleGroupSelect(group)}>
+          <Card key={group.id} className="cursor-pointer hover:shadow-lg transition-shadow w-full" onClick={() => handleGroupSelect(group)}>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center justify-between text-lg">
                 <div className="flex items-center gap-2">
@@ -783,13 +785,13 @@ function CollectionForm({
       <div className="flex gap-2 justify-between">
         <div className="flex gap-2">
           {currentMemberIndex > 0 && (
-            <Button variant="outline" onClick={handlePrevious}>
-              Previous Member
+            <Button variant="outline" size="icon" onClick={handlePrevious}>
+              <ChevronLeft className="h-4 w-4" />
             </Button>
           )}
           {currentMemberIndex < groupMembers.length - 1 && (
-            <Button variant="outline" onClick={handleSkip}>
-              Skip Member
+            <Button variant="outline" size="icon" onClick={handleSkip}>
+              <SkipForward className="h-4 w-4" />
             </Button>
           )}
         </div>
