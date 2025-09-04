@@ -329,6 +329,29 @@ function CollectionForm({
 
       const memberId = extractMemberId(currentMember.member_id);
 
+      // Check for duplicate records on the same day
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+
+      const existingRecords = await dbOperations.getCashCollections();
+      const todayRecords = existingRecords.filter(record => {
+        const recordDate = new Date(record.timestamp);
+        return recordDate >= today && recordDate < tomorrow && record.memberId === memberId;
+      });
+
+      if (todayRecords.length > 0) {
+        const confirmDuplicate = confirm(
+          `⚠️ A record for member ${currentMember.name} (ID: ${memberId}) already exists for today.\n\nAre you sure you want to create a second record?`
+        );
+        
+        if (!confirmDuplicate) {
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Prepare allocations without individual IDs
       const formattedAllocations = allocations
         .filter(allocation => allocation.amount > 0)
@@ -791,7 +814,7 @@ function CollectionForm({
           )}
           {currentMemberIndex < groupMembers.length - 1 && (
             <Button variant="outline" size="icon" onClick={handleSkip}>
-              <SkipForward className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
           )}
         </div>
