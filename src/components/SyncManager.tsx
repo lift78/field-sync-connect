@@ -20,6 +20,8 @@ import {
   Clock,
   Upload,
   Settings,
+  Eye,
+  EyeOff,
   User,
   Key,
   X,
@@ -49,6 +51,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [offlineData, setOfflineData] = useState<SyncData[]>([]);
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [showCredentialModal, setShowCredentialModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Load actual data from IndexedDB
   useEffect(() => {
@@ -677,12 +680,28 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
               
               <div>
                 <Label>Password</Label>
-                <Input
-                  type="password"
-                  value={credentials.password === "••••••••" ? "" : credentials.password}
-                  onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-                  placeholder="Enter new password"
-                />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={credentials.password === "••••••••" ? "" : credentials.password}
+                    onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+                    placeholder="Enter new password"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
               </div>
               
               <Button 

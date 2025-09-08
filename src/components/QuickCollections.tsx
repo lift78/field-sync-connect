@@ -814,7 +814,7 @@ function CollectionForm({
       </Card>
 
       {/* Fixed Action Buttons */}
-      <div className="fixed bottom-4 left-4 right-4 sm:relative sm:bottom-auto sm:left-auto sm:right-auto flex gap-2 justify-between bg-background/80 backdrop-blur-sm p-2 rounded-lg border sm:bg-transparent sm:backdrop-blur-none sm:p-0 sm:border-0">
+      <div className="fixed bottom-4 left-4 right-4 sm:relative sm:bottom-auto sm:left-auto sm:right-auto flex gap-2 justify-between bg-background/80 backdrop-blur-sm p-2 rounded-lg border sm:bg-transparent sm:backdrop-blur-none sm:p-0 sm:border-0 mobile-fixed-nav">
         <div className="flex gap-2">
           {currentMemberIndex > 0 && (
             <Button 

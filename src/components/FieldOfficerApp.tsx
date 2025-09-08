@@ -103,11 +103,13 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
           </p>
 
           {/* Form */}
-          <div className="space-y-4">
+          <form className="space-y-4">
             <div>
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
+                name="username"
+                autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter your username"
@@ -119,7 +121,9 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
@@ -135,12 +139,13 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
 
             <Button
               onClick={handleLogin}
+              type="submit"
               className="w-full mt-4"
               disabled={isLoading}
             >
               {isLoading ? "Logging in..." : "Login"}
             </Button>
-          </div>
+          </form>
 
           {/* Status badges */}
           <div className="flex flex-wrap justify-center gap-2 mt-8">
@@ -357,16 +362,6 @@ export function FieldOfficerApp() {
         </div>
       )}
 
-      {/* Swipe detector for left edge */}
-      <div 
-        className="fixed left-0 top-0 bottom-0 w-8 z-30"
-        onTouchStart={(e) => {
-          const touch = e.touches[0];
-          if (touch.clientX < 30) {
-            setQuickDrawerOpen(true);
-          }
-        }}
-      />
 
       {/* Main Content */}
       <main className="p-4 pb-20 mobile-content">
