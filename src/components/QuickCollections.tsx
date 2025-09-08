@@ -125,7 +125,7 @@ function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Grou
 
   if (isLoading) {
     return (
-      <div className="p-6 text-center">
+      <div className="p-4 sm:p-6 text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
         <p>Loading groups...</p>
       </div>
@@ -133,7 +133,7 @@ function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Grou
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" onClick={onBack} className="flex items-center gap-2">
@@ -141,26 +141,30 @@ function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Grou
           Back
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">Quick Collections</h1>
-          <p className="text-muted-foreground">Select a group to start collecting from members</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Quick Collections</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Select a group to start collecting from members</p>
         </div>
       </div>
 
-      {/* Groups Grid - Full width cards like CashCollectionForm */}
-      <div className="space-y-4 h-[60vh] overflow-y-auto">
+      {/* Groups Grid - Optimized for mobile */}
+      <div className="space-y-3 h-[65vh] overflow-y-auto px-1">
         {groups.map((group) => (
-          <Card key={group.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => handleGroupSelect(group)}>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center justify-between text-lg">
+          <Card 
+            key={group.id} 
+            className="cursor-pointer hover:shadow-lg transition-shadow mx-1 sm:mx-0" 
+            onClick={() => handleGroupSelect(group)}
+          >
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="flex items-center justify-between text-base sm:text-lg">
                 <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-primary" />
-                  {group.name}
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
+                  <span className="truncate">{group.name}</span>
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
+            <CardContent className="pt-0">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {group.memberCount} members
               </p>
             </CardContent>
@@ -169,11 +173,11 @@ function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Grou
       </div>
 
       {groups.length === 0 && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Groups Found</h3>
-            <p className="text-muted-foreground">
+        <Card className="mx-1 sm:mx-0">
+          <CardContent className="p-6 sm:p-8 text-center">
+            <Users className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-base sm:text-lg font-semibold mb-2">No Groups Found</h3>
+            <p className="text-sm sm:text-base text-muted-foreground">
               No member groups are available for quick collections.
             </p>
           </CardContent>
@@ -425,47 +429,42 @@ function CollectionForm({
   const hasValidData = totalCollected > 0 || totalAllocated > 0;
 
   return (
-    <div className="space-y-6 max-h-screen overflow-y-auto">
+    <div className="space-y-4 sm:space-y-6 pb-20 sm:pb-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={onBack} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
-          Back to Groups
+          <span className="hidden sm:inline">Back to Groups</span>
+          <span className="sm:hidden">Back</span>
         </Button>
-        <Badge variant="outline">
+        <Badge variant="outline" className="text-xs sm:text-sm">
           {currentMemberIndex + 1} of {groupMembers.length}
         </Badge>
       </div>
 
-      {/* Member Info */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Member Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Name</p>
-                <p className="font-medium">{currentMember.name}</p>
+      {/* Compact Member Info */}
+      <Card className="shadow-card bg-gradient-card mx-1 sm:mx-0">
+        <CardContent className="p-3 sm:p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <User className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground">Name</p>
+                <p className="font-medium text-sm sm:text-base truncate">{currentMember.name}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Phone</p>
-                <p className="font-medium">{currentMember.phone}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <Phone className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground">Phone</p>
+                <p className="font-medium text-sm sm:text-base truncate">{currentMember.phone}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Group</p>
-                <p className="font-medium">{selectedGroup.name}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <Users className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground">Group</p>
+                <p className="font-medium text-sm sm:text-base truncate">{selectedGroup.name}</p>
               </div>
             </div>
           </div>
@@ -473,18 +472,18 @@ function CollectionForm({
       </Card>
 
       {/* Cash Collection */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <CardTitle className="text-lg">Cash Collection</CardTitle>
+      <Card className="shadow-card bg-gradient-card mx-1 sm:mx-0">
+        <CardHeader className="pb-3 sm:pb-4">
+          <CardTitle className="text-base sm:text-lg">Cash Collection</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Enhanced Cash Field */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 p-2 bg-success/10 rounded-lg border border-success/20">
-                <Banknote className="h-5 w-5 text-success" />
-                <div>
-                  <Label htmlFor="cash-amount" className="text-base font-semibold text-success">
+                <Banknote className="h-4 w-4 sm:h-5 sm:w-5 text-success flex-shrink-0" />
+                <div className="min-w-0">
+                  <Label htmlFor="cash-amount" className="text-sm sm:text-base font-semibold text-success">
                     💵 CASH Amount (KES)
                   </Label>
                   <p className="text-xs text-success/80">Physical money received</p>
@@ -497,11 +496,11 @@ function CollectionForm({
                 placeholder="0.00"
                 value={cashAmount}
                 onChange={(e) => setCashAmount(e.target.value)}
-                className="text-lg p-3 border-2 border-success/30 focus:border-success bg-success/5"
+                className="text-base sm:text-lg p-3 border-2 border-success/30 focus:border-success bg-success/5"
               />
               {cashAmountNum > 0 && (
-                <div className="flex items-center gap-2 text-sm text-success bg-success/10 p-2 rounded">
-                  <span>📄 Cash reference will be generated automatically</span>
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-success bg-success/10 p-2 rounded">
+                  <span>🔄 Cash reference will be generated automatically</span>
                 </div>
               )}
             </div>
@@ -509,9 +508,9 @@ function CollectionForm({
             {/* Enhanced M-Pesa Field */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/20">
-                <Smartphone className="h-5 w-5 text-primary" />
-                <div>
-                  <Label htmlFor="mpesa-amount" className="text-base font-semibold text-primary">
+                <Smartphone className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
+                <div className="min-w-0">
+                  <Label htmlFor="mpesa-amount" className="text-sm sm:text-base font-semibold text-primary">
                     📱 M-PESA Amount (KES)
                   </Label>
                   <p className="text-xs text-primary/80">Mobile money received</p>
@@ -524,10 +523,10 @@ function CollectionForm({
                 placeholder="0.00"
                 value={mpesaAmount}
                 onChange={(e) => setMpesaAmount(e.target.value)}
-                className="text-lg p-3 border-2 border-primary/30 focus:border-primary bg-primary/5"
+                className="text-base sm:text-lg p-3 border-2 border-primary/30 focus:border-primary bg-primary/5"
               />
               {mpesaAmountNum > 0 && (
-                <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 p-2 rounded">
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-primary bg-primary/10 p-2 rounded">
                   <span>📱 M-Pesa transaction recorded</span>
                 </div>
               )}
@@ -535,16 +534,16 @@ function CollectionForm({
           </div>
 
           {/* Enhanced Total Summary */}
-          <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
+          <div className="p-3 sm:p-4 bg-primary/10 rounded-lg border border-primary/20">
             <div className="flex justify-between items-center">
-              <span className="font-medium">Amount to Allocate:</span>
-              <span className="text-xl font-bold text-primary">
+              <span className="font-medium text-sm sm:text-base">Amount to Allocate:</span>
+              <span className="text-lg sm:text-xl font-bold text-primary">
                 {formatAmount(totalCollected)}
               </span>
             </div>
             {/* Show breakdown if both amounts exist */}
             {cashAmountNum > 0 && mpesaAmountNum > 0 && (
-              <div className="mt-2 pt-2 border-t border-primary/20 text-sm text-muted-foreground">
+              <div className="mt-2 pt-2 border-t border-primary/20 text-xs sm:text-sm text-muted-foreground">
                 <div className="flex justify-between">
                   <span className="flex items-center gap-1">
                     <Banknote className="h-3 w-3 text-success" />
@@ -562,18 +561,18 @@ function CollectionForm({
       </Card>
 
       {/* Enhanced Allocations */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <CardTitle className="text-lg">Member Allocations</CardTitle>
-          <p className="text-sm text-muted-foreground">
+      <Card className="shadow-card bg-gradient-card mx-1 sm:mx-0">
+        <CardHeader className="pb-3 sm:pb-4">
+          <CardTitle className="text-base sm:text-lg">Member Allocations</CardTitle>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             All allocations will be saved under one allocation ID
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Core Allocation Fields - Always Visible */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="savings-amount">Allocate to Savings (KES)</Label>
+              <Label htmlFor="savings-amount" className="text-sm">Allocate to Savings (KES)</Label>
               <Input
                 id="savings-amount"
                 type="number"
@@ -590,18 +589,19 @@ function CollectionForm({
                     setAllocations(prev => [...prev, { type: 'savings', amount }]);
                   }
                 }}
+                className="text-sm"
               />
               {currentBalances && (
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2 bg-muted/30 rounded border border-muted/50">
-                    <div className="text-muted-foreground">Current Savings</div>
-                    <div className="font-medium text-blue-400">
+                <div className="grid grid-cols-2 gap-1 sm:gap-2 text-xs">
+                  <div className="p-1.5 sm:p-2 bg-muted/30 rounded border border-muted/50">
+                    <div className="text-muted-foreground text-xs">Current Savings</div>
+                    <div className="font-medium text-blue-400 text-xs">
                       {formatAmount(currentBalances.savings_balance)}
                     </div>
                   </div>
-                  <div className="p-2 bg-green-500/10 rounded border border-green-500/20">
-                    <div className="text-muted-foreground">Savings CF</div>
-                    <div className="font-medium text-green-400">
+                  <div className="p-1.5 sm:p-2 bg-green-500/10 rounded border border-green-500/20">
+                    <div className="text-muted-foreground text-xs">Savings CF</div>
+                    <div className="font-medium text-green-400 text-xs">
                       {formatAmount(savingsCarryForward)}
                     </div>
                   </div>
@@ -610,7 +610,7 @@ function CollectionForm({
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="loan-amount">Pay Loan Installments (KES)</Label>
+              <Label htmlFor="loan-amount" className="text-sm">Pay Loan Installments (KES)</Label>
               <Input
                 id="loan-amount"
                 type="number"
@@ -627,18 +627,19 @@ function CollectionForm({
                     setAllocations(prev => [...prev, { type: 'loan', amount }]);
                   }
                 }}
+                className="text-sm"
               />
               {currentBalances && (
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2 bg-muted/30 rounded border border-muted/50">
-                    <div className="text-muted-foreground">Current Balance</div>
-                    <div className="font-medium text-red-400">
+                <div className="grid grid-cols-2 gap-1 sm:gap-2 text-xs">
+                  <div className="p-1.5 sm:p-2 bg-muted/30 rounded border border-muted/50">
+                    <div className="text-muted-foreground text-xs">Current Balance</div>
+                    <div className="font-medium text-red-400 text-xs">
                       {formatAmount(currentBalances.loan_balance)}
                     </div>
                   </div>
-                  <div className="p-2 bg-green-500/10 rounded border border-green-500/20">
-                    <div className="text-muted-foreground">Loan CF</div>
-                    <div className="font-medium text-green-400">
+                  <div className="p-1.5 sm:p-2 bg-green-500/10 rounded border border-green-500/20">
+                    <div className="text-muted-foreground text-xs">Loan CF</div>
+                    <div className="font-medium text-green-400 text-xs">
                       {formatAmount(Math.max(0, loanCarryForward))}
                     </div>
                   </div>
@@ -647,7 +648,7 @@ function CollectionForm({
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="advance-payment-amount">Advance Payments (KES)</Label>
+              <Label htmlFor="advance-payment-amount" className="text-sm">Advance Payments (KES)</Label>
               <div className="relative">
                 <Input
                   id="advance-payment-amount"
@@ -665,7 +666,7 @@ function CollectionForm({
                       setAllocations(prev => [...prev, { type: 'amount_for_advance_payment', amount }]);
                     }
                   }}
-                  className="pr-12"
+                  className="pr-10 text-sm"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2">
                   <AdvanceCalculatorDialog
@@ -683,10 +684,10 @@ function CollectionForm({
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-8 w-8 hover:bg-accent"
+                        className="h-6 w-6 hover:bg-accent"
                         type="button"
                       >
-                        <Calculator className="h-4 w-4" />
+                        <Calculator className="h-3 w-3" />
                       </Button>
                     }
                   />
@@ -697,16 +698,16 @@ function CollectionForm({
                 Click calculator to preview payment split
               </p>
               {currentBalances && (
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2 bg-muted/30 rounded border border-muted/50">
-                    <div className="text-muted-foreground">Current Balance</div>
-                    <div className="font-medium text-red-400">
+                <div className="grid grid-cols-2 gap-1 sm:gap-2 text-xs">
+                  <div className="p-1.5 sm:p-2 bg-muted/30 rounded border border-muted/50">
+                    <div className="text-muted-foreground text-xs">Current Balance</div>
+                    <div className="font-medium text-red-400 text-xs">
                       {formatAmount(currentBalances.advance_loan_balance)}
                     </div>
                   </div>
-                  <div className="p-2 bg-green-500/10 rounded border border-green-500/20">
-                    <div className="text-muted-foreground">Advance CF</div>
-                    <div className="font-medium text-green-400">
+                  <div className="p-1.5 sm:p-2 bg-green-500/10 rounded border border-green-500/20">
+                    <div className="text-muted-foreground text-xs">Advance CF</div>
+                    <div className="font-medium text-green-400 text-xs">
                       {formatAmount(Math.max(0, advanceCarryForward))}
                     </div>
                   </div>
@@ -723,8 +724,9 @@ function CollectionForm({
                 variant="outline" 
                 size="sm" 
                 onClick={() => addAllocation('other')}
+                className="text-xs"
               >
-                <Plus className="h-4 w-4 mr-1" />
+                <Plus className="h-3 w-3 mr-1" />
                 Add Other
               </Button>
             </div>
@@ -735,7 +737,7 @@ function CollectionForm({
                 return (
                   <div key={index} className="p-3 border rounded-lg bg-background/50">
                     <div className="flex items-center justify-between mb-2">
-                      <Badge variant="secondary">
+                      <Badge variant="secondary" className="text-xs">
                         OTHER ALLOCATION
                       </Badge>
                       <Button
@@ -743,11 +745,11 @@ function CollectionForm({
                         size="sm"
                         onClick={() => removeAllocation(otherIndex)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
                         <Label className="text-xs">Amount (KES)</Label>
                         <Input
@@ -761,6 +763,7 @@ function CollectionForm({
                               amount: toPreciseNumber(value)
                             });
                           }}
+                          className="text-sm"
                         />
                       </div>
                       
@@ -770,12 +773,12 @@ function CollectionForm({
                           value={allocation.reason}
                           onValueChange={(value) => updateAllocation(otherIndex, { reason: value })}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="text-sm">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             {allocationReasons.map((reason) => (
-                              <SelectItem key={reason} value={reason}>
+                              <SelectItem key={reason} value={reason} className="text-sm">
                                 {reason}
                               </SelectItem>
                             ))}
@@ -791,7 +794,7 @@ function CollectionForm({
 
           {/* Summary */}
           <Separator />
-          <div className="space-y-2">
+          <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span>Total Collected:</span>
               <span className="font-medium">{formatAmount(totalCollected)}</span>
@@ -810,28 +813,40 @@ function CollectionForm({
         </CardContent>
       </Card>
 
-      {/* Action Buttons */}
-      <div className="flex gap-2 justify-between">
+      {/* Fixed Action Buttons */}
+      <div className="fixed bottom-4 left-4 right-4 sm:relative sm:bottom-auto sm:left-auto sm:right-auto flex gap-2 justify-between bg-background/80 backdrop-blur-sm p-2 rounded-lg border sm:bg-transparent sm:backdrop-blur-none sm:p-0 sm:border-0">
         <div className="flex gap-2">
           {currentMemberIndex > 0 && (
-            <Button variant="outline" size="icon" onClick={handlePrevious}>
-              <ChevronLeft className="h-4 w-4" />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handlePrevious}
+              className="flex items-center gap-1"
+            >
+              <ChevronLeft className="h-3 w-3" />
+              <span className="hidden sm:inline">Previous</span>
             </Button>
           )}
           {currentMemberIndex < groupMembers.length - 1 && (
-            <Button variant="outline" size="icon" onClick={handleSkip}>
-              <ChevronRight className="h-4 w-4" />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleSkip}
+              className="flex items-center gap-1"
+            >
+              <SkipForward className="h-3 w-3" />
+              <span className="hidden sm:inline">Skip</span>
             </Button>
           )}
         </div>
         <Button 
-          variant="mobile" 
-          size="mobile" 
+          variant="default" 
+          size="sm" 
           onClick={handleSave} 
           disabled={isLoading || !hasValidData}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 min-w-[120px] justify-center"
         >
-          <Save className="h-4 w-4" />
+          <Save className="h-3 w-3 sm:h-4 sm:w-4" />
           {isLoading ? 'Saving...' : 'Save & Next'}
         </Button>
       </div>
@@ -851,19 +866,20 @@ export function QuickCollections({ onBack }: QuickCollectionsProps) {
   const handleBackToGroups = () => {
     setSelectedGroup(null);
     setGroupMembers([]);
-    
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-2 sm:p-6 max-w-6xl mx-auto">
       {!selectedGroup ? (
         <GroupSelection onGroupSelect={handleGroupSelect} onBack={onBack} />
       ) : (
-        <CollectionForm 
-          selectedGroup={selectedGroup} 
-          groupMembers={groupMembers} 
-          onBack={handleBackToGroups} 
-        />
+        <div className="max-h-screen overflow-y-auto">
+          <CollectionForm 
+            selectedGroup={selectedGroup} 
+            groupMembers={groupMembers} 
+            onBack={handleBackToGroups} 
+          />
+        </div>
       )}
     </div>
   );
