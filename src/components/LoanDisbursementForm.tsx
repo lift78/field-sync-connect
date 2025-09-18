@@ -12,7 +12,7 @@ export function LoanDisbursementForm() {
   const { toast } = useToast();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [groups, setGroups] = useState<Array<{ id: number; name: string }>>([]);
-  const [selectedGroup, setSelectedGroup] = useState<string>("");
+  const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [filteredLoans, setFilteredLoans] = useState<Loan[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,7 +22,7 @@ export function LoanDisbursementForm() {
   }, []);
 
   useEffect(() => {
-    if (selectedGroup) {
+    if (selectedGroup && selectedGroup !== "all") {
       const groupId = parseInt(selectedGroup);
       setFilteredLoans(loans.filter(loan => loan.group.id === groupId && loan.status === 'approved' && !loan.disbursed));
     } else {
@@ -92,7 +92,7 @@ export function LoanDisbursementForm() {
                 <SelectValue placeholder="All Groups" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Groups</SelectItem>
+                <SelectItem value="all">All Groups</SelectItem>
                 {groups.map((group) => (
                   <SelectItem key={group.id} value={group.id.toString()}>
                     {group.name}

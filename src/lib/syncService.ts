@@ -920,6 +920,28 @@ export class SyncService {
     
     if (memberDataResult.success) {
       console.log(`✅ Member data sync completed: ${memberDataResult.totalMembers} members, ${memberDataResult.totalMeetings} meetings`);
+      
+      // After successful member data sync, fetch loans for available groups
+      try {
+        const memberBalances = await dbOperations.getAllMembers();
+        const uniqueGroupIds = [...new Set(memberBalances.map(member => {
+          // Extract group ID from group_name if it's in a format like "Group 123"
+          const match = member.group_name.match(/\d+/);
+          return match ? parseInt(match[0]) : null;
+        }).filter(id => id !== null))];
+
+        if (uniqueGroupIds.length > 0) {
+          console.log('🔄 Fetching loans for groups:', uniqueGroupIds);
+          const loansResult = await memberDataService.fetchAllLoansForGroups(uniqueGroupIds as number[]);
+          if (loansResult.success) {
+            console.log(`✅ Loans sync completed: ${loansResult.loans.length} loans retrieved`);
+          } else {
+            console.warn('⚠️ Loans sync failed:', loansResult.error);
+          }
+        }
+      } catch (loansError) {
+        console.warn('⚠️ Loans fetching failed:', loansError);
+      }
     } else {
       console.warn('⚠️ Member data sync failed:', memberDataResult.error);
     }
@@ -946,7 +968,10 @@ export class SyncService {
       return { success: memberDataResult.success, summary, errors: memberDataResult.error ? [memberDataResult.error] : [] };
     }
   
-    // Continue with existing sync operations...
+    // Continue with existing sync operations - LOAN DISBURSEMENTS FIRST
+    const disbursementsResult = await this.syncLoanDisbursements(unsynced.loanDisbursements || []);
+    summary.loanDisbursements = { success: disbursementsResult.success, failed: disbursementsResult.failed };
+
     const cashCollectionsResult = await this.syncCashCollections(unsynced.cashCollections || []);
     summary.cashCollections = { success: cashCollectionsResult.success, failed: cashCollectionsResult.failed };
   
@@ -955,18 +980,15 @@ export class SyncService {
   
     const advanceLoansResult = await this.syncAdvanceLoans(unsynced.advanceLoans || []);
     summary.advanceLoans = { success: advanceLoansResult.success, failed: advanceLoansResult.failed };
-  
-    const disbursementsResult = await this.syncLoanDisbursements(unsynced.loanDisbursements || []);
-    summary.loanDisbursements = { success: disbursementsResult.success, failed: disbursementsResult.failed };
 
     const groupCollectionsResult = await this.syncGroupCollections(unsynced.groupCollections || []);
     summary.groupCollections = { success: groupCollectionsResult.success, failed: groupCollectionsResult.failed };
 
     const errors = [
+      ...disbursementsResult.errors,
       ...cashCollectionsResult.errors,
       ...loanApplicationsResult.errors,
       ...advanceLoansResult.errors,
-      ...disbursementsResult.errors,
       ...groupCollectionsResult.errors
     ];
   
@@ -976,8 +998,9 @@ export class SyncService {
     }
   
     const totalFailed = 
+      disbursementsResult.failed +
       cashCollectionsResult.failed + 
-      loanApplicationsResult.failed + 
+      loanApplicationsResult.failed +
       advanceLoansResult.failed + 
       disbursementsResult.failed +
       groupCollectionsResult.failed;
