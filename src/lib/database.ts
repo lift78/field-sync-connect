@@ -65,11 +65,40 @@ export interface LoanApplication {
   syncError?: string;
 }
 
+export interface Loan {
+  id?: number;
+  loan_id: string;
+  database_id: number;
+  member: {
+    member_id: string;
+    name: string;
+    phone: string;
+    advance_balance: number;
+  };
+  group: {
+    id: number;
+    name: string;
+  };
+  principalAmount: number;
+  repaymentAmount: number;
+  monthlyRepayment: number;
+  installments: number;
+  status: string;
+  applicationDate: string;
+  disbursed?: boolean;
+}
+
 export interface LoanDisbursement {
   id?: number;
-  loanId: string;
-  amountType: 'all' | 'custom';
-  customAmount?: number;
+  loan_id: string;
+  database_id: number;
+  include_processing_fee: boolean;
+  include_advocate_fee: boolean;
+  include_advance_deduction: boolean;
+  custom_deductions: Array<{
+    description: string;
+    amount: number;
+  }>;
   timestamp: Date;
   synced: boolean;
   syncStatus?: 'pending' | 'failed' | 'synced';
@@ -105,6 +134,7 @@ export interface GroupCollection {
 export class FieldOfficerDB extends Dexie {
   cashCollections!: Table<CashCollection>;
   loanApplications!: Table<LoanApplication>;
+  loans!: Table<Loan>;
   loanDisbursements!: Table<LoanDisbursement>;
   advanceLoans!: Table<AdvanceLoan>;
   groupCollections!: Table<GroupCollection>;
@@ -113,11 +143,12 @@ export class FieldOfficerDB extends Dexie {
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(7).stores({
+    this.version(8).stores({
       // Enhanced indexing for better search performance
       cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp',
-      loanDisbursements: '++id, loanId, amountType, customAmount, timestamp',
+      loans: '++id, loan_id, database_id, [member.member_id], [group.id], status, applicationDate',
+      loanDisbursements: '++id, loan_id, database_id, timestamp',
       advanceLoans: '++id, memberId, memberName, amount, timestamp',
       groupCollections: '++id, groupId, groupName, cashCollected, finesCollected, timestamp',
       userCredentials: '++id, username, lastLogin',
@@ -248,6 +279,49 @@ export const dbOperations = {
 
   async deleteLoanApplication(id: string | number) {
     return await db.loanApplications.delete(Number(id));
+  },
+
+  // =============================================================================
+  // LOANS
+  // =============================================================================
+  async storeLoans(loans: Omit<Loan, 'id'>[]) {
+    try {
+      // Clear existing loans and store new ones
+      await db.loans.clear();
+      await db.loans.bulkAdd(loans);
+      return loans.length;
+    } catch (error) {
+      console.error('Error storing loans:', error);
+      throw error;
+    }
+  },
+
+  async getAllLoans() {
+    return await db.loans.toArray();
+  },
+
+  async getLoansByGroup(groupId: number) {
+    return await db.loans.filter(loan => loan.group.id === groupId).toArray();
+  },
+
+  async getLoanById(loanId: string) {
+    return await db.loans.where('loan_id').equals(loanId).first();
+  },
+
+  async markLoanAsDisbursed(loanId: string) {
+    return await db.loans.where('loan_id').equals(loanId).modify({ disbursed: true });
+  },
+
+  async getUniqueGroups() {
+    const loans = await db.loans.toArray();
+    const uniqueGroups = loans.reduce((acc, loan) => {
+      const existing = acc.find(g => g.id === loan.group.id);
+      if (!existing) {
+        acc.push(loan.group);
+      }
+      return acc;
+    }, [] as Array<{ id: number; name: string }>);
+    return uniqueGroups;
   },
 
   // =============================================================================

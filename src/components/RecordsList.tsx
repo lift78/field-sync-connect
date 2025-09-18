@@ -79,11 +79,12 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
           return {
             id: item.id?.toString() || '',
             memberId: 'memberId' in item ? item.memberId : 'groupId' in item ? item.groupId : undefined,
-            loanId: 'loanId' in item ? item.loanId : undefined,
+            loanId: 'loan_id' in item ? item.loan_id : undefined,
             amount: 'amount' in item ? item.amount : 
                    'loanAmount' in item ? item.loanAmount : 
-                   'customAmount' in item ? item.customAmount :
-                   'cashCollected' in item ? (item.cashCollected + (item.finesCollected || 0)) : undefined,
+                   'principalAmount' in item ? item.principalAmount :
+                   'totalAmount' in item ? item.totalAmount :
+                   'cashCollected' in item ? (item.cashCollected + (item.finesCollected || 0)) : 0,
             status,
             syncError: item.syncError,
             lastUpdated: item.timestamp.toISOString(),

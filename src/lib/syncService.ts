@@ -749,8 +749,11 @@ export class SyncService {
       try {
         // Map Dexie LoanDisbursement fields to backend expected format
         const payload = {
-          loan_id: parseInt(record.loanId, 10), // Convert to integer
-          notes: `Disbursed via offline app - ${record.amountType === 'custom' ? `Custom amount: ${record.customAmount}` : 'Full amount'}`,
+          loan_id: parseInt(record.loan_id, 10), // Convert to integer
+          include_processing_fee: record.include_processing_fee,
+          include_advocate_fee: record.include_advocate_fee,
+          include_advance_deduction: record.include_advance_deduction,
+          custom_deductions: record.custom_deductions,
           timestamp: record.timestamp instanceof Date 
             ? record.timestamp.toISOString() 
             : new Date(record.timestamp).toISOString()
@@ -759,7 +762,7 @@ export class SyncService {
         console.log("📤 Syncing loan disbursement:", payload);
   
         // Use the disbursement endpoint with loan_id in URL
-        const disbursementEndpoint = `${this.baseUrl}/api/loans/${record.loanId}/disburse/`;
+        const disbursementEndpoint = `${this.baseUrl}/api/loans/${record.loan_id}/preview_disbursement/`;
   
         const response = await this.authenticatedFetch(disbursementEndpoint, {
           method: 'POST',
@@ -1139,14 +1142,17 @@ export class SyncService {
   
     try {
       const payload = {
-        loan_id: parseInt(record.loanId, 10),
-        notes: `Disbursed via offline app - ${record.amountType === 'custom' ? `Custom amount: ${record.customAmount}` : 'Full amount'}`,
+        loan_id: parseInt(record.loan_id, 10),
+        include_processing_fee: record.include_processing_fee,
+        include_advocate_fee: record.include_advocate_fee,
+        include_advance_deduction: record.include_advance_deduction,
+        custom_deductions: record.custom_deductions,
         timestamp: record.timestamp instanceof Date 
           ? record.timestamp.toISOString() 
           : new Date(record.timestamp).toISOString()
       };
   
-      const disbursementEndpoint = `${this.baseUrl}/api/loans/${record.loanId}/disburse/`;
+      const disbursementEndpoint = `${this.baseUrl}/api/loans/${record.loan_id}/preview_disbursement/`;
   
       const response = await this.authenticatedFetch(disbursementEndpoint, {
         method: 'POST',
