@@ -76,17 +76,28 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             status = 'synced';
           }
 
+          // Safely extract amount with proper type assertions
+          let amount: number = 0;
+          if ('amount' in item && typeof item.amount === 'number') {
+            amount = item.amount;
+          } else if ('loanAmount' in item && typeof item.loanAmount === 'number') {
+            amount = item.loanAmount;
+          } else if ('principalAmount' in item && typeof item.principalAmount === 'number') {
+            amount = item.principalAmount;
+          } else if ('totalAmount' in item && typeof item.totalAmount === 'number') {
+            amount = item.totalAmount;
+          } else if ('cashCollected' in item && typeof item.cashCollected === 'number') {
+            const finesCollected = ('finesCollected' in item && typeof item.finesCollected === 'number') ? item.finesCollected : 0;
+            amount = item.cashCollected + finesCollected;
+          }
+
           return {
             id: item.id?.toString() || '',
-            memberId: 'memberId' in item ? item.memberId : 'groupId' in item ? item.groupId : undefined,
-            loanId: 'loan_id' in item ? item.loan_id : undefined,
-            amount: 'amount' in item ? item.amount : 
-                   'loanAmount' in item ? item.loanAmount : 
-                   'principalAmount' in item ? item.principalAmount :
-                   'totalAmount' in item ? item.totalAmount :
-                   'cashCollected' in item ? (item.cashCollected + (item.finesCollected || 0)) : 0,
+            memberId: 'memberId' in item ? (item.memberId as string) : 'groupId' in item ? (item.groupId as string) : undefined,
+            loanId: 'loan_id' in item ? (item.loan_id as string) : undefined,
+            amount,
             status,
-            syncError: item.syncError,
+            syncError: item.syncError || '',
             lastUpdated: item.timestamp.toISOString(),
             data: item
           };
