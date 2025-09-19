@@ -99,14 +99,13 @@ Phone number: ${loan.member.phone}`;
     setIsProcessing(true);
     try {
       // Validate loan data
-      if (!loan?.loan_id) {
-        console.error('Loan object:', loan);
+      if (!loan?.id) {
         throw new Error(`Loan ID is missing. Loan object: ${JSON.stringify(loan)}`);
       }
 
       // Save disbursement record
       await dbOperations.addLoanDisbursement({
-        loan_id: loan.loan_id,
+        loan_id: String(loan.id),
         database_id: loan.database_id,
         include_processing_fee: includeProcessingFee,
         include_advocate_fee: includeAdvocateFee,
@@ -116,7 +115,7 @@ Phone number: ${loan.member.phone}`;
       });
 
       // Mark loan as disbursed
-      await dbOperations.markLoanAsDisbursed(loan.loan_id);
+      await dbOperations.markLoanAsDisbursed(String(loan.id));
 
       toast({
         title: "✅ Loan Disbursed",
@@ -143,7 +142,7 @@ Phone number: ${loan.member.phone}`;
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold">{loan.member.name}</h2>
-              <p className="text-sm text-muted-foreground">Loan ID: {loan.loan_id}</p>
+              <p className="text-sm text-muted-foreground">Loan ID: {loan.id}</p>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose}>
               ✕
