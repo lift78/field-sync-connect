@@ -99,8 +99,9 @@ Phone number: ${loan.member.phone}`;
     setIsProcessing(true);
     try {
       // Validate loan data
-      if (!loan.loan_id) {
-        throw new Error('Loan ID is missing');
+      if (!loan?.loan_id) {
+        console.error('Loan object:', loan);
+        throw new Error(`Loan ID is missing. Loan object: ${JSON.stringify(loan)}`);
       }
 
       // Save disbursement record

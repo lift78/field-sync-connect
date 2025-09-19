@@ -38,6 +38,7 @@ export function LoanDisbursementForm() {
         dbOperations.getUniqueGroups()
       ]);
       
+      console.log('Loaded loans data:', loansData);
       setLoans(loansData);
       setGroups(groupsData);
     } catch (error) {
