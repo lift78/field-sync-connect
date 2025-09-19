@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,7 +88,7 @@ Phone number: ${loan.member.phone}`;
       });
     } catch (error) {
       toast({
-        title: "❌ Copy Failed",
+        title: "⚠ Copy Failed",
         description: "Could not copy to clipboard",
         variant: "destructive",
       });
@@ -121,7 +121,7 @@ Phone number: ${loan.member.phone}`;
     } catch (error) {
       console.error("Error disbursing loan:", error);
       toast({
-        title: "❌ Disbursement Failed",
+        title: "⚠ Disbursement Failed",
         description: "Could not save disbursement record",
         variant: "destructive",
       });
@@ -133,21 +133,21 @@ Phone number: ${loan.member.phone}`;
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Loan Disbursement Preview</span>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">{loan.member.name}</h2>
+              <p className="text-sm text-muted-foreground">Loan ID: {loan.loan_id}</p>
+            </div>
             <Button variant="ghost" size="icon" onClick={onClose}>
               ✕
             </Button>
-          </CardTitle>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Loan Info */}
           <div className="bg-muted p-4 rounded-lg">
-            <h3 className="font-semibold mb-2">Loan Details</h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>Loan ID: {loan.loan_id}</div>
-              <div>Member: {loan.member.name}</div>
               <div>Group: {loan.group.name}</div>
               <div>Principal: KES {loan.principalAmount.toLocaleString()}</div>
             </div>
@@ -158,7 +158,7 @@ Phone number: ${loan.member.phone}`;
             <h3 className="font-semibold">Deductions</h3>
             
             {/* Processing Fee */}
-            <div className="flex items-center justify-between p-3 border rounded">
+            <div className="flex items-center justify-between p-3 border rounded bg-background">
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   checked={includeProcessingFee}
@@ -171,7 +171,7 @@ Phone number: ${loan.member.phone}`;
 
             {/* Advocate Fee */}
             {advocateFee > 0 && (
-              <div className="flex items-center justify-between p-3 border rounded">
+              <div className="flex items-center justify-between p-3 border rounded bg-background">
                 <div className="flex items-center space-x-2">
                   <Checkbox 
                     checked={includeAdvocateFee}
@@ -185,7 +185,7 @@ Phone number: ${loan.member.phone}`;
 
             {/* Advance Deduction */}
             {advanceDeduction > 0 && (
-              <div className="flex items-center justify-between p-3 border rounded">
+              <div className="flex items-center justify-between p-3 border rounded bg-background">
                 <div className="flex items-center space-x-2">
                   <Checkbox 
                     checked={includeAdvanceDeduction}
@@ -198,10 +198,10 @@ Phone number: ${loan.member.phone}`;
             )}
 
             {/* Custom Deductions */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label>Custom Deductions</Label>
               {customDeductions.map((deduction, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded bg-orange-50">
+                <div key={index} className="flex items-center justify-between p-3 border rounded bg-background">
                   <span>{deduction.description}</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">KES {deduction.amount.toLocaleString()}</span>
@@ -216,21 +216,25 @@ Phone number: ${loan.member.phone}`;
                 </div>
               ))}
               
-              <div className="flex gap-2">
+              {/* Mobile-optimized custom deduction input */}
+              <div className="space-y-2">
                 <Input
                   placeholder="Deduction description"
                   value={newDeduction.description}
                   onChange={(e) => setNewDeduction({...newDeduction, description: e.target.value})}
                 />
-                <Input
-                  type="number"
-                  placeholder="Amount"
-                  value={newDeduction.amount || ""}
-                  onChange={(e) => setNewDeduction({...newDeduction, amount: parseFloat(e.target.value) || 0})}
-                />
-                <Button onClick={addCustomDeduction} size="icon">
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Amount"
+                    value={newDeduction.amount || ""}
+                    onChange={(e) => setNewDeduction({...newDeduction, amount: parseFloat(e.target.value) || 0})}
+                    className="flex-1"
+                  />
+                  <Button onClick={addCustomDeduction} size="icon" className="shrink-0">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -253,12 +257,12 @@ Phone number: ${loan.member.phone}`;
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-2">
+          {/* Action Buttons - Mobile optimized */}
+          <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-2">
             <Button
               variant="outline"
               onClick={copyToClipboard}
-              className="flex-1"
+              className="w-full sm:flex-1 order-1"
             >
               <Copy className="h-4 w-4 mr-2" />
               Copy Details
@@ -266,7 +270,7 @@ Phone number: ${loan.member.phone}`;
             <Button
               onClick={handleDisbursement}
               disabled={isProcessing}
-              className="flex-1"
+              className="w-full sm:flex-1 order-2"
             >
               {isProcessing ? (
                 "Processing..."
