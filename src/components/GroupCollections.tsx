@@ -28,11 +28,10 @@ export function GroupCollections({ realMembers, onSuccess }: GroupCollectionsPro
     
     const groupsMap = new Map();
     realMembers.forEach(member => {
-      if (member.group_name && !groupsMap.has(member.group_name)) {
-        const groupMember = realMembers.find(m => m.group_name === member.group_name);
+      if (member.group_name && member.group_id && !groupsMap.has(member.group_name)) {
         groupsMap.set(member.group_name, {
           name: member.group_name,
-          id: groupMember?.member_id.split('/')[1] || member.group_name
+          id: member.group_id.toString()
         });
       }
     });

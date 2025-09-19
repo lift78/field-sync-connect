@@ -21,6 +21,7 @@ export interface MemberBalance {
   member_id: string;
   name: string;
   phone: string;
+  group_id: number;
   group_name: string;
   meeting_date: string;
   balances: {
@@ -143,7 +144,7 @@ export class FieldOfficerDB extends Dexie {
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(8).stores({
+    this.version(9).stores({
       // Enhanced indexing for better search performance
       cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp',
@@ -152,7 +153,7 @@ export class FieldOfficerDB extends Dexie {
       advanceLoans: '++id, memberId, memberName, amount, timestamp',
       groupCollections: '++id, groupId, groupName, cashCollected, finesCollected, timestamp',
       userCredentials: '++id, username, lastLogin',
-      memberBalances: '++id, member_id, name, phone, group_name, last_updated'
+      memberBalances: '++id, member_id, name, phone, group_id, group_name, last_updated'
     });
   }
 }
@@ -364,6 +365,14 @@ export const dbOperations = {
       synced: false, 
       syncStatus: 'pending', 
       syncError: undefined 
+    });
+  },
+
+  async updateLoanDisbursementSyncStatus(id: number, status: 'pending' | 'failed' | 'synced', error?: string): Promise<number> {
+    return await db.loanDisbursements.update(id, { 
+      syncStatus: status, 
+      syncError: error,
+      synced: status === 'synced'
     });
   },
 
