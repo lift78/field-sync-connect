@@ -310,6 +310,9 @@ export const dbOperations = {
   },
 
   async markLoanAsDisbursed(loanId: string) {
+    if (!loanId || typeof loanId !== 'string') {
+      throw new Error('Invalid loan ID provided');
+    }
     return await db.loans.where('loan_id').equals(loanId).modify({ disbursed: true });
   },
 

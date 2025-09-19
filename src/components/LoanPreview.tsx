@@ -98,6 +98,11 @@ Phone number: ${loan.member.phone}`;
   const handleDisbursement = async () => {
     setIsProcessing(true);
     try {
+      // Validate loan data
+      if (!loan.loan_id) {
+        throw new Error('Loan ID is missing');
+      }
+
       // Save disbursement record
       await dbOperations.addLoanDisbursement({
         loan_id: loan.loan_id,
