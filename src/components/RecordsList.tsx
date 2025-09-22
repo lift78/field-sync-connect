@@ -15,6 +15,7 @@ import {
   Trash2
 } from "lucide-react";
 import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement, GroupCollection } from "@/lib/database";
+import { EditableDisbursementPreview } from "@/components/EditableDisbursementPreview";
 
 interface Record {
   id: string;
@@ -39,6 +40,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
   const [error, setError] = useState<string | null>(null);
   const [resolvingRecords, setResolvingRecords] = useState<Set<string>>(new Set());
   const [deletingRecords, setDeletingRecords] = useState<Set<string>>(new Set());
+  const [editingDisbursement, setEditingDisbursement] = useState<LoanDisbursement | null>(null);
 
   useEffect(() => {
     const loadRecords = async () => {
@@ -114,6 +116,87 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
 
     loadRecords();
   }, [type]);
+
+  const handleRecordClick = (record: Record) => {
+    if (type === 'disbursement' && !record.data.synced) {
+      // Show editable preview for unsynced disbursements
+      setEditingDisbursement(record.data as LoanDisbursement);
+    } else {
+      // Use regular edit for other types or synced disbursements
+      onEditRecord(record);
+    }
+  };
+
+  const handleDisbursementSaved = () => {
+    setEditingDisbursement(null);
+    // Reload records to reflect changes
+    const loadRecords = async () => {
+      try {
+        setLoading(true);
+        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection)[] = [];
+        
+        switch (type) {
+          case 'cash':
+            data = await dbOperations.getCashCollections();
+            break;
+          case 'loan':
+            data = await dbOperations.getLoanApplications();
+            break;
+          case 'advance':
+            data = await dbOperations.getAdvanceLoans();
+            break;
+          case 'disbursement':
+            data = await dbOperations.getLoanDisbursements();
+            break;
+          case 'group':
+            data = await dbOperations.getGroupCollections();
+            break;
+        }
+
+        const formattedRecords: Record[] = data.map((item) => {
+          let status: 'synced' | 'pending' | 'failed' = 'pending';
+          if (item.syncStatus) {
+            status = item.syncStatus as 'synced' | 'pending' | 'failed';
+          } else if (item.synced) {
+            status = 'synced';
+          }
+
+          let amount: number = 0;
+          if ('amount' in item && typeof item.amount === 'number') {
+            amount = item.amount;
+          } else if ('loanAmount' in item && typeof item.loanAmount === 'number') {
+            amount = item.loanAmount;
+          } else if ('principalAmount' in item && typeof item.principalAmount === 'number') {
+            amount = item.principalAmount;
+          } else if ('totalAmount' in item && typeof item.totalAmount === 'number') {
+            amount = item.totalAmount;
+          } else if ('cashCollected' in item && typeof item.cashCollected === 'number') {
+            const finesCollected = ('finesCollected' in item && typeof item.finesCollected === 'number') ? item.finesCollected : 0;
+            amount = item.cashCollected + finesCollected;
+          }
+
+          return {
+            id: item.id?.toString() || '',
+            memberId: 'memberId' in item ? (item.memberId as string) : 'groupId' in item ? (item.groupId as string) : undefined,
+            loanId: 'loan_id' in item ? (item.loan_id as string) : undefined,
+            amount,
+            status,
+            syncError: item.syncError || '',
+            lastUpdated: item.timestamp.toISOString(),
+            data: item
+          };
+        });
+
+        setRecords(formattedRecords);
+      } catch (err) {
+        console.error('Failed to reload records:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadRecords();
+  };
 
   const getTypeTitle = () => {
     switch (type) {
@@ -407,7 +490,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             className={`shadow-card cursor-pointer hover:shadow-lg transition-shadow ${
               record.status === 'failed' ? 'border-l-4 border-l-red-500' : ''
             }`}
-            onClick={() => onEditRecord(record)}
+            onClick={() => handleRecordClick(record)}
           >
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -565,6 +648,15 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Editable Disbursement Preview Modal */}
+      {editingDisbursement && (
+        <EditableDisbursementPreview
+          disbursement={editingDisbursement}
+          onClose={() => setEditingDisbursement(null)}
+          onSaved={handleDisbursementSaved}
+        />
       )}
     </div>
   );

@@ -383,6 +383,10 @@ export const dbOperations = {
     return await db.loanDisbursements.delete(Number(id));
   },
 
+  async getLoanDisbursementByLoanId(loanId: string) {
+    return await db.loanDisbursements.where('loan_id').equals(loanId).first();
+  },
+
   // =============================================================================
   // ADVANCE LOANS
   // =============================================================================

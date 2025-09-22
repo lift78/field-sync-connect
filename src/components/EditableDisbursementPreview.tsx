@@ -1,32 +1,88 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, Copy, CheckCircle } from "lucide-react";
+import { Trash2, Plus, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { dbOperations, Loan } from "@/lib/database";
+import { dbOperations, LoanDisbursement, Loan } from "@/lib/database";
 
 interface CustomDeduction {
   description: string;
   amount: number;
 }
 
-interface LoanPreviewProps {
-  loan: Loan;
+interface EditableDisbursementPreviewProps {
+  disbursement: LoanDisbursement;
   onClose: () => void;
-  onDisbursed: () => void;
+  onSaved: () => void;
 }
 
-export function LoanPreview({ loan, onClose, onDisbursed }: LoanPreviewProps) {
+export function EditableDisbursementPreview({ 
+  disbursement, 
+  onClose, 
+  onSaved 
+}: EditableDisbursementPreviewProps) {
   const { toast } = useToast();
-  const [includeProcessingFee, setIncludeProcessingFee] = useState(true);
-  const [includeAdvocateFee, setIncludeAdvocateFee] = useState(true);
-  const [includeAdvanceDeduction, setIncludeAdvanceDeduction] = useState(true);
-  const [customDeductions, setCustomDeductions] = useState<CustomDeduction[]>([]);
+  const [loan, setLoan] = useState<Loan | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  
+  // Editable state
+  const [includeProcessingFee, setIncludeProcessingFee] = useState(disbursement.include_processing_fee);
+  const [includeAdvocateFee, setIncludeAdvocateFee] = useState(disbursement.include_advocate_fee);
+  const [includeAdvanceDeduction, setIncludeAdvanceDeduction] = useState(disbursement.include_advance_deduction);
+  const [customDeductions, setCustomDeductions] = useState<CustomDeduction[]>(
+    disbursement.custom_deductions || []
+  );
   const [newDeduction, setNewDeduction] = useState({ description: "", amount: 0 });
-  const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    const loadLoanData = async () => {
+      try {
+        const loanData = await dbOperations.getLoanById(disbursement.loan_id);
+        setLoan(loanData || null);
+      } catch (error) {
+        console.error("Error loading loan data:", error);
+        toast({
+          title: "⚠ Error",
+          description: "Could not load loan details",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLoanData();
+  }, [disbursement.loan_id, toast]);
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <Card className="w-full max-w-2xl">
+          <CardContent className="p-8 text-center">
+            <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p>Loading loan details...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!loan) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <Card className="w-full max-w-2xl">
+          <CardContent className="p-8 text-center">
+            <p className="text-destructive mb-4">Loan not found</p>
+            <Button onClick={onClose}>Close</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Calculate deductions
   const processingFee = loan.principalAmount * 0.015; // 1.5%
@@ -53,97 +109,35 @@ export function LoanPreview({ loan, onClose, onDisbursed }: LoanPreviewProps) {
     setCustomDeductions(customDeductions.filter((_, i) => i !== index));
   };
 
-  const generateCopyMessage = () => {
-    let deductionsText = "";
-    if (includeAdvanceDeduction && advanceDeduction > 0) {
-      deductionsText += `Advance: ${advanceDeduction.toLocaleString()}\n`;
-    }
-    if (includeProcessingFee) {
-      deductionsText += `Processing fee: ${processingFee.toLocaleString()}\n`;
-    }
-    if (includeAdvocateFee && advocateFee > 0) {
-      deductionsText += `Advocate: ${advocateFee.toLocaleString()}\n`;
-    }
-    customDeductions.forEach(deduction => {
-      deductionsText += `${deduction.description}: ${deduction.amount.toLocaleString()}\n`;
-    });
-
-    return `Group: ${loan.group.name}
-Name: ${loan.member.name}
-Gross loan amount: ${loan.principalAmount.toLocaleString()} (principal)
-Deductions
-${deductionsText}
-Total deductions: ${totalDeductions.toLocaleString()}
-
-Net Loan to be disbursed: ${netAmount.toLocaleString()}
-Phone number: ${loan.member.phone}`;
-  };
-
-  const copyToClipboard = async () => {
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      await navigator.clipboard.writeText(generateCopyMessage());
-      toast({
-        title: "✅ Copied to Clipboard",
-        description: "Disbursement details copied successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "⚠ Copy Failed",
-        description: "Could not copy to clipboard",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDisbursement = async () => {
-    setIsProcessing(true);
-    try {
-      // Validate loan data
-      if (!loan?.id) {
-        throw new Error(`Loan ID is missing. Loan object: ${JSON.stringify(loan)}`);
-      }
-
-      // Check for existing disbursement
-      const existingDisbursement = await dbOperations.getLoanDisbursementByLoanId(String(loan.id));
-      if (existingDisbursement) {
-        toast({
-          title: "⚠ Duplicate Disbursement",
-          description: "This loan has already been disbursed. Check your records.",
-          variant: "destructive",
-        });
-        setIsProcessing(false);
-        return;
-      }
-
-      // Save disbursement record
-      await dbOperations.addLoanDisbursement({
-        loan_id: String(loan.id),
-        database_id: loan.database_id,
+      const updatedDisbursement: LoanDisbursement = {
+        ...disbursement,
         include_processing_fee: includeProcessingFee,
         include_advocate_fee: includeAdvocateFee,
         include_advance_deduction: includeAdvanceDeduction,
         custom_deductions: customDeductions,
         timestamp: new Date(),
-      });
+      };
 
-      // Mark loan as disbursed
-      await dbOperations.markLoanAsDisbursed(String(loan.id));
+      await dbOperations.updateLoanDisbursement(String(disbursement.id), updatedDisbursement);
 
       toast({
-        title: "✅ Loan Disbursed",
-        description: `Disbursement record saved for ${loan.member.name}`,
+        title: "✅ Disbursement Updated",
+        description: "Changes saved successfully",
       });
 
-      onDisbursed();
+      onSaved();
     } catch (error) {
-      console.error("Error disbursing loan:", error);
+      console.error("Error updating disbursement:", error);
       toast({
-        title: "⚠ Disbursement Failed",
-        description: "Could not save disbursement record",
+        title: "⚠ Update Failed",
+        description: "Could not save changes",
         variant: "destructive",
       });
     } finally {
-      setIsProcessing(false);
+      setSaving(false);
     }
   };
 
@@ -153,11 +147,13 @@ Phone number: ${loan.member.phone}`;
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">{loan.member.name}</h2>
-              <p className="text-sm text-muted-foreground">Loan ID: {loan.id}</p>
+              <h2 className="text-lg font-semibold">Edit Disbursement</h2>
+              <p className="text-sm text-muted-foreground">
+                {loan.member.name} - Loan ID: {loan.id}
+              </p>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose}>
-              ✕
+              <X className="h-4 w-4" />
             </Button>
           </div>
         </CardHeader>
@@ -170,9 +166,18 @@ Phone number: ${loan.member.phone}`;
             </div>
           </div>
 
+          {/* Status Warning for Synced Records */}
+          {disbursement.synced && (
+            <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+              <p className="text-sm text-yellow-800 font-medium">
+                ⚠ This disbursement has already been synced. Changes will require re-sync.
+              </p>
+            </div>
+          )}
+
           {/* Deductions */}
           <div className="space-y-4">
-            <h3 className="font-semibold">Deductions</h3>
+            <h3 className="font-semibold">Edit Deductions</h3>
             
             {/* Processing Fee */}
             <div className="flex items-center justify-between p-3 border rounded bg-background">
@@ -233,7 +238,7 @@ Phone number: ${loan.member.phone}`;
                 </div>
               ))}
               
-              {/* Mobile-optimized custom deduction input */}
+              {/* Custom deduction input */}
               <div className="space-y-2">
                 <Input
                   placeholder="Deduction description"
@@ -274,27 +279,26 @@ Phone number: ${loan.member.phone}`;
             </div>
           </div>
 
-          {/* Action Buttons - Mobile optimized */}
-          <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-2">
+          {/* Action Buttons */}
+          <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={copyToClipboard}
-              className="w-full sm:flex-1 order-1"
+              onClick={onClose}
+              className="flex-1"
             >
-              <Copy className="h-4 w-4 mr-2" />
-              Copy Details
+              Cancel
             </Button>
             <Button
-              onClick={handleDisbursement}
-              disabled={isProcessing}
-              className="w-full sm:flex-1 order-2"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1"
             >
-              {isProcessing ? (
-                "Processing..."
+              {saving ? (
+                "Saving..."
               ) : (
                 <>
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Confirm & Disburse
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
                 </>
               )}
             </Button>
