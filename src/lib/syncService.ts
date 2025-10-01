@@ -59,7 +59,7 @@ export class SyncService {
     this.endpoints = {
       cashCollections: `${baseUrl}/api/collect-cash/`,
       loanApplications: `${baseUrl}/api/loans/`,
-      loanDisbursements: `${baseUrl}/api/loan-disbursements/`,
+      loanDisbursements: `${baseUrl}/api/loans/preview_disbursement/`,
       advanceLoans: `${baseUrl}/api/advance-loans/`,
       groupCollections: `${baseUrl}/api/diary/meetings/record_collections/`,
       allocations: `${baseUrl}/api/members/{memberId}/allocate_funds/`,
@@ -391,10 +391,10 @@ export class SyncService {
     for (const record of records) {
       try {
         const payload = {
-          member: String(record.memberId).padStart(4, '0'), // Keep as string for member lookup
+          member: String(record.memberId).padStart(4, '0'), 
           amount: record.loanAmount,
           installments: record.installments,
-          guarantors: record.guarantors.map(id => parseInt(id, 10)), // Convert to integers
+          guarantors: record.guarantors.map(id => parseInt(id, 10)), 
           officer_name: 'Offline Officer',
           notes: record.purpose || '',
           loan_type: 'longterm',
@@ -747,9 +747,24 @@ export class SyncService {
   
     for (const record of records) {
       try {
+        // Extract numeric ID from loan_id string (e.g., "LN0039" -> 39)
+        const extractNumericId = (loanId: string): number => {
+          // Remove letters and leading zeros, then convert to number
+          const numericPart = loanId.replace(/[A-Za-z]/g, '').replace(/^0+/, '');
+          const numericId = parseInt(numericPart, 10);
+          
+          if (isNaN(numericId)) {
+            throw new Error(`Invalid loan ID format: ${loanId}`);
+          }
+          
+          return numericId;
+        };
+  
+        const numericLoanId = extractNumericId(record.loan_id);
+  
         // Map Dexie LoanDisbursement fields to backend expected format
         const payload = {
-          loan_id: parseInt(record.loan_id, 10), // Convert to integer
+          loan_id: numericLoanId, // Use extracted numeric ID
           include_processing_fee: record.include_processing_fee,
           include_advocate_fee: record.include_advocate_fee,
           include_advance_deduction: record.include_advance_deduction,
@@ -759,24 +774,52 @@ export class SyncService {
             : new Date(record.timestamp).toISOString()
         };
   
-        console.log("📤 Syncing loan disbursement:", payload);
+        console.log(`📤 Syncing loan disbursement for loan ${record.loan_id} (numeric: ${numericLoanId}):`, payload);
   
-        // Use the disbursement endpoint with loan_id in URL
-        const disbursementEndpoint = `${this.baseUrl}/api/loans/${record.loan_id}/preview_disbursement/`;
-  
-        const response = await this.authenticatedFetch(disbursementEndpoint, {
+        // Step 1: Call preview endpoint to prepare the loan
+        const previewEndpoint = `${this.baseUrl}/api/loans/${numericLoanId}/preview_disbursement/`;
+        
+        console.log(`🔄 Step 1: Calling preview endpoint for loan ${numericLoanId}`);
+        const previewResponse = await this.authenticatedFetch(previewEndpoint, {
           method: 'POST',
           body: JSON.stringify(payload)
         });
   
-        // Check if response is OK first (HTTP 200-299)
+        if (!previewResponse.ok) {
+          throw new Error(`Preview failed: HTTP ${previewResponse.status}: ${previewResponse.statusText}`);
+        }
+  
+        let previewResult: SyncResponse;
+        try {
+          previewResult = await previewResponse.json();
+        } catch (jsonError) {
+          throw new Error(`Preview response parsing failed: ${jsonError}`);
+        }
+  
+        if (previewResult.success === false) {
+          throw new Error(`Preview failed: ${previewResult.error || 'Unknown preview error'}`);
+        }
+  
+        console.log(`✅ Step 1 completed: Preview successful for loan ${numericLoanId}`);
+  
+        // Step 2: Call disburse endpoint to actually disburse the loan
+        const disburseEndpoint = `${this.baseUrl}/api/loans/${numericLoanId}/disburse/`;
+        
+        console.log(`🔄 Step 2: Calling disburse endpoint for loan ${numericLoanId}`);
+        const response = await this.authenticatedFetch(disburseEndpoint, {
+          method: 'POST',
+          body: JSON.stringify({
+            loan_id: numericLoanId,
+            timestamp: payload.timestamp
+          })
+        });
+  
+        // Rest of the method remains the same...
         if (response.ok) {
-          // Try to parse JSON response
           let result: SyncResponse;
           try {
             result = await response.json();
           } catch (jsonError) {
-            // If JSON parsing fails but HTTP response was OK, assume success
             console.log(`✅ Loan disbursement ${record.id} synced successfully (no JSON response)`);
             if (record.id) {
               await dbOperations.markLoanDisbursementSynced(record.id);
@@ -785,25 +828,32 @@ export class SyncService {
             continue;
           }
   
-          // If we have JSON response, check success field
           if (result.success !== false) {
-            console.log(`✅ Loan disbursement ${record.id} synced successfully`);
+            console.log(`✅ Loan disbursement ${record.id} completed successfully`);
             if (record.id) {
               await dbOperations.markLoanDisbursementSynced(record.id);
             }
+            
+            // Mark the loan as disbursed in the local database
+            try {
+              await dbOperations.markLoanAsDisbursed(record.loan_id);
+              console.log(`✅ Loan ${record.loan_id} marked as disbursed in local database`);
+            } catch (markError) {
+              console.warn(`⚠️ Failed to mark loan ${record.loan_id} as disbursed locally:`, markError);
+              // Don't fail the sync for this - the disbursement was successful
+            }
+            
             success++;
           } else {
             console.error(`❌ Loan disbursement sync failed for ${record.id}:`, result.error);
             failed++;
             const errorMsg = result.error || 'Unknown error from server';
             errors.push(`LoanDisbursement ${record.id}: ${errorMsg}`);
-            // Mark record as failed
             if (record.id) {
               await dbOperations.markLoanDisbursementFailed(record.id, errorMsg);
             }
           }
         } else {
-          // HTTP error occurred
           let result: SyncResponse;
           try {
             result = await response.json();
@@ -812,32 +862,39 @@ export class SyncService {
             failed++;
             const errorMsg = `HTTP ${response.status} ${response.statusText}`;
             errors.push(`LoanDisbursement ${record.id}: ${errorMsg}`);
-            // Mark record as failed
             if (record.id) {
               await dbOperations.markLoanDisbursementFailed(record.id, errorMsg);
             }
             continue;
           }
   
-          // Check for duplicate errors
           const isDuplicateError = result.error && (
             result.error.includes('already disbursed') ||
             result.error.includes('duplicate') ||
+            result.error.includes('loan is already disbursed') ||
             result.error.toLowerCase().includes('already exists')
           );
   
           if (isDuplicateError) {
-            console.log(`⚠️ Loan disbursement ${record.id} already processed on server`);
+            console.log(`Loan disbursement ${record.id} already processed on server`);
             if (record.id) {
               await dbOperations.markLoanDisbursementSynced(record.id);
             }
+            
+            // Mark the loan as disbursed in local database even if it was already disbursed
+            try {
+              await dbOperations.markLoanAsDisbursed(record.loan_id);
+              console.log(`Loan ${record.loan_id} marked as disbursed in local database (was already disbursed on server)`);
+            } catch (markError) {
+              console.warn(`Failed to mark loan ${record.loan_id} as disbursed locally:`, markError);
+            }
+            
             success++;
           } else {
             console.error(`❌ Loan disbursement sync failed for ${record.id}:`, result.error);
             failed++;
             const errorMsg = result.error || `HTTP ${response.status}`;
             errors.push(`LoanDisbursement ${record.id}: ${errorMsg}`);
-            // Mark record as failed
             if (record.id) {
               await dbOperations.markLoanDisbursementFailed(record.id, errorMsg);
             }
@@ -848,7 +905,6 @@ export class SyncService {
         failed++;
         errors.push(`LoanDisbursement ${record.id}: ${error.message}`);
         console.error(`💥 Exception during loan disbursement sync for ${record.id}:`, error);
-        // Mark record as failed
         if (record.id) {
           await dbOperations.markLoanDisbursementFailed(record.id, error.message);
         }
@@ -1164,8 +1220,22 @@ export class SyncService {
     }
   
     try {
+      // Extract numeric ID from loan_id string (e.g., "LN0039" -> 39)
+      const extractNumericId = (loanId: string): number => {
+        const numericPart = loanId.replace(/[A-Za-z]/g, '').replace(/^0+/, '');
+        const numericId = parseInt(numericPart, 10);
+        
+        if (isNaN(numericId)) {
+          throw new Error(`Invalid loan ID format: ${loanId}`);
+        }
+        
+        return numericId;
+      };
+  
+      const numericLoanId = extractNumericId(record.loan_id);
+  
       const payload = {
-        loan_id: parseInt(record.loan_id, 10),
+        loan_id: numericLoanId, // Use extracted numeric ID
         include_processing_fee: record.include_processing_fee,
         include_advocate_fee: record.include_advocate_fee,
         include_advance_deduction: record.include_advance_deduction,
@@ -1175,11 +1245,42 @@ export class SyncService {
           : new Date(record.timestamp).toISOString()
       };
   
-      const disbursementEndpoint = `${this.baseUrl}/api/loans/${record.loan_id}/preview_disbursement/`;
+      // Use the numeric ID in the URL
+      const previewEndpoint = `${this.baseUrl}/api/loans/${numericLoanId}/preview_disbursement/`;
+      const disburseEndpoint = `${this.baseUrl}/api/loans/${numericLoanId}/disburse/`;
   
-      const response = await this.authenticatedFetch(disbursementEndpoint, {
+      // Step 1: Call preview endpoint
+      console.log(`Step 1: Calling preview endpoint for loan ${numericLoanId}`);
+      const previewResponse = await this.authenticatedFetch(previewEndpoint, {
         method: 'POST',
         body: JSON.stringify(payload)
+      });
+  
+      if (!previewResponse.ok) {
+        throw new Error(`Preview failed: HTTP ${previewResponse.status}: ${previewResponse.statusText}`);
+      }
+  
+      let previewResult: SyncResponse;
+      try {
+        previewResult = await previewResponse.json();
+      } catch (jsonError) {
+        throw new Error(`Preview response parsing failed: ${jsonError}`);
+      }
+  
+      if (previewResult.success === false) {
+        throw new Error(`Preview failed: ${previewResult.error || 'Unknown preview error'}`);
+      }
+  
+      console.log(`Step 1 completed: Preview successful for loan ${numericLoanId}`);
+  
+      // Step 2: Call disburse endpoint
+      console.log(`Step 2: Calling disburse endpoint for loan ${numericLoanId}`);
+      const response = await this.authenticatedFetch(disburseEndpoint, {
+        method: 'POST',
+        body: JSON.stringify({
+          loan_id: numericLoanId,
+          timestamp: payload.timestamp
+        })
       });
   
       if (!response.ok) {
@@ -1190,6 +1291,15 @@ export class SyncService {
   
       if (result.success && record.id) {
         await dbOperations.markLoanDisbursementSynced(record.id);
+        
+        // Mark the loan as disbursed in the local database
+        try {
+          await dbOperations.markLoanAsDisbursed(record.loan_id);
+          console.log(`Loan ${record.loan_id} marked as disbursed in local database`);
+        } catch (markError) {
+          console.warn(`Failed to mark loan ${record.loan_id} as disbursed locally:`, markError);
+          // Don't fail the sync for this - the disbursement was successful
+        }
       }
   
       return {
