@@ -12,6 +12,7 @@ import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
 import { Calculator } from "lucide-react";
 import { Plus, Trash2, Save, User, Phone, Users, Banknote, Smartphone, AlertCircle, DollarSign } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { GroupCollections } from "./GroupCollections";
 // import { Keyboard } from "@capacitor/keyboard";
 
 
@@ -68,11 +69,6 @@ export function CashCollectionForm() {
   const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
   const [selectedRealMember, setSelectedRealMember] = useState<MemberBalance | null>(null);
   const [showFinesDialog, setShowFinesDialog] = useState(false);
-  const [selectedGroupId, setSelectedGroupId] = useState('');
-  const [selectedGroupName, setSelectedGroupName] = useState('');
-  const [groupQuery, setGroupQuery] = useState('');
-  const [cashCollectedAmount, setCashCollectedAmount] = useState('');
-  const [finesCollectedAmount, setFinesCollectedAmount] = useState('');
   const { toast } = useToast();
 
 
@@ -94,34 +90,6 @@ export function CashCollectionForm() {
     loadRealMembers();
   }, []);
 
-  // Get unique groups from real members data
-  const availableGroups = useMemo(() => {
-    if (!realMembers.length) return [];
-    
-    const groupsMap = new Map();
-    realMembers.forEach(member => {
-      if (member.group_name && !groupsMap.has(member.group_name)) {
-        // Find any group_id from the first member of this group
-        const groupMember = realMembers.find(m => m.group_name === member.group_name);
-        groupsMap.set(member.group_name, {
-          name: member.group_name,
-          id: groupMember?.member_id.split('/')[1] || member.group_name // Extract group ID from member_id format
-        });
-      }
-    });
-    
-    return Array.from(groupsMap.values());
-  }, [realMembers]);
-
-  // Filter groups based on search query
-  const filteredGroups = useMemo(() => {
-    if (!groupQuery) return [];
-    
-    const query = groupQuery.trim().toLowerCase();
-    return availableGroups.filter(group => 
-      group.name.toLowerCase().includes(query)
-    ).slice(0, 10);
-  }, [groupQuery, availableGroups]);
 
   // Search and filter members based on query
   const filteredMembers = useMemo(() => {
@@ -368,89 +336,6 @@ export function CashCollectionForm() {
     }
   };
 
-  const handleGroupSelect = (groupOption: any) => {
-    setSelectedGroupId(groupOption.id);
-    setSelectedGroupName(groupOption.name);
-    setGroupQuery(groupOption.name);
-  };
-
-  const handleSaveGroupCollections = async () => {
-    try {
-      if (!selectedGroupId || !selectedGroupName) {
-        toast({
-          title: "❌ Group Required",
-          description: "Please select a group",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const cashAmount = toPreciseNumber(cashCollectedAmount);
-      const finesAmount = toPreciseNumber(finesCollectedAmount);
-
-      if (cashAmount <= 0 && finesAmount <= 0) {
-        toast({
-          title: "❌ Amount Required",
-          description: "Please enter cash collected amount or fines amount",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Prepare data for the new endpoint
-      const collectionData = {
-        group_id: parseInt(selectedGroupId),
-        cash_collected: cashAmount.toFixed(2),
-        fines_collected: finesAmount.toFixed(2)
-      };
-
-      // TODO: Replace with actual API call to POST /diary/meetings/record_collections/
-      console.log('Group collections data to send:', collectionData);
-      
-      // For now, save to local cash collections with group name
-      const totalAmount = cashAmount + finesAmount;
-      const allocations = [];
-      
-      if (finesAmount > 0) {
-        allocations.push({
-          memberId: selectedGroupId,
-          type: 'other' as const,
-          amount: finesAmount,
-          reason: 'Fines and Penalties'
-        });
-      }
-
-      await dbOperations.addCashCollection({
-        memberId: selectedGroupId,
-        memberName: selectedGroupName,
-        totalAmount: totalAmount,
-        cashAmount: totalAmount,
-        mpesaAmount: 0,
-        allocations: allocations,
-        timestamp: new Date()
-      });
-
-      toast({
-        title: "✅ Group Collections Recorded",
-        description: `Collections saved for ${selectedGroupName}`,
-      });
-
-      // Reset fines form
-      setShowFinesDialog(false);
-      setSelectedGroupId('');
-      setSelectedGroupName('');
-      setGroupQuery('');
-      setCashCollectedAmount('');
-      setFinesCollectedAmount('');
-    } catch (error) {
-      toast({
-        title: "❌ Save Failed",
-        description: "Failed to save group collections",
-        variant: "destructive"
-      });
-    }
-  };
-
   const handleSave = async () => {
     try {
       if (!selectedMember) {
@@ -625,94 +510,11 @@ export function CashCollectionForm() {
             </div>
           )}
         </CardContent>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Record Group Collections</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Group Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="group-search">Select Group</Label>
-              <Input
-                id="group-search"
-                placeholder="Type group name..."
-                value={groupQuery}
-                onChange={(e) => setGroupQuery(e.target.value)}
-              />
-            </div>
-            
-            {groupQuery && filteredGroups.length > 0 && (
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {filteredGroups.map((group, index) => (
-                  <Button
-                    key={`${group.id}-${index}`}
-                    variant={selectedGroupId === group.id ? "default" : "outline"}
-                    onClick={() => handleGroupSelect(group)}
-                    className="justify-start p-3 h-auto text-left w-full"
-                  >
-                    <div className="flex flex-col items-start w-full">
-                      <span className="font-medium">{group.name}</span>
-                      <span className="text-xs text-muted-foreground">Group ID: {group.id}</span>
-                    </div>
-                  </Button>
-                ))}
-              </div>
-            )}
-
-            {/* Cash Collected Amount */}
-            <div className="space-y-2">
-              <Label>Cash Collected Amount (KES)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={cashCollectedAmount}
-                onChange={(e) => setCashCollectedAmount(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                💡 This input needs validation/confirmation from the group chair
-              </p>
-            </div>
-
-            {/* Fines and Penalties */}
-            <div className="space-y-2">
-              <Label>Fines and Penalties (KES)</Label>
-              <div className="space-y-2">
-                <div className="grid grid-cols-3 gap-2">
-                  {[20, 50, 100].map((amount) => (
-                    <Button
-                      key={amount}
-                      variant={parseInt(finesCollectedAmount) === amount ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setFinesCollectedAmount(amount.toString())}
-                    >
-                      {amount}
-                    </Button>
-                  ))}
-                </div>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="Custom amount..."
-                  value={finesCollectedAmount}
-                  onChange={(e) => setFinesCollectedAmount(e.target.value)}
-                />
-              </div>
-              <p className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
-                ⚠️ If a member paid the fine in M-Pesa, don't include the fine here
-              </p>
-            </div>
-
-            {/* Save Button */}
-            <Button 
-              onClick={handleSaveGroupCollections}
-              className="w-full"
-              disabled={!selectedGroupId || (!cashCollectedAmount && !finesCollectedAmount)}
-            >
-              <Save className="h-4 w-4 mr-2" />
-              Record Collections
-            </Button>
-          </div>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto p-0">
+          <GroupCollections 
+            realMembers={realMembers}
+            onSuccess={() => setShowFinesDialog(false)}
+          />
         </DialogContent>
         </Dialog>
       </Card>

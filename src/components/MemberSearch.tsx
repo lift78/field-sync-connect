@@ -10,6 +10,7 @@ interface MemberBalance {
   member_id: string;
   name: string;
   phone: string;
+  group_id: number;
   group_name: string;
   meeting_date: string;
   balances: {

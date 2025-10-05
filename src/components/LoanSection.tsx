@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreditCard, Banknote } from "lucide-react";
 import { LoanApplicationForm } from "./LoanApplicationForm";
 import { LoanDisbursementForm } from "./LoanDisbursementForm";
@@ -28,30 +27,23 @@ export function LoanSection() {
 
   return (
     <div className="space-y-4">
-      {/* Sub-navigation */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Loan Management</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-2">
-            {subSections.map((section) => {
-              const isActive = activeSubSection === section.id;
-              return (
-                <Button
-                  key={section.id}
-                  variant={isActive ? "default" : "outline"}
-                  onClick={() => setActiveSubSection(section.id)}
-                  className="flex items-center gap-2 h-auto p-4"
-                >
-                  <section.icon className="h-5 w-5" />
-                  <span className="text-sm font-medium">{section.title}</span>
-                </Button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Compact Sub-navigation */}
+      <div className="grid grid-cols-2 gap-2">
+        {subSections.map((section) => {
+          const isActive = activeSubSection === section.id;
+          return (
+            <Button
+              key={section.id}
+              variant={isActive ? "default" : "outline"}
+              onClick={() => setActiveSubSection(section.id)}
+              className="flex items-center gap-2 py-3"
+            >
+              <section.icon className="h-4 w-4" />
+              <span className="text-sm font-medium">{section.title}</span>
+            </Button>
+          );
+        })}
+      </div>
 
       {/* Active sub-section content */}
       {renderActiveSubSection()}

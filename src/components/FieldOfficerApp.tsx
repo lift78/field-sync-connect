@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useKeyboardHandler } from "@/hooks/useKeyboardHandler";
 import { dbOperations } from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { LoanSection } from "./LoanSection";
 import { AdvanceLoanForm } from "./AdvanceLoanForm";
 import { SyncManager } from "./SyncManager";
 import { RecordDetailView } from "./RecordDetailView";
+import { QuickCollections } from "./QuickCollections";
 import { 
   Wallet, 
   CreditCard, 
@@ -19,7 +21,8 @@ import {
   Menu,
   X,
   Moon,
-  Sun
+  Sun,
+  Users
 } from "lucide-react";
 import { CashCollection, LoanApplication, AdvanceLoan } from "@/lib/database";
 
@@ -100,11 +103,13 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
           </p>
 
           {/* Form */}
-          <div className="space-y-4">
+          <form className="space-y-4">
             <div>
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
+                name="username"
+                autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter your username"
@@ -116,7 +121,9 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
@@ -132,12 +139,13 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
 
             <Button
               onClick={handleLogin}
+              type="submit"
               className="w-full mt-4"
               disabled={isLoading}
             >
               {isLoading ? "Logging in..." : "Login"}
             </Button>
-          </div>
+          </form>
 
           {/* Status badges */}
           <div className="flex flex-wrap justify-center gap-2 mt-8">
@@ -164,12 +172,17 @@ export function FieldOfficerApp() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [recordView, setRecordView] = useState<RecordView | null>(null);
   const [showLogin, setShowLogin] = useState(true);
+  const [showQuickCollections, setShowQuickCollections] = useState(false);
+  const [quickDrawerOpen, setQuickDrawerOpen] = useState(false);
   const { theme, setTheme } = useTheme();
+  
+  // Initialize keyboard handler
+  useKeyboardHandler();
 
   const sections = [
     { id: 'cash' as const, title: 'Cash Collection', icon: Wallet, color: 'bg-gradient-primary' },
-    { id: 'loan' as const, title: 'Loan Management', icon: CreditCard, color: 'bg-gradient-success' },
-    { id: 'advance' as const, title: 'Advance Loan', icon: Zap, color: 'bg-gradient-accent' },
+    { id: 'loan' as const, title: 'Loan Management', icon: CreditCard, color: 'bg-gradient-accent' },
+    { id: 'advance' as const, title: 'Advance Loan', icon: Zap, color: 'bg-gradient-warning' },
     { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-secondary' },
   ];
 
@@ -225,6 +238,11 @@ export function FieldOfficerApp() {
   };
 
   const renderActiveSection = () => {
+    // If showing quick collections, render it fullscreen
+    if (showQuickCollections) {
+      return <QuickCollections onBack={() => setShowQuickCollections(false)} />;
+    }
+
     // If viewing a record, show the record detail view
     if (recordView) {
       return (
@@ -256,6 +274,11 @@ export function FieldOfficerApp() {
     return <LoginScreen onLogin={() => setShowLogin(false)} />;
   }
 
+  // Show quick collections fullscreen
+  if (showQuickCollections) {
+    return <QuickCollections onBack={() => setShowQuickCollections(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile Header */}
@@ -275,6 +298,16 @@ export function FieldOfficerApp() {
             <p className="text-sm opacity-90 hidden sm:block">{activeTitle}</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Quick Collections Button - Both Desktop and Mobile */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setQuickDrawerOpen(true)}
+              className="hover:bg-accent"
+              title="Quick Collections"
+            >
+              <Users className="h-5 w-5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -322,13 +355,21 @@ export function FieldOfficerApp() {
         </div>
       )}
 
+      {/* Quick Collections Drawer */}
+      {quickDrawerOpen && (
+        <div className="fixed inset-0 z-50 bg-background">
+          <QuickCollections onBack={() => setQuickDrawerOpen(false)} />
+        </div>
+      )}
+
+
       {/* Main Content */}
       <main className="p-4 pb-20 mobile-content">
         {renderActiveSection()}
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 z-40">
+      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 z-40 mobile-fixed-nav">
         <div className="grid grid-cols-4 gap-1">
           {sections.map((section) => {
             const isActive = activeSection === section.id;
@@ -337,7 +378,10 @@ export function FieldOfficerApp() {
                 key={section.id}
                 variant="ghost"
                 size="sm"
-                onClick={() => setActiveSection(section.id)}
+                onClick={() => {
+                  setActiveSection(section.id);
+                  setShowQuickCollections(false);
+                }}
                 className={`flex-col h-16 p-2 ${
                   isActive 
                     ? 'text-primary bg-primary/10' 

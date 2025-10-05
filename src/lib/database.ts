@@ -21,6 +21,7 @@ export interface MemberBalance {
   member_id: string;
   name: string;
   phone: string;
+  group_id: number;
   group_name: string;
   meeting_date: string;
   balances: {
@@ -65,11 +66,40 @@ export interface LoanApplication {
   syncError?: string;
 }
 
+export interface Loan {
+  id?: number;
+  loan_id: string;
+  database_id: number;
+  member: {
+    member_id: string;
+    name: string;
+    phone: string;
+    advance_balance: number;
+  };
+  group: {
+    id: number;
+    name: string;
+  };
+  principalAmount: number;
+  repaymentAmount: number;
+  monthlyRepayment: number;
+  installments: number;
+  status: string;
+  applicationDate: string;
+  disbursed?: boolean;
+}
+
 export interface LoanDisbursement {
   id?: number;
-  loanId: string;
-  amountType: 'all' | 'custom';
-  customAmount?: number;
+  loan_id: string;
+  database_id: number;
+  include_processing_fee: boolean;
+  include_advocate_fee: boolean;
+  include_advance_deduction: boolean;
+  custom_deductions: Array<{
+    description: string;
+    amount: number;
+  }>;
   timestamp: Date;
   synced: boolean;
   syncStatus?: 'pending' | 'failed' | 'synced';
@@ -89,25 +119,41 @@ export interface AdvanceLoan {
   syncError?: string;
 }
 
+export interface GroupCollection {
+  id?: number;
+  groupId: string;
+  groupName: string;
+  cashCollected: number;
+  finesCollected: number;
+  timestamp: Date;
+  synced: boolean;
+  syncStatus?: 'pending' | 'failed' | 'synced';
+  syncError?: string;
+}
+
 // Database class
 export class FieldOfficerDB extends Dexie {
   cashCollections!: Table<CashCollection>;
   loanApplications!: Table<LoanApplication>;
+  loans!: Table<Loan>;
   loanDisbursements!: Table<LoanDisbursement>;
   advanceLoans!: Table<AdvanceLoan>;
+  groupCollections!: Table<GroupCollection>;
   userCredentials!: Table<UserCredentials>;
   memberBalances!: Table<MemberBalance>;
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(6).stores({
+    this.version(9).stores({
       // Enhanced indexing for better search performance
       cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp',
-      loanDisbursements: '++id, loanId, amountType, customAmount, timestamp',
+      loans: '++id, loan_id, database_id, [member.member_id], [group.id], status, applicationDate',
+      loanDisbursements: '++id, loan_id, database_id, timestamp',
       advanceLoans: '++id, memberId, memberName, amount, timestamp',
+      groupCollections: '++id, groupId, groupName, cashCollected, finesCollected, timestamp',
       userCredentials: '++id, username, lastLogin',
-      memberBalances: '++id, member_id, name, phone, group_name, last_updated'
+      memberBalances: '++id, member_id, name, phone, group_id, group_name, last_updated'
     });
   }
 }
@@ -232,6 +278,56 @@ export const dbOperations = {
     });
   },
 
+  async deleteLoanApplication(id: string | number) {
+    return await db.loanApplications.delete(Number(id));
+  },
+
+  // =============================================================================
+  // LOANS
+  // =============================================================================
+  async storeLoans(loans: Omit<Loan, 'id'>[]) {
+    try {
+      // Clear existing loans and store new ones
+      await db.loans.clear();
+      await db.loans.bulkAdd(loans);
+      return loans.length;
+    } catch (error) {
+      console.error('Error storing loans:', error);
+      throw error;
+    }
+  },
+
+  async getAllLoans() {
+    return await db.loans.toArray();
+  },
+
+  async getLoansByGroup(groupId: number) {
+    return await db.loans.filter(loan => loan.group.id === groupId).toArray();
+  },
+
+  async getLoanById(loanId: string) {
+    return await db.loans.where('loan_id').equals(loanId).first();
+  },
+
+  async markLoanAsDisbursed(loanId: string) {
+    if (!loanId || typeof loanId !== 'string') {
+      throw new Error('Invalid loan ID provided');
+    }
+    return await db.loans.where('loan_id').equals(loanId).modify({ disbursed: true });
+  },
+
+  async getUniqueGroups() {
+    const loans = await db.loans.toArray();
+    const uniqueGroups = loans.reduce((acc, loan) => {
+      const existing = acc.find(g => g.id === loan.group.id);
+      if (!existing) {
+        acc.push(loan.group);
+      }
+      return acc;
+    }, [] as Array<{ id: number; name: string }>);
+    return uniqueGroups;
+  },
+
   // =============================================================================
   // LOAN DISBURSEMENTS
   // =============================================================================
@@ -264,6 +360,31 @@ export const dbOperations = {
       syncStatus: 'failed', 
       syncError: error 
     });
+  },
+
+  async updateLoanDisbursement(id: string, data: LoanDisbursement) {
+    return await db.loanDisbursements.update(Number(id), { 
+      ...data, 
+      synced: false, 
+      syncStatus: 'pending', 
+      syncError: undefined 
+    });
+  },
+
+  async updateLoanDisbursementSyncStatus(id: number, status: 'pending' | 'failed' | 'synced', error?: string): Promise<number> {
+    return await db.loanDisbursements.update(id, { 
+      syncStatus: status, 
+      syncError: error,
+      synced: status === 'synced'
+    });
+  },
+
+  async deleteLoanDisbursement(id: string | number) {
+    return await db.loanDisbursements.delete(Number(id));
+  },
+
+  async getLoanDisbursementByLoanId(loanId: string) {
+    return await db.loanDisbursements.where('loan_id').equals(loanId).first();
   },
 
   // =============================================================================
@@ -307,6 +428,57 @@ export const dbOperations = {
       syncStatus: 'pending', 
       syncError: undefined 
     });
+  },
+
+  async deleteAdvanceLoan(id: string | number) {
+    return await db.advanceLoans.delete(Number(id));
+  },
+
+  // =============================================================================
+  // GROUP COLLECTIONS
+  // =============================================================================
+  async addGroupCollection(data: Omit<GroupCollection, 'id' | 'synced'>) {
+    return await db.groupCollections.add({
+      ...data,
+      synced: false,
+      syncStatus: 'pending'
+    });
+  },
+
+  async getGroupCollections() {
+    return await db.groupCollections.orderBy('timestamp').reverse().toArray();
+  },
+
+  async getUnsyncedGroupCollections() {
+    return await db.groupCollections.filter(record => record.synced === false).toArray();
+  },
+
+  async markGroupCollectionSynced(id: number): Promise<number> {
+    return await db.groupCollections.update(id, {
+      synced: true,
+      syncStatus: 'synced',
+      syncError: undefined
+    });
+  },
+
+  async markGroupCollectionFailed(id: number, error: string): Promise<number> {
+    return await db.groupCollections.update(id, {
+      syncStatus: 'failed',
+      syncError: error
+    });
+  },
+
+  async updateGroupCollection(id: string, data: GroupCollection) {
+    return await db.groupCollections.update(Number(id), {
+      ...data,
+      synced: false,
+      syncStatus: 'pending',
+      syncError: undefined
+    });
+  },
+
+  async deleteGroupCollection(id: string | number) {
+    return await db.groupCollections.delete(Number(id));
   },
 
   // =============================================================================
@@ -594,13 +766,15 @@ export const dbOperations = {
     loanApplications: LoanApplication[];
     loanDisbursements: LoanDisbursement[];
     advanceLoans: AdvanceLoan[];
+    groupCollections: GroupCollection[];
     total: number;
   }> {
-    const [cashCollections, loanApplications, loanDisbursements, advanceLoans] = await Promise.all([
+    const [cashCollections, loanApplications, loanDisbursements, advanceLoans, groupCollections] = await Promise.all([
       this.getUnsyncedCashCollections(),
       this.getUnsyncedLoanApplications(),
       this.getUnsyncedLoanDisbursements(),
-      this.getUnsyncedAdvanceLoans()
+      this.getUnsyncedAdvanceLoans(),
+      this.getUnsyncedGroupCollections()
     ]);
 
     return {
@@ -608,7 +782,8 @@ export const dbOperations = {
       loanApplications,
       loanDisbursements,
       advanceLoans,
-      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length
+      groupCollections,
+      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length + groupCollections.length
     };
   },
 
@@ -620,13 +795,15 @@ export const dbOperations = {
     loanApplications: LoanApplication[];
     loanDisbursements: LoanDisbursement[];
     advanceLoans: AdvanceLoan[];
+    groupCollections: GroupCollection[];
     total: number;
   }> {
-    const [cashCollections, loanApplications, loanDisbursements, advanceLoans] = await Promise.all([
+    const [cashCollections, loanApplications, loanDisbursements, advanceLoans, groupCollections] = await Promise.all([
       db.cashCollections.filter(record => record.syncStatus === 'failed').toArray(),
       db.loanApplications.filter(record => record.syncStatus === 'failed').toArray(),
       db.loanDisbursements.filter(record => record.syncStatus === 'failed').toArray(),
-      db.advanceLoans.filter(record => record.syncStatus === 'failed').toArray()
+      db.advanceLoans.filter(record => record.syncStatus === 'failed').toArray(),
+      db.groupCollections.filter(record => record.syncStatus === 'failed').toArray()
     ]);
 
     return {
@@ -634,7 +811,8 @@ export const dbOperations = {
       loanApplications,
       loanDisbursements,
       advanceLoans,
-      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length
+      groupCollections,
+      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length + groupCollections.length
     };
   },
 
@@ -646,7 +824,8 @@ export const dbOperations = {
       db.cashCollections.filter(record => record.synced === true).delete(),
       db.loanApplications.filter(record => record.synced === true).delete(),
       db.loanDisbursements.filter(record => record.synced === true).delete(),
-      db.advanceLoans.filter(record => record.synced === true).delete()
+      db.advanceLoans.filter(record => record.synced === true).delete(),
+      db.groupCollections.filter(record => record.synced === true).delete()
     ]);
     
     return results.reduce((sum, count) => sum + count, 0);
@@ -791,6 +970,20 @@ export const dbOperations = {
       return true;
     } catch (error) {
       console.error('Failed to update loan disbursement status:', error);
+      return false;
+    }
+  },
+
+  async updateGroupCollectionStatus(id: string, status: 'pending' | 'failed' | 'synced'): Promise<boolean> {
+    try {
+      const numericId = parseInt(id);
+      await db.groupCollections.update(numericId, { 
+        syncStatus: status,
+        syncError: status === 'pending' ? undefined : undefined
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to update group collection status:', error);
       return false;
     }
   }

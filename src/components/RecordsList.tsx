@@ -11,9 +11,11 @@ import {
   User,
   Loader2,
   AlertCircle,
-  RotateCcw
+  RotateCcw,
+  Trash2
 } from "lucide-react";
-import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement } from "@/lib/database";
+import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement, GroupCollection } from "@/lib/database";
+import { EditableDisbursementPreview } from "@/components/EditableDisbursementPreview";
 
 interface Record {
   id: string;
@@ -27,7 +29,7 @@ interface Record {
 }
 
 interface RecordsListProps {
-  type: 'cash' | 'loan' | 'advance' | 'disbursement'; // Added 'disbursement'
+  type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group';
   onBack: () => void;
   onEditRecord: (record: Record) => void;
 }
@@ -37,6 +39,8 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resolvingRecords, setResolvingRecords] = useState<Set<string>>(new Set());
+  const [deletingRecords, setDeletingRecords] = useState<Set<string>>(new Set());
+  const [editingDisbursement, setEditingDisbursement] = useState<LoanDisbursement | null>(null);
 
   useEffect(() => {
     const loadRecords = async () => {
@@ -44,7 +48,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         setLoading(true);
         setError(null);
         
-        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement)[] = [];
+        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection)[] = [];
         
         switch (type) {
           case 'cash':
@@ -56,8 +60,11 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
           case 'advance':
             data = await dbOperations.getAdvanceLoans();
             break;
-          case 'disbursement': // Added disbursement case
+          case 'disbursement':
             data = await dbOperations.getLoanDisbursements();
+            break;
+          case 'group':
+            data = await dbOperations.getGroupCollections();
             break;
         }
 
@@ -71,17 +78,30 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             status = 'synced';
           }
 
+          // Safely extract amount with proper type assertions
+          let amount: number = 0;
+          if ('amount' in item && typeof item.amount === 'number') {
+            amount = item.amount;
+          } else if ('loanAmount' in item && typeof item.loanAmount === 'number') {
+            amount = item.loanAmount;
+          } else if ('principalAmount' in item && typeof item.principalAmount === 'number') {
+            amount = item.principalAmount;
+          } else if ('totalAmount' in item && typeof item.totalAmount === 'number') {
+            amount = item.totalAmount;
+          } else if ('cashCollected' in item && typeof item.cashCollected === 'number') {
+            const finesCollected = ('finesCollected' in item && typeof item.finesCollected === 'number') ? item.finesCollected : 0;
+            amount = item.cashCollected + finesCollected;
+          }
+
           return {
             id: item.id?.toString() || '',
-            memberId: 'memberId' in item ? item.memberId : undefined,
-            loanId: 'loanId' in item ? item.loanId : undefined, // Added for disbursements
-            amount: 'amount' in item ? item.amount : 
-                   'loanAmount' in item ? item.loanAmount : 
-                   'customAmount' in item ? item.customAmount : undefined, // Added customAmount for disbursements
+            memberId: 'memberId' in item ? (item.memberId as string) : 'groupId' in item ? (item.groupId as string) : undefined,
+            loanId: 'loan_id' in item ? (item.loan_id as string) : undefined,
+            amount,
             status,
-            syncError: item.syncError, // Include sync error message
+            syncError: item.syncError || '',
             lastUpdated: item.timestamp.toISOString(),
-            data: item // Store full record for editing
+            data: item
           };
         });
 
@@ -97,6 +117,87 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     loadRecords();
   }, [type]);
 
+  const handleRecordClick = (record: Record) => {
+    if (type === 'disbursement' && !record.data.synced) {
+      // Show editable preview for unsynced disbursements
+      setEditingDisbursement(record.data as LoanDisbursement);
+    } else {
+      // Use regular edit for other types or synced disbursements
+      onEditRecord(record);
+    }
+  };
+
+  const handleDisbursementSaved = () => {
+    setEditingDisbursement(null);
+    // Reload records to reflect changes
+    const loadRecords = async () => {
+      try {
+        setLoading(true);
+        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection)[] = [];
+        
+        switch (type) {
+          case 'cash':
+            data = await dbOperations.getCashCollections();
+            break;
+          case 'loan':
+            data = await dbOperations.getLoanApplications();
+            break;
+          case 'advance':
+            data = await dbOperations.getAdvanceLoans();
+            break;
+          case 'disbursement':
+            data = await dbOperations.getLoanDisbursements();
+            break;
+          case 'group':
+            data = await dbOperations.getGroupCollections();
+            break;
+        }
+
+        const formattedRecords: Record[] = data.map((item) => {
+          let status: 'synced' | 'pending' | 'failed' = 'pending';
+          if (item.syncStatus) {
+            status = item.syncStatus as 'synced' | 'pending' | 'failed';
+          } else if (item.synced) {
+            status = 'synced';
+          }
+
+          let amount: number = 0;
+          if ('amount' in item && typeof item.amount === 'number') {
+            amount = item.amount;
+          } else if ('loanAmount' in item && typeof item.loanAmount === 'number') {
+            amount = item.loanAmount;
+          } else if ('principalAmount' in item && typeof item.principalAmount === 'number') {
+            amount = item.principalAmount;
+          } else if ('totalAmount' in item && typeof item.totalAmount === 'number') {
+            amount = item.totalAmount;
+          } else if ('cashCollected' in item && typeof item.cashCollected === 'number') {
+            const finesCollected = ('finesCollected' in item && typeof item.finesCollected === 'number') ? item.finesCollected : 0;
+            amount = item.cashCollected + finesCollected;
+          }
+
+          return {
+            id: item.id?.toString() || '',
+            memberId: 'memberId' in item ? (item.memberId as string) : 'groupId' in item ? (item.groupId as string) : undefined,
+            loanId: 'loan_id' in item ? (item.loan_id as string) : undefined,
+            amount,
+            status,
+            syncError: item.syncError || '',
+            lastUpdated: item.timestamp.toISOString(),
+            data: item
+          };
+        });
+
+        setRecords(formattedRecords);
+      } catch (err) {
+        console.error('Failed to reload records:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadRecords();
+  };
+
   const getTypeTitle = () => {
     switch (type) {
       case 'cash':
@@ -105,8 +206,10 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         return 'Loan Application Records';
       case 'advance':
         return 'Advance Loan Records';
-      case 'disbursement': // Added disbursement title
+      case 'disbursement':
         return 'Loan Disbursement Records';
+      case 'group':
+        return 'Group Collection Records';
       default:
         return 'Records';
     }
@@ -152,15 +255,15 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     }).format(amount);
   };
 
-  // Updated to handle disbursements which have loanId instead of memberId
+  // Updated to handle disbursements and group collections
   const getRecordDisplayName = (record: Record) => {
     const fullData = record.data as any;
     
     if (type === 'disbursement') {
-      // For disbursements, show loan ID
       return `Loan ID: ${record.loanId || fullData?.loanId || 'Unknown'}`;
+    } else if (type === 'group') {
+      return `${fullData?.groupName || 'Unknown Group'} (${record.memberId})`;
     } else {
-      // For other types, show member info
       if (fullData?.memberName) {
         return `${fullData.memberName} (${record.memberId})`;
       }
@@ -172,15 +275,17 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     const fullData = record.data as any;
     
     if (type === 'disbursement') {
-      // For disbursements, show amount type and custom amount if applicable
       if (fullData?.amountType === 'custom' && fullData?.customAmount) {
         return `Custom Amount: ${formatAmount(fullData.customAmount)}`;
       } else if (fullData?.amountType === 'all') {
         return 'Full Loan Amount';
       }
       return 'Disbursement';
+    } else if (type === 'group') {
+      const cashCollected = fullData?.cashCollected || 0;
+      const finesCollected = fullData?.finesCollected || 0;
+      return `Cash: ${formatAmount(cashCollected)} | Fines: ${formatAmount(finesCollected)}`;
     } else {
-      // For other types, show amount
       if (record.amount) {
         return formatAmount(record.amount);
       }
@@ -219,6 +324,9 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         case 'disbursement':
           updateResult = await dbOperations.updateLoanDisbursementStatus(recordId, 'pending');
           break;
+        case 'group':
+          updateResult = await dbOperations.updateGroupCollectionStatus(recordId, 'pending');
+          break;
       }
 
       if (updateResult) {
@@ -233,6 +341,52 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
       console.error('Failed to resolve record:', err);
     } finally {
       setResolvingRecords(prev => {
+        const newSet = new Set([...prev]);
+        newSet.delete(recordId);
+        return newSet;
+      });
+    }
+  };
+
+  // Function to delete a record
+  const handleDeleteRecord = async (recordId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    
+    if (!confirm('Are you sure you want to delete this record? This action cannot be undone.')) {
+      return;
+    }
+    
+    setDeletingRecords(prev => new Set([...prev, recordId]));
+    
+    try {
+      let deleteResult;
+      switch (type) {
+        case 'cash':
+          deleteResult = await dbOperations.deleteCashCollection(recordId);
+          break;
+        case 'loan':
+          deleteResult = await dbOperations.deleteLoanApplication(recordId);
+          break;
+        case 'advance':
+          deleteResult = await dbOperations.deleteAdvanceLoan(recordId);
+          break;
+        case 'disbursement':
+          deleteResult = await dbOperations.deleteLoanDisbursement(recordId);
+          break;
+        case 'group':
+          deleteResult = await dbOperations.deleteGroupCollection(recordId);
+          break;
+      }
+
+      if (deleteResult !== undefined) {
+        // Remove from local state
+        setRecords(prev => prev.filter(r => r.id !== recordId));
+      }
+    } catch (err) {
+      console.error('Failed to delete record:', err);
+      alert('Failed to delete record. Please try again.');
+    } finally {
+      setDeletingRecords(prev => {
         const newSet = new Set([...prev]);
         newSet.delete(recordId);
         return newSet;
@@ -336,7 +490,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             className={`shadow-card cursor-pointer hover:shadow-lg transition-shadow ${
               record.status === 'failed' ? 'border-l-4 border-l-red-500' : ''
             }`}
-            onClick={() => onEditRecord(record)}
+            onClick={() => handleRecordClick(record)}
           >
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -371,22 +525,40 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
                             <p className="text-xs text-muted-foreground italic">
                               Click to edit and retry sync
                             </p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => handleResolveRecord(record.id, e)}
-                              disabled={resolvingRecords.has(record.id)}
-                              className="h-6 px-2 text-xs"
-                            >
-                              {resolvingRecords.has(record.id) ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <>
-                                  <RotateCcw className="h-3 w-3 mr-1" />
-                                  Resolve
-                                </>
-                              )}
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => handleResolveRecord(record.id, e)}
+                                disabled={resolvingRecords.has(record.id)}
+                                className="h-6 px-2 text-xs"
+                              >
+                                {resolvingRecords.has(record.id) ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <>
+                                    <RotateCcw className="h-3 w-3 mr-1" />
+                                    Resolve
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => handleDeleteRecord(record.id, e)}
+                                disabled={deletingRecords.has(record.id)}
+                                className="h-6 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                {deletingRecords.has(record.id) ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Trash2 className="h-3 w-3 mr-1" />
+                                    Delete
+                                  </>
+                                )}
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -397,6 +569,19 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
                 <div className="flex items-center space-x-2">
                   {getStatusBadge(record.status)}
                   <Edit3 className="h-4 w-4 text-muted-foreground" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => handleDeleteRecord(record.id, e)}
+                    disabled={deletingRecords.has(record.id)}
+                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    {deletingRecords.has(record.id) ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -463,6 +648,15 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Editable Disbursement Preview Modal */}
+      {editingDisbursement && (
+        <EditableDisbursementPreview
+          disbursement={editingDisbursement}
+          onClose={() => setEditingDisbursement(null)}
+          onSaved={handleDisbursementSaved}
+        />
       )}
     </div>
   );

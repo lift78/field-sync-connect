@@ -1,258 +1,203 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Banknote, Plus, Trash2, Save } from "lucide-react";
-import { dbOperations } from "@/lib/database"; // Import database operations
-import { useToast } from "@/hooks/use-toast"; // Fix import
-
-interface DisbursementRecord {
-  id: string;
-  loanId: string;
-  amountType: 'all' | 'custom';
-  customAmount?: number;
-  timestamp: Date;
-}
+import { CheckCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { dbOperations, Loan } from "@/lib/database";
+import { LoanPreview } from "./LoanPreview";
 
 export function LoanDisbursementForm() {
-  const [disbursements, setDisbursements] = useState<DisbursementRecord[]>([]);
-  const [loanId, setLoanId] = useState("");
-  const [amountType, setAmountType] = useState<'all' | 'custom'>('all');
-  const [customAmount, setCustomAmount] = useState("");
-  const { toast } = useToast(); // Fix toast usage
+  const { toast } = useToast();
+  const [loans, setLoans] = useState<Loan[]>([]);
+  const [groups, setGroups] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedGroup, setSelectedGroup] = useState<string>("all");
+  const [filteredLoans, setFilteredLoans] = useState<Loan[]>([]);
+  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const formatAmount = (amount: number): string => {
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES',
-      minimumFractionDigits: 0,
-    }).format(amount).replace('KES', 'Ksh');
-  };
+  useEffect(() => {
+    loadLoansAndGroups();
+  }, []);
 
-  const addDisbursement = () => {
-    if (!loanId.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a loan ID",
-        variant: "destructive",
-      });
-      return;
+  useEffect(() => {
+    if (selectedGroup && selectedGroup !== "all") {
+      const groupId = parseInt(selectedGroup);
+      setFilteredLoans(loans.filter(loan => loan.group.id === groupId && loan.status === 'approved' && !loan.disbursed));
+    } else {
+      setFilteredLoans(loans.filter(loan => loan.status === 'approved' && !loan.disbursed));
     }
+  }, [selectedGroup, loans]);
 
-    if (amountType === 'custom' && (!customAmount || Number(customAmount) <= 0)) {
-      toast({
-        title: "Error", 
-        description: "Please enter a valid custom amount",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newDisbursement: DisbursementRecord = {
-      id: Date.now().toString(),
-      loanId: loanId.trim(),
-      amountType,
-      customAmount: amountType === 'custom' ? Number(customAmount) : undefined,
-      timestamp: new Date(),
-    };
-
-    setDisbursements([...disbursements, newDisbursement]);
-    
-    // Reset form
-    setLoanId("");
-    setAmountType('all');
-    setCustomAmount("");
-
-    toast({
-      title: "Success",
-      description: "Disbursement record added",
-    });
-  };
-
-  const removeDisbursement = (id: string) => {
-    setDisbursements(disbursements.filter(d => d.id !== id));
-    toast({
-      title: "Removed",
-      description: "Disbursement record removed",
-    });
-  };
-
-  // FIX: Actually save to database instead of just logging
-  const handleSave = async () => {
-    if (disbursements.length === 0) {
-      toast({
-        title: "No Records",
-        description: "Add disbursement records before saving",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const loadLoansAndGroups = async () => {
     try {
-      // Save each disbursement to the database
-      for (const disbursement of disbursements) {
-        await dbOperations.addLoanDisbursement({
-          loanId: disbursement.loanId,
-          amountType: disbursement.amountType,
-          customAmount: disbursement.customAmount,
-          timestamp: disbursement.timestamp
-        });
-      }
-
-      toast({
-        title: "✅ Disbursements Saved",
-        description: `${disbursements.length} disbursement(s) saved successfully`,
-      });
+      setIsLoading(true);
+      const [loansData, groupsData] = await Promise.all([
+        dbOperations.getAllLoans(),
+        dbOperations.getUniqueGroups()
+      ]);
       
-      // Reset after successful save
-      setDisbursements([]);
+      setLoans(loansData);
+      setGroups(groupsData);
     } catch (error) {
-      console.error('Failed to save disbursements:', error);
+      console.error("Error loading loans:", error);
       toast({
-        title: "❌ Save Failed",
-        description: "Failed to save loan disbursements",
-        variant: "destructive"
+        title: "⚠ Error",
+        description: "Failed to load loan data",
+        variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Add Disbursement Form */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Banknote className="h-5 w-5" />
-            Loan Disbursement
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="loanId">Loan ID</Label>
-            <Input
-              id="loanId"
-              placeholder="Enter loan ID"
-              value={loanId}
-              onChange={(e) => setLoanId(e.target.value)}
-            />
+  const handlePreview = (loan: Loan) => {
+    setSelectedLoan(loan);
+  };
+
+  const handleDisbursed = () => {
+    setSelectedLoan(null);
+    loadLoansAndGroups(); // Refresh data
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p>Loading loans...</p>
           </div>
-
-          <div className="space-y-3">
-            <Label>Disbursement Amount</Label>
-            <RadioGroup
-              value={amountType}
-              onValueChange={(value: 'all' | 'custom') => setAmountType(value)}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="all" id="all" />
-                <Label htmlFor="all">Full loan amount</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="custom" id="custom" />
-                <Label htmlFor="custom">Custom amount</Label>
-              </div>
-            </RadioGroup>
-
-            {amountType === 'custom' && (
-              <div className="space-y-2">
-                <Label htmlFor="customAmount">Custom Amount (Ksh)</Label>
-                <Input
-                  id="customAmount"
-                  type="number"
-                  placeholder="Enter amount"
-                  value={customAmount}
-                  onChange={(e) => setCustomAmount(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-
-          <Button onClick={addDisbursement} className="w-full" variant="mobile">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Disbursement
-          </Button>
         </CardContent>
       </Card>
+    );
+  }
 
-      {/* Disbursement Records */}
-      {disbursements.length > 0 && (
-        <Card className="shadow-card bg-gradient-card">
-          <CardHeader>
-            <CardTitle>Disbursement Records ({disbursements.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {disbursements.map((disbursement) => (
-                <div
-                  key={disbursement.id}
-                  className="flex items-center justify-between p-3 bg-background/50 rounded-lg"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Loan ID: {disbursement.loanId}</span>
-                      <Badge variant="outline">
-                        {disbursement.amountType === 'all' 
-                          ? 'Full Amount' 
-                          : formatAmount(disbursement.customAmount!)}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {disbursement.timestamp.toLocaleDateString()} at{' '}
-                      {disbursement.timestamp.toLocaleTimeString()}
-                    </p>
+  return (
+    <>
+      {/* Sticky Group Filter */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm pb-4">
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <label className="text-sm font-medium mb-2 block">Filter by Group</label>
+            <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Groups" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Groups</SelectItem>
+                {groups.map((group) => (
+                  <SelectItem key={group.id} value={group.id.toString()}>
+                    {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Loans Grid */}
+      <div className="space-y-4">
+        {filteredLoans.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12 text-muted-foreground">
+              {selectedGroup !== "all" ? "No approved loans found for selected group" : "No approved loans available for disbursement"}
+            </CardContent>
+          </Card>
+        ) : (
+          filteredLoans.map((loan) => (
+            <Card key={loan.loan_id} className="p-0 overflow-hidden hover:shadow-lg transition-all duration-200 border border-border/50">
+              {/* Header with gradient background */}
+              <div className="bg-gradient-to-r from-primary/10 to-primary/5 px-4 py-3 border-b">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-lg">{loan.loan_id}</span>
+                    <Badge variant="outline" className="text-xs border-primary/30">
+                      {loan.status}
+                    </Badge>
                   </div>
+                  {loan.disbursed && (
+                    <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 border-green-200">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Disbursed
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Content */}
+              <CardContent className="p-4 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Member:</span>
+                      <span className="text-sm font-medium">{loan.member.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Group:</span>
+                      <span className="text-sm font-medium">{loan.group.name}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Principal:</span>
+                      <span className="text-sm font-semibold text-green-600">
+                        KES {loan.principalAmount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Total Repayment:</span>
+                      <span className="text-sm font-medium text-orange-600">
+                        KES {loan.repaymentAmount.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-muted/30 p-3 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Monthly Payment:</span>
+                    <span className="text-sm font-bold">
+                      KES {loan.monthlyRepayment.toLocaleString()} × {loan.installments} months
+                    </span>
+                  </div>
+                </div>
+
+                {/* Action Button */}
+                <div className="pt-2">
                   <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => removeDisbursement(disbursement.id)}
+                    onClick={() => handlePreview(loan)}
+                    disabled={loan.disbursed}
+                    className="w-full"
+                    variant={loan.disbursed ? "outline" : "default"}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    {loan.disbursed ? (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Already Disbursed
+                      </>
+                    ) : (
+                      "Preview Disbursement"
+                    )}
                   </Button>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
 
-      {/* Save Button */}
-      {disbursements.length > 0 && (
-        <Card className="shadow-card">
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">
-                  {disbursements.length} disbursement{disbursements.length !== 1 ? 's' : ''} ready to save
-                </p>
-              </div>
-              
-              <Button 
-                variant="success" 
-                size="mobile" 
-                onClick={handleSave}
-                className="w-full"
-              >
-                <Save className="h-5 w-5 mr-2" />
-                Save All Disbursements
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Preview Modal */}
+      {selectedLoan && (
+        <LoanPreview
+          loan={selectedLoan}
+          onClose={() => setSelectedLoan(null)}
+          onDisbursed={handleDisbursed}
+        />
       )}
-
-      {disbursements.length === 0 && (
-        <Card className="shadow-card">
-          <CardContent className="text-center py-12">
-            <Banknote className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">
-              No disbursement records yet. Add your first disbursement above.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    </>
   );
 }

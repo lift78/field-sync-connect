@@ -20,6 +20,8 @@ import {
   Clock,
   Upload,
   Settings,
+  Eye,
+  EyeOff,
   User,
   Key,
   X,
@@ -27,13 +29,13 @@ import {
 } from "lucide-react";
 
 interface SyncData {
-  type: 'cash' | 'loan' | 'advance' | 'disbursement';
+  type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group';
   count: number;
   lastUpdated: string;
 }
 
 interface SyncManagerProps {
-  onEditRecord?: (type: 'cash' | 'loan' | 'advance' | 'disbursement', recordData: any) => void;
+  onEditRecord?: (type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group', recordData: any) => void;
 }
 
 export function SyncManager({ onEditRecord }: SyncManagerProps) {
@@ -44,11 +46,12 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [memberUpdateProgress, setMemberUpdateProgress] = useState(0); // New state for member update progress
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [lastMemberUpdateTime, setLastMemberUpdateTime] = useState<string | null>(null); // New state for last member update
-  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | null>(null);
+  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(null);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [offlineData, setOfflineData] = useState<SyncData[]>([]);
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [showCredentialModal, setShowCredentialModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Load actual data from IndexedDB
   useEffect(() => {
@@ -65,11 +68,12 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     const loadOfflineData = async () => {
       try {
         // FIX: Load UNSYNCED records instead of all records
-        const [cash, loans, advances, disbursements] = await Promise.all([
+        const [cash, loans, advances, disbursements, groups] = await Promise.all([
           dbOperations.getUnsyncedCashCollections(),      // ✅ Only unsynced
           dbOperations.getUnsyncedLoanApplications(),     // ✅ Only unsynced
           dbOperations.getUnsyncedAdvanceLoans(),         // ✅ Only unsynced
-          dbOperations.getUnsyncedLoanDisbursements()     // ✅ Only unsynced
+          dbOperations.getUnsyncedLoanDisbursements(),    // ✅ Only unsynced
+          dbOperations.getUnsyncedGroupCollections()      // ✅ Only unsynced
         ]);
 
         setOfflineData([
@@ -92,6 +96,11 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
             type: 'disbursement', 
             count: disbursements.length, 
             lastUpdated: disbursements.length > 0 ? disbursements[0].timestamp.toISOString() : new Date().toISOString()
+          },
+          { 
+            type: 'group', 
+            count: groups.length, 
+            lastUpdated: groups.length > 0 ? groups[0].timestamp.toISOString() : new Date().toISOString()
           },
         ]);
       } catch (error) {
@@ -240,7 +249,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     }
   };
   
-  // FIX: Updated getTypeIcon to include disbursement
+  // FIX: Updated getTypeIcon to include disbursement and group
   const getTypeIcon = (type: SyncData['type']) => {
     switch (type) {
       case 'cash':
@@ -250,13 +259,15 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
       case 'advance':
         return '⚡';
       case 'disbursement':
-        return '💸'; // Added disbursement icon
+        return '💸';
+      case 'group':
+        return '👥';
       default:
         return '📄';
     }
   };
 
-  // FIX: Updated getTypeLabel to include disbursement
+  // FIX: Updated getTypeLabel to include disbursement and group
   const getTypeLabel = (type: SyncData['type']) => {
     switch (type) {
       case 'cash':
@@ -266,7 +277,9 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
       case 'advance':
         return 'Advance Loans';
       case 'disbursement':
-        return 'Loan Disbursements'; // Added disbursement label
+        return 'Loan Disbursements';
+      case 'group':
+        return 'Group Summary';
       default:
         return 'Unknown';
     }
@@ -667,12 +680,28 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
               
               <div>
                 <Label>Password</Label>
-                <Input
-                  type="password"
-                  value={credentials.password === "••••••••" ? "" : credentials.password}
-                  onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-                  placeholder="Enter new password"
-                />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={credentials.password === "••••••••" ? "" : credentials.password}
+                    onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+                    placeholder="Enter new password"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
               </div>
               
               <Button 
