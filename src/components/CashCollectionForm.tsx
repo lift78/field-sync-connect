@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
 import { Calculator } from "lucide-react";
 import { Plus, Trash2, Save, User, Phone, Users, Banknote, Smartphone, AlertCircle, DollarSign } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { GroupSummary } from "./GroupSummary";
 // import { Keyboard } from "@capacitor/keyboard";
 
@@ -68,7 +67,7 @@ export function CashCollectionForm() {
   const [memberQuery, setMemberQuery] = useState('');
   const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
   const [selectedRealMember, setSelectedRealMember] = useState<MemberBalance | null>(null);
-  const [showFinesDialog, setShowFinesDialog] = useState(false);
+  const [showGroupSummary, setShowGroupSummary] = useState(false);
   const { toast } = useToast();
 
 
@@ -400,22 +399,25 @@ export function CashCollectionForm() {
     }
   };
 
+  // Show Group Summary view
+  if (showGroupSummary) {
+    return <GroupSummary onBack={() => setShowGroupSummary(false)} />;
+  }
+
   return (
     <div className="space-y-6">
       {/* Member Selection */}
       <Card className="shadow-card bg-gradient-card">
-        <Dialog open={showFinesDialog} onOpenChange={setShowFinesDialog}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-lg">Member Identification</CardTitle>
-            <DialogTrigger asChild>
-              <Button 
-                variant="default" 
-                size="sm"
-                className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white"
-              >
-                Group Summary
-              </Button>
-            </DialogTrigger>
+            <Button 
+              variant="default" 
+              size="sm"
+              onClick={() => setShowGroupSummary(true)}
+              className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              Group Summary
+            </Button>
           </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -510,12 +512,6 @@ export function CashCollectionForm() {
             </div>
           )}
         </CardContent>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto p-0">
-          <GroupSummary 
-            onBack={() => setShowFinesDialog(false)}
-          />
-        </DialogContent>
-        </Dialog>
       </Card>
       
       {/* Cash Collection */}
@@ -657,7 +653,12 @@ export function CashCollectionForm() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="loan-amount">Pay Loan Installments (KES)</Label>
+              <div className="flex items-center gap-2 mb-1">
+                <Label htmlFor="loan-amount">Pay Loan Installments (KES)</Label>
+                <Badge variant="outline" className="text-xs">
+                  Expected: {formatAmount(selectedRealMember?.inst || 0)}
+                </Badge>
+              </div>
               <Input
                 id="loan-amount"
                 type="number"

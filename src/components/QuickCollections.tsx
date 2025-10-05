@@ -625,11 +625,9 @@ function CollectionForm({
             <div className="space-y-2">
               <div className="flex items-center gap-2 mb-1">
                 <Label htmlFor="loan-amount" className="text-sm">Pay Loan Installments (KES)</Label>
-                {currentMember?.inst && currentMember.inst > 0 && (
-                  <Badge variant="outline" className="text-xs">
-                    Expected: {formatAmount(currentMember.inst)}
-                  </Badge>
-                )}
+                <Badge variant="outline" className="text-xs">
+                  Expected: {formatAmount(currentMember?.inst || 0)}
+                </Badge>
               </div>
               <Input
                 id="loan-amount"
