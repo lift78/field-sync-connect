@@ -31,6 +31,7 @@ export interface MemberBalance {
     unallocated_funds: number;
     total_outstanding: number;
   };
+  inst?: number; // Monthly installment amount member should pay
   last_updated: string;
 }
 
@@ -285,12 +286,27 @@ export const dbOperations = {
   // =============================================================================
   // LOANS
   // =============================================================================
-  async storeLoans(loans: Omit<Loan, 'id'>[]) {
+  async storeLoans(loans: any[]) {
     try {
+      // Map backend loan format to our Loan interface
+      const formattedLoans = loans.map(loan => ({
+        loan_id: loan.id, // Map backend 'id' to 'loan_id'
+        database_id: loan.database_id,
+        member: loan.member,
+        group: loan.group,
+        principalAmount: loan.principalAmount,
+        repaymentAmount: loan.repaymentAmount,
+        monthlyRepayment: loan.monthlyRepayment,
+        installments: loan.installments,
+        status: loan.status,
+        applicationDate: loan.applicationDate,
+        disbursed: loan.disbursed
+      }));
+      
       // Clear existing loans and store new ones
       await db.loans.clear();
-      await db.loans.bulkAdd(loans);
-      return loans.length;
+      await db.loans.bulkAdd(formattedLoans);
+      return formattedLoans.length;
     } catch (error) {
       console.error('Error storing loans:', error);
       throw error;

@@ -197,8 +197,8 @@ function CollectionForm({
   onBack: () => void;
 }) {
   const [currentMemberIndex, setCurrentMemberIndex] = useState(0);
+  const [totalRepaid, setTotalRepaid] = useState('');
   const [cashAmount, setCashAmount] = useState('');
-  const [mpesaAmount, setMpesaAmount] = useState('');
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -206,15 +206,16 @@ function CollectionForm({
   const currentMember = groupMembers[currentMemberIndex];
 
   const resetForm = () => {
+    setTotalRepaid('');
     setCashAmount('');
-    setMpesaAmount('');
     setAllocations([]);
   };
 
   // Use precise calculations to avoid floating point issues
+  const totalRepaidNum = toPreciseNumber(totalRepaid);
   const cashAmountNum = toPreciseNumber(cashAmount);
-  const mpesaAmountNum = toPreciseNumber(mpesaAmount);
-  const totalCollected = toPreciseNumber(cashAmountNum + mpesaAmountNum);
+  const mpesaAmountNum = toPreciseNumber(totalRepaidNum - cashAmountNum);
+  const totalCollected = totalRepaidNum;
   const totalAllocated = toPreciseNumber(
     allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
   );
@@ -478,7 +479,29 @@ function CollectionForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-            {/* Enhanced Cash Field */}
+          {/* Total Repaid Field */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/20">
+                <Banknote className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
+                <div className="min-w-0">
+                  <Label htmlFor="total-repaid" className="text-sm sm:text-base font-semibold text-primary">
+                    💰 Total Repaid (KES)
+                  </Label>
+                  <p className="text-xs text-primary/80">Total amount member paid</p>
+                </div>
+              </div>
+              <Input
+                id="total-repaid"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={totalRepaid}
+                onChange={(e) => setTotalRepaid(e.target.value)}
+                className="text-base sm:text-lg p-3 border-2 border-primary/30 focus:border-primary bg-primary/5"
+              />
+            </div>
+            
+            {/* Cash Amount Field */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 p-2 bg-success/10 rounded-lg border border-success/20">
                 <Banknote className="h-4 w-4 sm:h-5 sm:w-5 text-success flex-shrink-0" />
@@ -495,7 +518,20 @@ function CollectionForm({
                 step="0.01"
                 placeholder="0.00"
                 value={cashAmount}
-                onChange={(e) => setCashAmount(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const cashVal = toPreciseNumber(value);
+                  if (cashVal > totalRepaidNum) {
+                    toast({
+                      title: "Invalid Amount",
+                      description: "Cash amount cannot exceed total repaid",
+                      variant: "destructive"
+                    });
+                    return;
+                  }
+                  setCashAmount(value);
+                }}
+                disabled={!totalRepaid || totalRepaidNum <= 0}
                 className="text-base sm:text-lg p-3 border-2 border-success/30 focus:border-success bg-success/5"
               />
               {cashAmountNum > 0 && (
@@ -504,59 +540,36 @@ function CollectionForm({
                 </div>
               )}
             </div>
-            
-            {/* Enhanced M-Pesa Field */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/20">
-                <Smartphone className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
-                <div className="min-w-0">
-                  <Label htmlFor="mpesa-amount" className="text-sm sm:text-base font-semibold text-primary">
-                    📱 M-PESA Amount (KES)
-                  </Label>
-                  <p className="text-xs text-primary/80">Mobile money received</p>
-                </div>
-              </div>
-              <Input
-                id="mpesa-amount"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={mpesaAmount}
-                onChange={(e) => setMpesaAmount(e.target.value)}
-                className="text-base sm:text-lg p-3 border-2 border-primary/30 focus:border-primary bg-primary/5"
-              />
-              {mpesaAmountNum > 0 && (
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-primary bg-primary/10 p-2 rounded">
-                  <span>📱 M-Pesa transaction recorded</span>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Enhanced Total Summary */}
-          <div className="p-3 sm:p-4 bg-primary/10 rounded-lg border border-primary/20">
-            <div className="flex justify-between items-center">
-              <span className="font-medium text-sm sm:text-base">Amount to Allocate:</span>
-              <span className="text-lg sm:text-xl font-bold text-primary">
-                {formatAmount(totalCollected)}
-              </span>
-            </div>
-            {/* Show breakdown if both amounts exist */}
-            {cashAmountNum > 0 && mpesaAmountNum > 0 && (
-              <div className="mt-2 pt-2 border-t border-primary/20 text-xs sm:text-sm text-muted-foreground">
-                <div className="flex justify-between">
-                  <span className="flex items-center gap-1">
+          {totalRepaidNum > 0 && (
+            <div className="p-3 sm:p-4 bg-primary/10 rounded-lg border border-primary/20">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-medium text-sm sm:text-base">Amount to Allocate:</span>
+                <span className="text-lg sm:text-xl font-bold text-primary">
+                  {formatAmount(totalCollected)}
+                </span>
+              </div>
+              {/* Show breakdown */}
+              <div className="pt-2 border-t border-primary/20 text-xs sm:text-sm">
+                <div className="flex justify-between mb-1">
+                  <span className="flex items-center gap-1 text-muted-foreground">
                     <Banknote className="h-3 w-3 text-success" />
-                    Cash: {formatAmount(cashAmountNum)}
+                    Cash:
                   </span>
-                  <span className="flex items-center gap-1">
+                  <span className="font-medium">{formatAmount(cashAmountNum)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-1 text-muted-foreground">
                     <Smartphone className="h-3 w-3 text-primary" />
-                    M-Pesa: {formatAmount(mpesaAmountNum)}
+                    M-Pesa:
                   </span>
+                  <span className="font-medium">{formatAmount(mpesaAmountNum)}</span>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -610,7 +623,14 @@ function CollectionForm({
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="loan-amount" className="text-sm">Pay Loan Installments (KES)</Label>
+              <div className="flex items-center gap-2 mb-1">
+                <Label htmlFor="loan-amount" className="text-sm">Pay Loan Installments (KES)</Label>
+                {currentMember?.inst && currentMember.inst > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    Expected: {formatAmount(currentMember.inst)}
+                  </Badge>
+                )}
+              </div>
               <Input
                 id="loan-amount"
                 type="number"

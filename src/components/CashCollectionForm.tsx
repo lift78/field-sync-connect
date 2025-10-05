@@ -12,7 +12,7 @@ import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
 import { Calculator } from "lucide-react";
 import { Plus, Trash2, Save, User, Phone, Users, Banknote, Smartphone, AlertCircle, DollarSign } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { GroupCollections } from "./GroupCollections";
+import { GroupSummary } from "./GroupSummary";
 // import { Keyboard } from "@capacitor/keyboard";
 
 
@@ -413,7 +413,7 @@ export function CashCollectionForm() {
                 size="sm"
                 className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white"
               >
-                Group Collections
+                Group Summary
               </Button>
             </DialogTrigger>
           </CardHeader>
@@ -511,9 +511,8 @@ export function CashCollectionForm() {
           )}
         </CardContent>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto p-0">
-          <GroupCollections 
-            realMembers={realMembers}
-            onSuccess={() => setShowFinesDialog(false)}
+          <GroupSummary 
+            onBack={() => setShowFinesDialog(false)}
           />
         </DialogContent>
         </Dialog>

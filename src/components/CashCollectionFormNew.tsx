@@ -42,14 +42,15 @@ const toPreciseNumber = (value: string | number): number => {
 
 export function CashCollectionForm() {
   const [selectedMember, setSelectedMember] = useState<MemberBalance | null>(null);
+  const [totalRepaid, setTotalRepaid] = useState('');
   const [cashAmount, setCashAmount] = useState('');
-  const [mpesaAmount, setMpesaAmount] = useState('');
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const { toast } = useToast();
 
+  const totalRepaidNum = toPreciseNumber(totalRepaid);
   const cashAmountNum = toPreciseNumber(cashAmount);
-  const mpesaAmountNum = toPreciseNumber(mpesaAmount);
-  const totalCollected = toPreciseNumber(cashAmountNum + mpesaAmountNum);
+  const mpesaAmountNum = toPreciseNumber(totalRepaidNum - cashAmountNum);
+  const totalCollected = totalRepaidNum;
   const totalAllocated = toPreciseNumber(
     allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
   );
@@ -136,8 +137,8 @@ export function CashCollectionForm() {
       
       // Reset form
       setSelectedMember(null);
+      setTotalRepaid('');
       setCashAmount('');
-      setMpesaAmount('');
       setAllocations([]);
     } catch (error) {
       toast({
@@ -198,6 +199,21 @@ export function CashCollectionForm() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label htmlFor="total-repaid">Total Repaid (KES)</Label>
+              <Input
+                id="total-repaid"
+                type="number"
+                step="0.01"
+                placeholder="0"
+                value={totalRepaid}
+                onChange={(e) => setTotalRepaid(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                💰 Total amount member paid
+              </p>
+            </div>
+            
+            <div className="space-y-2">
               <Label htmlFor="cash-amount">Cash Amount (KES)</Label>
               <Input
                 id="cash-amount"
@@ -205,7 +221,20 @@ export function CashCollectionForm() {
                 step="0.01"
                 placeholder="0"
                 value={cashAmount}
-                onChange={(e) => setCashAmount(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const cashVal = toPreciseNumber(value);
+                  if (cashVal > totalRepaidNum) {
+                    toast({
+                      title: "Invalid Amount",
+                      description: "Cash amount cannot exceed total repaid",
+                      variant: "destructive"
+                    });
+                    return;
+                  }
+                  setCashAmount(value);
+                }}
+                disabled={!totalRepaid || totalRepaidNum <= 0}
               />
               {cashAmountNum > 0 && (
                 <p className="text-xs text-muted-foreground">
@@ -213,28 +242,28 @@ export function CashCollectionForm() {
                 </p>
               )}
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="mpesa-amount">M-Pesa Amount (KES)</Label>
-              <Input
-                id="mpesa-amount"
-                type="number"
-                step="0.01"
-                placeholder="0"
-                value={mpesaAmount}
-                onChange={(e) => setMpesaAmount(e.target.value)}
-              />
-            </div>
           </div>
 
-          <div className="p-4 bg-primary/10 rounded-lg">
-            <div className="flex justify-between items-center">
-              <span className="font-medium">Amount to Allocate:</span>
-              <span className="text-xl font-bold text-primary">
-                {formatAmount(totalCollected)}
-              </span>
+          {totalRepaidNum > 0 && (
+            <div className="p-4 bg-primary/10 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-medium">Amount to Allocate:</span>
+                <span className="text-xl font-bold text-primary">
+                  {formatAmount(totalCollected)}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-primary/20 text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cash:</span>
+                  <span className="font-medium">{formatAmount(cashAmountNum)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">M-Pesa:</span>
+                  <span className="font-medium">{formatAmount(mpesaAmountNum)}</span>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -270,7 +299,14 @@ export function CashCollectionForm() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="loan-amount">Pay Loan Installments (KES)</Label>
+              <div className="flex items-center gap-2 mb-1">
+                <Label htmlFor="loan-amount">Pay Loan Installments (KES)</Label>
+                {selectedMember?.inst && selectedMember.inst > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    Expected: {formatAmount(selectedMember.inst)}
+                  </Badge>
+                )}
+              </div>
               <Input
                 id="loan-amount"
                 type="number"
