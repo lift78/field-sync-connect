@@ -654,9 +654,9 @@ export function CashCollectionForm() {
             
             <div className="space-y-2">
               <div className="flex items-center gap-2 mb-1">
-                <Label htmlFor="loan-amount">Pay Loan Installments (KES)</Label>
+                <Label htmlFor="loan-amount">Pay Loan (KES)</Label>
                 <Badge variant="outline" className="text-xs">
-                  Expected: {formatAmount(selectedRealMember?.inst || 0)}
+                  Minimum: {formatAmount(selectedRealMember?.inst || 0)}
                 </Badge>
               </div>
               <Input

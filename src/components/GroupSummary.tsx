@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Users, Banknote, AlertTriangle, ArrowLeft, TrendingUp, Coins } from "lucide-react";
+import { Users, Banknote, AlertTriangle, ArrowLeft, TrendingUp, Coins, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { dbOperations } from "@/lib/database";
 import { useEffect } from "react";
+import { GroupMemberRecords } from "./GroupMemberRecords";
 
 interface GroupSummaryData {
   groupId: string;
@@ -17,14 +18,16 @@ interface GroupSummaryData {
   totalAdvances: number;
   totalLoans: number;
   totalFines: number;
+  netCashRemitted: number;
 }
 
-export function GroupSummary({ onBack }: { onBack?: () => void }) {
+export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; onEditRecord?: (record: any) => void }) {
   const [groupsSummary, setGroupsSummary] = useState<GroupSummaryData[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<GroupSummaryData | null>(null);
   const [finesAmount, setFinesAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFinesInput, setShowFinesInput] = useState(false);
+  const [showMemberRecords, setShowMemberRecords] = useState(false);
   const { toast } = useToast();
 
   const loadGroupsSummary = async () => {
@@ -66,7 +69,8 @@ export function GroupSummary({ onBack }: { onBack?: () => void }) {
             totalMpesa: 0,
             totalAdvances: 0,
             totalLoans: 0,
-            totalFines: 0
+            totalFines: 0,
+            netCashRemitted: 0
           });
         }
         
@@ -88,7 +92,8 @@ export function GroupSummary({ onBack }: { onBack?: () => void }) {
             totalMpesa: 0,
             totalAdvances: 0,
             totalLoans: 0,
-            totalFines: 0
+            totalFines: 0,
+            netCashRemitted: 0
           });
         }
         
@@ -112,7 +117,8 @@ export function GroupSummary({ onBack }: { onBack?: () => void }) {
             totalMpesa: 0,
             totalAdvances: 0,
             totalLoans: 0,
-            totalFines: 0
+            totalFines: 0,
+            netCashRemitted: 0
           });
         }
         
@@ -130,12 +136,18 @@ export function GroupSummary({ onBack }: { onBack?: () => void }) {
             totalMpesa: 0,
             totalAdvances: 0,
             totalLoans: 0,
-            totalFines: 0
+            totalFines: 0,
+            netCashRemitted: 0
           });
         }
         
         const group = groupsMap.get(collection.groupId)!;
         group.totalFines += collection.finesCollected || 0;
+      });
+      
+      // Calculate net cash remitted for each group
+      groupsMap.forEach(group => {
+        group.netCashRemitted = (group.totalCash + group.totalFines) - group.totalAdvances;
       });
       
       setGroupsSummary(Array.from(groupsMap.values()));
@@ -198,6 +210,11 @@ export function GroupSummary({ onBack }: { onBack?: () => void }) {
     }
   };
 
+  const handleViewRecords = (group: GroupSummaryData) => {
+    setSelectedGroup(group);
+    setShowMemberRecords(true);
+  };
+
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
@@ -205,6 +222,20 @@ export function GroupSummary({ onBack }: { onBack?: () => void }) {
       minimumFractionDigits: 0,
     }).format(amount);
   };
+
+  // Show member records view
+  if (selectedGroup && showMemberRecords) {
+    return (
+      <GroupMemberRecords
+        groupId={selectedGroup.groupId}
+        groupName={selectedGroup.groupName}
+        onBack={() => {
+          setShowMemberRecords(false);
+          setSelectedGroup(null);
+        }}
+      />
+    );
+  }
 
   if (selectedGroup && showFinesInput) {
     return (
@@ -264,15 +295,19 @@ export function GroupSummary({ onBack }: { onBack?: () => void }) {
   return (
     <div className="space-y-6 p-1">
       {/* Header */}
-      <div className="text-center space-y-2">
-        <div className="flex items-center justify-center gap-2">
-          <Users className="h-6 w-6 text-primary" />
-          <h2 className="text-xl font-semibold">Group Summary</h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Summary of unsynced data by group
-        </p>
-      </div>
+      <Card className="shadow-sm bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-primary/20">
+        <CardContent className="py-4">
+          <div className="text-center space-y-1">
+            <div className="flex items-center justify-center gap-2">
+              <Users className="h-6 w-6 text-primary" />
+              <h2 className="text-xl font-bold tracking-tight">Group Summary</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Summary of unsynced data by group
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {groupsSummary.length === 0 ? (
         <Card className="shadow-sm">
@@ -306,7 +341,7 @@ export function GroupSummary({ onBack }: { onBack?: () => void }) {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-3 bg-success/10 rounded-lg border border-success/20">
                     <div className="flex items-center gap-2 mb-1">
@@ -349,6 +384,26 @@ export function GroupSummary({ onBack }: { onBack?: () => void }) {
                       <p className="font-semibold text-orange-500">{formatAmount(group.totalFines)}</p>
                     </div>
                   )}
+                  
+                  <div className="col-span-2 p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Banknote className="h-4 w-4 text-green-600" />
+                      <span className="text-xs text-muted-foreground">Net Cash Remitted</span>
+                    </div>
+                    <p className="font-semibold text-green-600">{formatAmount(group.netCashRemitted)}</p>
+                  </div>
+                </div>
+                
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewRecords(group)}
+                    className="flex items-center gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    View Records
+                  </Button>
                 </div>
               </CardContent>
             </Card>
