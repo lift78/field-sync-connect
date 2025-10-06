@@ -301,7 +301,7 @@ export function CashCollectionForm() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 mb-1">
                 <Label htmlFor="loan-amount">Pay Loan Installments (KES)</Label>
-                <Badge variant="destructive" className="text-xs">
+                <Badge variant="destructive" className="text-xs font-bold animate-pulse shadow-lg border-2 border-red-600">
                   Min: {formatAmount(selectedMember?.inst || 0)}
                 </Badge>
               </div>

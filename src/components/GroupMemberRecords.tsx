@@ -155,6 +155,8 @@ export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember, o
           data: firstRecord
         };
         onEditRecord(record, 'cash');
+        // Navigate back to allow the parent to show the edit view
+        onBack();
       }
     } else {
       toast({
