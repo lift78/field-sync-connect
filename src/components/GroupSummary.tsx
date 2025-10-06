@@ -233,6 +233,7 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
           setShowMemberRecords(false);
           setSelectedGroup(null);
         }}
+        onEditRecord={onEditRecord}
       />
     );
   }

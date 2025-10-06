@@ -62,7 +62,7 @@ export function MemberSearch({ onMemberSelect, selectedMember, placeholder = "Se
 
   const handleMemberSelect = (member: MemberBalance) => {
     onMemberSelect(member);
-    setQuery(`${member.name} (${member.member_id})`);
+    setQuery(`${member.name} - ${member.group_name}`);
     setShowSuggestions(false);
   };
 

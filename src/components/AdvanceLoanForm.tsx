@@ -65,6 +65,7 @@ export function AdvanceLoanForm() {
       id: string;
       name: string;
       isReal: boolean;
+      groupName?: string;
     }> = [];
 
     // First, search in real member data
@@ -85,7 +86,8 @@ export function AdvanceLoanForm() {
         results.push({
           id: memberId,
           name: member.name,
-          isReal: true
+          isReal: true,
+          groupName: member.group_name
         });
       });
     }
@@ -182,7 +184,7 @@ export function AdvanceLoanForm() {
     setApplications(applications.filter(app => app.id !== id));
   };
 
-  const handleMemberSelect = (member: { id: string; name: string; isReal: boolean }) => {
+  const handleMemberSelect = (member: { id: string; name: string; isReal: boolean; groupName?: string }) => {
     setSelectedMemberId(member.id);
     setSelectedMemberName(member.name);
     setMemberQuery('');
@@ -267,6 +269,9 @@ export function AdvanceLoanForm() {
                           </Badge>
                         )}
                       </div>
+                      {member.isReal && (member as any).groupName && (
+                        <span className="text-xs text-muted-foreground">{(member as any).groupName}</span>
+                      )}
                     </div>
                   </Button>
                 ))}

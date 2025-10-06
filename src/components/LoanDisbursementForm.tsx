@@ -7,6 +7,7 @@ import { CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { dbOperations, Loan } from "@/lib/database";
 import { LoanPreview } from "./LoanPreview";
+import { MemberSearch } from "./MemberSearch";
 
 export function LoanDisbursementForm() {
   const { toast } = useToast();

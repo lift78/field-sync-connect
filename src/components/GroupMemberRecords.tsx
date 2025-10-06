@@ -25,9 +25,10 @@ interface GroupMemberRecordsProps {
   groupName: string;
   onBack: () => void;
   onEditMember?: (memberId: string, records: CashCollection[]) => void;
+  onEditRecord?: (record: any, type: 'cash') => void;
 }
 
-export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember }: GroupMemberRecordsProps) {
+export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember, onEditRecord }: GroupMemberRecordsProps) {
   const [memberRecords, setMemberRecords] = useState<MemberRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -93,7 +94,7 @@ export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember }:
         if (collection.allocations && Array.isArray(collection.allocations)) {
           collection.allocations.forEach(allocation => {
             const amount = allocation.amount || 0;
-            const allocationType = allocation.type;
+            const allocationType = allocation.type as string;
             
             if (allocationType === 'savings') {
               memberRecord.allocations.savings += amount;
@@ -138,12 +139,23 @@ export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember }:
     }).format(amount);
   };
 
-  const handleEditMember = async (memberId: string) => {
-    if (onEditMember) {
-      // Get all cash collections for this member
+  const handleEditMember = async (memberId: string, recordIds: number[]) => {
+    if (onEditRecord && recordIds.length > 0) {
+      // Get the first record for this member to edit
       const allCollections = await dbOperations.getUnsyncedCashCollections();
-      const memberCollections = allCollections.filter(c => c.memberId === memberId);
-      onEditMember(memberId, memberCollections);
+      const firstRecord = allCollections.find(c => recordIds.includes(c.id!));
+      
+      if (firstRecord) {
+        const record = {
+          id: firstRecord.id!.toString(),
+          memberId: firstRecord.memberId,
+          amount: firstRecord.totalAmount,
+          status: 'pending' as const,
+          lastUpdated: firstRecord.timestamp.toISOString(),
+          data: firstRecord
+        };
+        onEditRecord(record, 'cash');
+      }
     } else {
       toast({
         title: "Edit Member",
@@ -297,7 +309,7 @@ export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember }:
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={() => handleEditMember(member.memberId)}
+                    onClick={() => handleEditMember(member.memberId, member.recordIds)}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6"
                   >
                     <Edit className="h-4 w-4 mr-2" />

@@ -625,8 +625,8 @@ function CollectionForm({
             <div className="space-y-2">
               <div className="flex items-center gap-2 mb-1">
                 <Label htmlFor="loan-amount" className="text-sm">Pay Loan(KES)</Label>
-                <Badge variant="outline" className="text-xs">
-                  Minimum: {formatAmount(currentMember?.inst || 0)}
+                <Badge variant="destructive" className="text-xs">
+                  Min: {formatAmount(currentMember?.inst || 0)}
                 </Badge>
               </div>
               <Input
