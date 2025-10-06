@@ -28,6 +28,7 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFinesInput, setShowFinesInput] = useState(false);
   const [showMemberRecords, setShowMemberRecords] = useState(false);
+  const [groupsWithExistingRecords, setGroupsWithExistingRecords] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const loadGroupsSummary = async () => {
@@ -37,6 +38,13 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
       const advanceLoans = await dbOperations.getUnsyncedAdvanceLoans();
       const loanDisbursements = await dbOperations.getUnsyncedLoanDisbursements();
       const groupCollections = await dbOperations.getUnsyncedGroupCollections();
+      
+      // Track which groups already have existing records
+      const existingRecordsSet = new Set<string>();
+      groupCollections.forEach(collection => {
+        existingRecordsSet.add(collection.groupId);
+      });
+      setGroupsWithExistingRecords(existingRecordsSet);
       
       // Get member balances to map members to groups
       const members = await dbOperations.getAllMembers();
@@ -335,10 +343,11 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
                       setSelectedGroup(group);
                       setShowFinesInput(true);
                     }}
+                    disabled={groupsWithExistingRecords.has(group.groupId)}
                     className="flex items-center gap-1"
                   >
                     <AlertTriangle className="h-3 w-3" />
-                    Add Fines
+                    {groupsWithExistingRecords.has(group.groupId) ? 'Record Exists' : 'Add Fines'}
                   </Button>
                 </div>
               </CardHeader>
