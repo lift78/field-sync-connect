@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Edit, User, Banknote, CreditCard, TrendingUp, Coins, DollarSign, Loader2 } from "lucide-react";
+import { ArrowLeft, Edit, User, Banknote, CreditCard, TrendingUp, Coins, DollarSign, Loader2, AlertTriangle } from "lucide-react";
 import { dbOperations, CashCollection } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,6 +20,13 @@ interface MemberRecord {
   recordIds: number[];
 }
 
+interface GroupCollectionRecord {
+  groupName: string;
+  finesCollected: number;
+  cashFromOffice: number;
+  recordId?: number;
+}
+
 interface GroupMemberRecordsProps {
   groupId: string;
   groupName: string;
@@ -30,6 +37,7 @@ interface GroupMemberRecordsProps {
 
 export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember, onEditRecord }: GroupMemberRecordsProps) {
   const [memberRecords, setMemberRecords] = useState<MemberRecord[]>([]);
+  const [groupCollection, setGroupCollection] = useState<GroupCollectionRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -43,6 +51,19 @@ export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember, o
       
       // Get all unsynced cash collections
       const cashCollections = await dbOperations.getUnsyncedCashCollections();
+      
+      // Get group collections for this group
+      const groupCollections = await dbOperations.getUnsyncedGroupCollections();
+      const thisGroupCollection = groupCollections.find(gc => gc.groupId === groupId);
+      
+      if (thisGroupCollection) {
+        setGroupCollection({
+          groupName: thisGroupCollection.groupName,
+          finesCollected: thisGroupCollection.finesCollected || 0,
+          cashFromOffice: thisGroupCollection.cashFromOffice || 0,
+          recordId: thisGroupCollection.id
+        });
+      }
       
       // Get all members to map member IDs to group IDs
       const members = await dbOperations.getAllMembers();
@@ -155,8 +176,6 @@ export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember, o
           data: firstRecord
         };
         onEditRecord(record, 'cash');
-        // Navigate back to allow the parent to show the edit view
-        onBack();
       }
     } else {
       toast({
@@ -217,6 +236,7 @@ export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember, o
         </Card>
       ) : (
         <div className="space-y-4">
+          {/* Member Records */}
           {memberRecords.map((member) => (
             <Card key={member.memberId} className="shadow-md hover:shadow-lg transition-shadow border-l-4 border-l-primary bg-card">
               <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-transparent border-b border-border">
@@ -321,6 +341,60 @@ export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember, o
               </CardContent>
             </Card>
           ))}
+          
+          {/* Group Collection Record (Fines) */}
+          {groupCollection && (groupCollection.finesCollected > 0 || groupCollection.cashFromOffice > 0) && (
+            <Card className="shadow-md hover:shadow-lg transition-shadow border-l-4 border-l-amber-500 bg-amber-500/5">
+              <CardHeader className="pb-3 bg-gradient-to-r from-amber-500/10 to-transparent border-b border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-10 h-10 bg-amber-500/10 rounded-full border border-amber-500/20">
+                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base font-semibold text-amber-900">Group Collection</CardTitle>
+                      <p className="text-xs text-muted-foreground">{groupName}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Total Amount</p>
+                    <p className="text-lg font-bold text-amber-600">
+                      {formatAmount((groupCollection.finesCollected || 0) + (groupCollection.cashFromOffice || 0))}
+                    </p>
+                  </div>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="space-y-4 pt-4">
+                {/* Breakdown */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Breakdown</p>
+                  
+                  <div className="space-y-2">
+                    {groupCollection.finesCollected > 0 && (
+                      <div className="flex items-center justify-between p-2 bg-orange-500/10 rounded border border-orange-500/30">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-orange-500" />
+                          <span className="text-sm font-medium">Fines & Penalties</span>
+                        </div>
+                        <span className="text-sm font-semibold text-orange-500">{formatAmount(groupCollection.finesCollected)}</span>
+                      </div>
+                    )}
+                    
+                    {groupCollection.cashFromOffice > 0 && (
+                      <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded border border-blue-500/30">
+                        <div className="flex items-center gap-2">
+                          <Banknote className="h-4 w-4 text-blue-500" />
+                          <span className="text-sm font-medium">Cash from Office</span>
+                        </div>
+                        <span className="text-sm font-semibold text-blue-500">{formatAmount(groupCollection.cashFromOffice)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>

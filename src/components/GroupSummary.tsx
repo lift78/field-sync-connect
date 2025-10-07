@@ -18,15 +18,19 @@ interface GroupSummaryData {
   totalAdvances: number;
   totalLoans: number;
   totalFines: number;
+  cashFromOffice: number;
   netCashRemitted: number;
+  groupCollectionId?: number; // ID of the group collection record for updates
 }
 
 export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; onEditRecord?: (record: any) => void }) {
   const [groupsSummary, setGroupsSummary] = useState<GroupSummaryData[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<GroupSummaryData | null>(null);
   const [finesAmount, setFinesAmount] = useState('');
+  const [cashFromOfficeAmount, setCashFromOfficeAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFinesInput, setShowFinesInput] = useState(false);
+  const [showCashFromOfficeInput, setShowCashFromOfficeInput] = useState(false);
   const [showMemberRecords, setShowMemberRecords] = useState(false);
   const [groupsWithExistingRecords, setGroupsWithExistingRecords] = useState<Set<string>>(new Set());
   const { toast } = useToast();
@@ -78,6 +82,7 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
             totalAdvances: 0,
             totalLoans: 0,
             totalFines: 0,
+            cashFromOffice: 0,
             netCashRemitted: 0
           });
         }
@@ -101,6 +106,7 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
             totalAdvances: 0,
             totalLoans: 0,
             totalFines: 0,
+            cashFromOffice: 0,
             netCashRemitted: 0
           });
         }
@@ -126,6 +132,7 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
             totalAdvances: 0,
             totalLoans: 0,
             totalFines: 0,
+            cashFromOffice: 0,
             netCashRemitted: 0
           });
         }
@@ -134,7 +141,7 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         group.totalLoans += loan.principalAmount || 0;
       });
       
-      // Process group collections (fines)
+      // Process group collections (fines and cash from office)
       groupCollections.forEach(collection => {
         if (!groupsMap.has(collection.groupId)) {
           groupsMap.set(collection.groupId, {
@@ -145,17 +152,21 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
             totalAdvances: 0,
             totalLoans: 0,
             totalFines: 0,
-            netCashRemitted: 0
+            cashFromOffice: 0,
+            netCashRemitted: 0,
+            groupCollectionId: collection.id
           });
         }
         
         const group = groupsMap.get(collection.groupId)!;
         group.totalFines += collection.finesCollected || 0;
+        group.cashFromOffice += collection.cashFromOffice || 0;
+        group.groupCollectionId = collection.id;
       });
       
       // Calculate net cash remitted for each group
       groupsMap.forEach(group => {
-        group.netCashRemitted = (group.totalCash + group.totalFines) - group.totalAdvances;
+        group.netCashRemitted = (group.totalCash + group.totalFines + group.cashFromOffice) - group.totalAdvances;
       });
       
       setGroupsSummary(Array.from(groupsMap.values()));
@@ -223,6 +234,95 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
     setShowMemberRecords(true);
   };
 
+  const handleAddCashFromOffice = async () => {
+    if (!selectedGroup) return;
+    
+    const cashAmount = parseFloat(cashFromOfficeAmount) || 0;
+    
+    if (cashAmount <= 0) {
+      toast({
+        title: "Amount Required",
+        description: "Please enter a valid cash amount",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      if (selectedGroup.groupCollectionId) {
+        // Update existing record
+        const existingRecord = await dbOperations.getUnsyncedGroupCollections();
+        const record = existingRecord.find(r => r.id === selectedGroup.groupCollectionId);
+        
+        if (record) {
+          await dbOperations.updateGroupCollection(selectedGroup.groupCollectionId.toString(), {
+            ...record,
+            cashFromOffice: (record.cashFromOffice || 0) + cashAmount
+          });
+        }
+      } else {
+        // Create new record
+        await dbOperations.addGroupCollection({
+          groupId: selectedGroup.groupId,
+          groupName: selectedGroup.groupName,
+          cashCollected: 0,
+          finesCollected: 0,
+          cashFromOffice: cashAmount,
+          timestamp: new Date()
+        });
+      }
+      
+      toast({
+        title: "Cash Added",
+        description: `Cash from office of KES ${cashAmount.toFixed(2)} added for ${selectedGroup.groupName}`,
+      });
+      
+      setCashFromOfficeAmount('');
+      setShowCashFromOfficeInput(false);
+      setSelectedGroup(null);
+      loadGroupsSummary();
+    } catch (error) {
+      toast({
+        title: "Save Failed",
+        description: "Failed to save cash from office",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRemoveCashFromOffice = async (group: GroupSummaryData) => {
+    if (!group.groupCollectionId) return;
+    
+    try {
+      const existingRecords = await dbOperations.getUnsyncedGroupCollections();
+      const record = existingRecords.find(r => r.id === group.groupCollectionId);
+      
+      if (record) {
+        await dbOperations.updateGroupCollection(group.groupCollectionId.toString(), {
+          ...record,
+          cashFromOffice: 0
+        });
+        
+        toast({
+          title: "Cash Removed",
+          description: "Cash from office has been removed",
+        });
+        
+        loadGroupsSummary();
+      }
+    } catch (error) {
+      toast({
+        title: "Remove Failed",
+        description: "Failed to remove cash from office",
+        variant: "destructive"
+      });
+    }
+  };
+
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
@@ -243,6 +343,65 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         }}
         onEditRecord={onEditRecord}
       />
+    );
+  }
+
+  // Show cash from office input view
+  if (selectedGroup && showCashFromOfficeInput) {
+    return (
+      <div className="space-y-6 p-1">
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => {
+              setShowCashFromOfficeInput(false);
+              setSelectedGroup(null);
+              setCashFromOfficeAmount('');
+            }}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+        </div>
+
+        <Card className="shadow-sm border-l-4 border-l-blue-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Banknote className="h-5 w-5 text-blue-600" />
+              Add Cash from Office
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {selectedGroup.groupName}
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="cash-from-office-amount">Cash Amount from Office (KES)</Label>
+              <Input
+                id="cash-from-office-amount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={cashFromOfficeAmount}
+                onChange={(e) => setCashFromOfficeAmount(e.target.value)}
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                This cash will be added to the net cash remitted calculation
+              </p>
+            </div>
+            
+            <Button 
+              onClick={handleAddCashFromOffice}
+              disabled={isSubmitting || !cashFromOfficeAmount || parseFloat(cashFromOfficeAmount) <= 0}
+              className="w-full"
+            >
+              {isSubmitting ? 'Saving...' : 'Add Cash'}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -336,20 +495,56 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
                     <CardTitle className="text-lg">{group.groupName}</CardTitle>
                     <p className="text-xs text-muted-foreground">ID: {group.groupId}</p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedGroup(group);
-                      setShowFinesInput(true);
-                    }}
-                    disabled={groupsWithExistingRecords.has(group.groupId)}
-                    className="flex items-center gap-1"
-                  >
-                    <AlertTriangle className="h-3 w-3" />
-                    {groupsWithExistingRecords.has(group.groupId) ? 'Record Exists' : 'Add Fines'}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedGroup(group);
+                        setShowCashFromOfficeInput(true);
+                      }}
+                      className="flex items-center gap-1"
+                    >
+                      <Banknote className="h-3 w-3" />
+                      + Cash
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedGroup(group);
+                        setShowFinesInput(true);
+                      }}
+                      disabled={groupsWithExistingRecords.has(group.groupId)}
+                      className="flex items-center gap-1"
+                    >
+                      <AlertTriangle className="h-3 w-3" />
+                      {groupsWithExistingRecords.has(group.groupId) ? 'Record Exists' : 'Add Fines'}
+                    </Button>
+                  </div>
                 </div>
+                
+                {/* Cash from Office Badge */}
+                {group.cashFromOffice > 0 && (
+                  <div className="mt-3">
+                    <Badge 
+                      variant="secondary" 
+                      className="bg-blue-500/10 text-blue-600 border border-blue-500/30 hover:bg-blue-500/20"
+                    >
+                      <Banknote className="h-3 w-3 mr-1" />
+                      Cash from Office: {formatAmount(group.cashFromOffice)}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveCashFromOffice(group);
+                        }}
+                        className="ml-2 hover:text-destructive"
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">

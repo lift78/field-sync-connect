@@ -126,6 +126,7 @@ export interface GroupCollection {
   groupName: string;
   cashCollected: number;
   finesCollected: number;
+  cashFromOffice?: number; // Cash received from office for this group
   timestamp: Date;
   synced: boolean;
   syncStatus?: 'pending' | 'failed' | 'synced';
@@ -145,14 +146,14 @@ export class FieldOfficerDB extends Dexie {
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(9).stores({
+    this.version(10).stores({
       // Enhanced indexing for better search performance
       cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp',
       loans: '++id, loan_id, database_id, [member.member_id], [group.id], status, applicationDate',
       loanDisbursements: '++id, loan_id, database_id, timestamp',
       advanceLoans: '++id, memberId, memberName, amount, timestamp',
-      groupCollections: '++id, groupId, groupName, cashCollected, finesCollected, timestamp',
+      groupCollections: '++id, groupId, groupName, cashCollected, finesCollected, cashFromOffice, timestamp',
       userCredentials: '++id, username, lastLogin',
       memberBalances: '++id, member_id, name, phone, group_id, group_name, last_updated'
     });
