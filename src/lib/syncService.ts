@@ -212,152 +212,138 @@ export class SyncService {
     let failed = 0;
     const errors: string[] = [];
     
-    // Helper function to sync a single record
     const syncSingleRecord = async (record: CashCollection) => {
       try {
-        let cashSyncSuccess = true;
-        let cashResult = null;
+        // NEW: Prepare payload with both cash and mpesa portions
+        const cashPayload = {
+          member_id: record.memberId,
+          officer_name: 'Offline Officer',
+          cash_amount: record.cashAmount,        // Cash portion
+          mpesa_amount: record.mpesaAmount,      // M-Pesa portion (NEW)
+          total_amount: record.totalAmount,      // Total amount
+          cash_reference: record.cashReference,  // Reference for cash transaction
+          allocation_id: record.allocationId,    // Allocation ID
+          remarks: 'Synced from offline app',
+          timestamp:
+            record.timestamp instanceof Date
+              ? record.timestamp.toISOString()
+              : new Date(record.timestamp).toISOString(),
+        };
   
-        // Only create cash transaction if amount > 0
-        if (record.cashAmount && record.cashAmount > 0) {
-          const cashPayload = {
-            member_id: record.memberId,
-            officer_name: 'Offline Officer',
-            amount: record.cashAmount,
-            remarks: 'Synced from offline app',
-            timestamp:
-              record.timestamp instanceof Date
-                ? record.timestamp.toISOString()
-                : new Date(record.timestamp).toISOString(),
-            transaction_id: record.cashReference, // include this if your API accepts it
-          };
+        console.log("📤 Syncing cash collection:", cashPayload);
   
-          console.log("📤 Syncing cash:", cashPayload);
+        const response = await this.authenticatedFetch(this.endpoints.cashCollections, {
+          method: 'POST',
+          body: JSON.stringify(cashPayload),
+        });
   
-          const response = await this.authenticatedFetch(this.endpoints.cashCollections, {
-            method: 'POST',
-            body: JSON.stringify(cashPayload),
-          });
+        const result = await response.json();
   
-          cashResult = await response.json();
+        if (response.ok && result.success) {
+          console.log(`✅ Cash collection ${record.id} synced successfully`);
+          
+          // Process allocations if they exist
+          if (record.allocations && record.allocations.length > 0) {
+            const allocationPayload: any = {
+              savings: 0,
+              loan_repayment: 0,
+              registration_fee: 0,
+              amount_for_advance_payment: 0,
+              other: 0,
+              other_description: '',
+              confirmed: true,
+              timestamp:
+                record.timestamp instanceof Date
+                  ? record.timestamp.toISOString()
+                  : new Date(record.timestamp).toISOString(),
+              allocation_id: record.allocationId,
+              other_items: [],
+            };
   
-          if (response.ok && cashResult.success) {
-            cashSyncSuccess = true;
-          } else {
-            // Check if this is a duplicate transaction ID error
-            const isDuplicateError = cashResult.error && (
-              cashResult.error.includes('UNIQUE constraint failed') ||
-              cashResult.error.includes('transaction_id') ||
-              cashResult.error.toLowerCase().includes('duplicate')
-            );
+            for (const alloc of record.allocations) {
+              switch (alloc.type) {
+                case 'savings':
+                  allocationPayload.savings += alloc.amount;
+                  break;
+                case 'loan':
+                  allocationPayload.loan_repayment += alloc.amount;
+                  break;
+                case 'amount_for_advance_payment':
+                  allocationPayload.amount_for_advance_payment += alloc.amount;
+                  break;
+                case 'other':
+                  allocationPayload.other += alloc.amount;
+                  allocationPayload.other_description = alloc.reason || '';
+                  break;
+              }
+            }
   
-            if (isDuplicateError) {
-              console.log(`⚠️ Cash record ${record.id} already exists on server, continuing with allocations`);
-              cashSyncSuccess = true;
+            console.log("📋 Syncing allocations:", allocationPayload);
+  
+            const allocationEndpoint = this.endpoints.allocations.replace('{memberId}', record.memberId);
+  
+            const allocRes = await this.authenticatedFetch(allocationEndpoint, {
+              method: 'POST',
+              body: JSON.stringify(allocationPayload),
+            });
+  
+            const allocJson = await allocRes.json();
+            if (!allocRes.ok || !allocJson.success) {
+              console.warn(`⚠️ Allocation sync failed for ${record.id}`, allocJson);
+              const errorMsg = `${allocJson.error || 'Unknown error'}`;
+              throw new Error(`Allocation failed for ${record.id}: ${errorMsg}`);
             } else {
-              console.error(`❌ Cash sync failed for ${record.id}:`, cashResult.error);
-              cashSyncSuccess = false;
-            }
-          }
-        } else {
-          console.log(`⏭️ Skipping zero amount cash transaction for record ${record.id}, processing allocations only`);
-          cashSyncSuccess = true; // No cash to sync, but we can still process allocations
-        }
-  
-        // ✅ Process allocations if cash sync was successful (or skipped) AND allocations exist
-        if (cashSyncSuccess && record.allocations && record.allocations.length > 0) {
-          const allocationPayload: any = {
-            savings: 0,
-            loan_repayment: 0,
-            registration_fee: 0,
-            amount_for_advance_payment: 0,
-            other: 0,
-            other_description: '',
-            confirmed: true,
-            timestamp:
-              record.timestamp instanceof Date
-                ? record.timestamp.toISOString()
-                : new Date(record.timestamp).toISOString(),
-            allocation_id: record.allocationId,
-            other_items: [],
-          };
-  
-          // Build allocation payload from individual allocations
-          for (const alloc of record.allocations) {
-            switch (alloc.type) {
-              case 'savings':
-                allocationPayload.savings += alloc.amount;
-                break;
-              case 'loan':
-                allocationPayload.loan_repayment += alloc.amount;
-                break;
-              case 'amount_for_advance_payment':
-                allocationPayload.amount_for_advance_payment += alloc.amount;
-                break;
-              case 'other':
-                allocationPayload.other += alloc.amount;
-                allocationPayload.other_description = alloc.reason || '';
-                break;
+              console.log(`✅ Allocations synced successfully for ${record.id}`);
             }
           }
   
-          console.log("📋 Syncing allocations:", allocationPayload);
-  
-          // Use the proper endpoint with base URL
-          const allocationEndpoint = this.endpoints.allocations.replace('{memberId}', record.memberId);
-  
-          const allocRes = await this.authenticatedFetch(allocationEndpoint, {
-            method: 'POST',
-            body: JSON.stringify(allocationPayload),
-          });
-  
-          const allocJson = await allocRes.json();
-          if (!allocRes.ok || !allocJson.success) {
-            console.warn(`⚠️ Allocation sync failed for ${record.id}`, allocJson);
-            const errorMsg = `${allocJson.error || 'Unknown error'}`;
-            throw new Error(`Allocation failed for ${record.id}: ${errorMsg}`);
-          } else {
-            console.log(`✅ Allocations synced successfully for ${record.id}`);
-          }
-        }
-  
-        // Mark as synced if cash sync was successful (or skipped for zero amount)
-        if (cashSyncSuccess) {
           if (record.id) {
             await dbOperations.markCashCollectionSynced(record.id);
           }
           console.log(`✅ Record ${record.id} marked as synced`);
           return { success: true, error: null };
         } else {
-          const errorMsg = `Cash sync failed for ${record.id}: ${cashResult?.error || 'Unknown error'}`;
-          if (record.id) {
-            await dbOperations.markCashCollectionFailed(record.id, cashResult?.error || 'Unknown error');
+          // Check for duplicate errors
+          const isDuplicateError = result.error && (
+            result.error.includes('UNIQUE constraint failed') ||
+            result.error.includes('transaction_id') ||
+            result.error.toLowerCase().includes('duplicate')
+          );
+  
+          if (isDuplicateError) {
+            console.log(`⚠️ Cash record ${record.id} already exists on server`);
+            if (record.id) {
+              await dbOperations.markCashCollectionSynced(record.id);
+            }
+            return { success: true, error: null };
+          } else {
+            const errorMsg = `Cash sync failed for ${record.id}: ${result?.error || 'Unknown error'}`;
+            if (record.id) {
+              await dbOperations.markCashCollectionFailed(record.id, result?.error || 'Unknown error');
+            }
+            return { success: false, error: errorMsg };
           }
-          return { success: false, error: errorMsg };
         }
   
       } catch (error: any) {
         console.error(`💥 Exception during sync for ${record.id}:`, error);
-        // Mark record as failed
         if (record.id) {
           await dbOperations.markCashCollectionFailed(record.id, error.message);
         }
         return { success: false, error: `Exception for ${record.id}: ${error.message}` };
       }
     };
-
+  
     // Process records in batches of 5
     const batchSize = 5;
     for (let i = 0; i < records.length; i += batchSize) {
       const batch = records.slice(i, i + batchSize);
       console.log(`🔄 Processing batch ${Math.floor(i / batchSize) + 1} (${batch.length} records)`);
       
-      // Process batch in parallel using Promise.all
       const batchResults = await Promise.all(
         batch.map(record => syncSingleRecord(record))
       );
       
-      // Aggregate results from this batch
       batchResults.forEach(result => {
         if (result.success) {
           success++;

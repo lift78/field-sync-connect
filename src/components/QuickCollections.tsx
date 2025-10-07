@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -197,25 +197,27 @@ function CollectionForm({
   onBack: () => void;
 }) {
   const [currentMemberIndex, setCurrentMemberIndex] = useState(0);
-  const [totalRepaid, setTotalRepaid] = useState('');
   const [cashAmount, setCashAmount] = useState('');
+  const [mpesaAmount, setMpesaAmount] = useState('');
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  
+  // Ref for member card to scroll to
+  const memberCardRef = useRef<HTMLDivElement>(null);
 
   const currentMember = groupMembers[currentMemberIndex];
 
   const resetForm = () => {
-    setTotalRepaid('');
     setCashAmount('');
+    setMpesaAmount('');
     setAllocations([]);
   };
 
   // Use precise calculations to avoid floating point issues
-  const totalRepaidNum = toPreciseNumber(totalRepaid);
   const cashAmountNum = toPreciseNumber(cashAmount);
-  const mpesaAmountNum = toPreciseNumber(totalRepaidNum - cashAmountNum);
-  const totalCollected = totalRepaidNum;
+  const mpesaAmountNum = toPreciseNumber(mpesaAmount);
+  const totalCollected = toPreciseNumber(cashAmountNum + mpesaAmountNum);
   const totalAllocated = toPreciseNumber(
     allocations.reduce((sum, alloc) => sum + alloc.amount, 0)
   );
@@ -311,6 +313,12 @@ function CollectionForm({
     setAllocations(allocations.filter((_, i) => i !== index));
   };
 
+  const scrollToMemberCard = () => {
+    setTimeout(() => {
+      memberCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
+
   const handleSave = async () => {
     if (!currentMember) return;
     
@@ -378,7 +386,7 @@ function CollectionForm({
       });
       
       toast({
-        title: "Collection Saved",
+        title: "✅ Collection Saved",
         description: `${formatAmount(totalCollected)} saved for ${currentMember.name}${
           cashAmountNum > 0 ? ' (Cash reference generated)' : ''
         }`,
@@ -388,11 +396,10 @@ function CollectionForm({
       if (currentMemberIndex < groupMembers.length - 1) {
         setCurrentMemberIndex(currentMemberIndex + 1);
         resetForm();
-        // Scroll to top for next member
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        scrollToMemberCard();
       } else {
         toast({
-          title: "Group Complete",
+          title: "🎉 Group Complete",
           description: `All collections for ${selectedGroup.name} completed!`,
         });
         onBack();
@@ -400,7 +407,7 @@ function CollectionForm({
     } catch (error) {
       console.error('Error saving collection:', error);
       toast({
-        title: "Error",
+        title: "❌ Error",
         description: "Failed to save collection. Please try again.",
         variant: "destructive"
       });
@@ -413,8 +420,7 @@ function CollectionForm({
     if (currentMemberIndex > 0) {
       setCurrentMemberIndex(currentMemberIndex - 1);
       resetForm();
-      // Scroll to top for previous member
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToMemberCard();
     }
   };
 
@@ -422,8 +428,7 @@ function CollectionForm({
     if (currentMemberIndex < groupMembers.length - 1) {
       setCurrentMemberIndex(currentMemberIndex + 1);
       resetForm();
-      // Scroll to top for skipped member
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToMemberCard();
     }
   };
 
@@ -443,34 +448,36 @@ function CollectionForm({
         </Badge>
       </div>
 
-      {/* Compact Member Info */}
-      <Card className="shadow-card bg-gradient-card mx-1 sm:mx-0">
-        <CardContent className="p-3 sm:p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
-            <div className="flex items-center gap-2 min-w-0">
-              <User className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-muted-foreground">Name</p>
-                <p className="font-medium text-sm sm:text-base truncate">{currentMember.name}</p>
+      {/* Enhanced Member Info Card with Bold Colors */}
+      <div ref={memberCardRef}>
+        <Card className="shadow-lg bg-gradient-to-r from-blue-500 to-purple-600 border-2 border-blue-400 mx-1 sm:mx-0">
+          <CardContent className="p-4 sm:p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="flex items-center gap-2 min-w-0 bg-white/20 backdrop-blur-sm p-3 rounded-lg">
+                <User className="h-4 w-4 sm:h-5 sm:w-5 text-white flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-white/80 font-medium">Member Name</p>
+                  <p className="font-bold text-sm sm:text-base text-white truncate">{currentMember.name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 min-w-0 bg-white/20 backdrop-blur-sm p-3 rounded-lg">
+                <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-white flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-white/80 font-medium">Phone Number</p>
+                  <p className="font-bold text-sm sm:text-base text-white truncate">{currentMember.phone}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 min-w-0 bg-white/20 backdrop-blur-sm p-3 rounded-lg">
+                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-white/80 font-medium">Group</p>
+                  <p className="font-bold text-sm sm:text-base text-white truncate">{selectedGroup.name}</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 min-w-0">
-              <Phone className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-muted-foreground">Phone</p>
-                <p className="font-medium text-sm sm:text-base truncate">{currentMember.phone}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 min-w-0">
-              <Users className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-muted-foreground">Group</p>
-                <p className="font-medium text-sm sm:text-base truncate">{selectedGroup.name}</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Cash Collection */}
       <Card className="shadow-card bg-gradient-card mx-1 sm:mx-0">
@@ -479,29 +486,7 @@ function CollectionForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-          {/* Total Repaid Field */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/20">
-                <Banknote className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
-                <div className="min-w-0">
-                  <Label htmlFor="total-repaid" className="text-sm sm:text-base font-semibold text-primary">
-                    💰 Total Repaid (KES)
-                  </Label>
-                  <p className="text-xs text-primary/80">Total amount member paid</p>
-                </div>
-              </div>
-              <Input
-                id="total-repaid"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={totalRepaid}
-                onChange={(e) => setTotalRepaid(e.target.value)}
-                className="text-base sm:text-lg p-3 border-2 border-primary/30 focus:border-primary bg-primary/5"
-              />
-            </div>
-            
-            {/* Cash Amount Field */}
+            {/* Enhanced Cash Field */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 p-2 bg-success/10 rounded-lg border border-success/20">
                 <Banknote className="h-4 w-4 sm:h-5 sm:w-5 text-success flex-shrink-0" />
@@ -518,32 +503,46 @@ function CollectionForm({
                 step="0.01"
                 placeholder="0.00"
                 value={cashAmount}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  const cashVal = toPreciseNumber(value);
-                  if (cashVal > totalRepaidNum) {
-                    toast({
-                      title: "Invalid Amount",
-                      description: "Cash amount cannot exceed total repaid",
-                      variant: "destructive"
-                    });
-                    return;
-                  }
-                  setCashAmount(value);
-                }}
-                disabled={!totalRepaid || totalRepaidNum <= 0}
+                onChange={(e) => setCashAmount(e.target.value)}
                 className="text-base sm:text-lg p-3 border-2 border-success/30 focus:border-success bg-success/5"
               />
               {cashAmountNum > 0 && (
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-success bg-success/10 p-2 rounded">
-                  <span>🔄 Cash reference will be generated automatically</span>
+                  <span>📄 Cash reference will be generated automatically</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Enhanced M-Pesa Field */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/20">
+                <Smartphone className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
+                <div className="min-w-0">
+                  <Label htmlFor="mpesa-amount" className="text-sm sm:text-base font-semibold text-primary">
+                    📱 M-PESA Amount (KES)
+                  </Label>
+                  <p className="text-xs text-primary/80">Mobile money received</p>
+                </div>
+              </div>
+              <Input
+                id="mpesa-amount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={mpesaAmount}
+                onChange={(e) => setMpesaAmount(e.target.value)}
+                className="text-base sm:text-lg p-3 border-2 border-primary/30 focus:border-primary bg-primary/5"
+              />
+              {mpesaAmountNum > 0 && (
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-primary bg-primary/10 p-2 rounded">
+                  <span>📱 M-Pesa transaction recorded</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Enhanced Total Summary */}
-          {totalRepaidNum > 0 && (
+          {/* Enhanced Total Summary with Breakdown */}
+          {totalCollected > 0 && (
             <div className="p-3 sm:p-4 bg-primary/10 rounded-lg border border-primary/20">
               <div className="flex justify-between items-center mb-2">
                 <span className="font-medium text-sm sm:text-base">Amount to Allocate:</span>
@@ -624,7 +623,7 @@ function CollectionForm({
             
             <div className="space-y-2">
               <div className="flex items-center gap-2 mb-1">
-                <Label htmlFor="loan-amount" className="text-sm">Pay Loan(KES)</Label>
+                <Label htmlFor="loan-amount" className="text-sm">Pay Loan (KES)</Label>
                 <Badge variant="destructive" className="text-xs font-bold animate-pulse shadow-lg border-2 border-red-600">
                   Min: {formatAmount(currentMember?.inst || 0)}
                 </Badge>

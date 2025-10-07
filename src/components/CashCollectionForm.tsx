@@ -653,12 +653,12 @@ export function CashCollectionForm() {
             </div>
             
             <div className="space-y-2">
-              <div className="flex items-center gap-2 mb-1">
-                <Label htmlFor="loan-amount">Pay Loan (KES)</Label>
-                <Badge variant="outline" className="text-xs">
-                  Minimum: {formatAmount(selectedRealMember?.inst || 0)}
-                </Badge>
-              </div>
+            <div className="flex items-center gap-2 mb-1">
+              <Label htmlFor="loan-amount">Pay Loan (KES)</Label>
+              <Badge variant="destructive" className="text-xs font-bold animate-pulse shadow-lg border-2 border-red-600">
+                Min: {formatAmount(selectedRealMember?.inst || 0)}
+              </Badge>
+            </div>
               <Input
                 id="loan-amount"
                 type="number"
