@@ -964,6 +964,60 @@ export const dbOperations = {
   // STATUS UPDATE METHODS (for failed record resolution)
   // =============================================================================
   
+  async getPendingRecords(): Promise<Array<{id: string; type: 'cash' | 'loan' | 'advance' | 'group'; memberId: string}>> {
+    const records: Array<{id: string; type: 'cash' | 'loan' | 'advance' | 'group'; memberId: string}> = [];
+    
+    // Get pending cash collections
+    const cashCollections = await db.cashCollections
+      .filter(record => record.syncStatus === 'pending' || (!record.synced && !record.syncStatus))
+      .toArray();
+    cashCollections.forEach(record => {
+      records.push({ 
+        id: record.id?.toString() || '',
+        type: 'cash',
+        memberId: record.memberId
+      });
+    });
+
+    // Get pending loan applications
+    const loanApplications = await db.loanApplications
+      .filter(record => record.syncStatus === 'pending' || (!record.synced && !record.syncStatus))
+      .toArray();
+    loanApplications.forEach(record => {
+      records.push({
+        id: record.id?.toString() || '',
+        type: 'loan',
+        memberId: record.memberId
+      });
+    });
+
+    // Get pending advance loans
+    const advanceLoans = await db.advanceLoans
+      .filter(record => record.syncStatus === 'pending' || (!record.synced && !record.syncStatus))
+      .toArray();
+    advanceLoans.forEach(record => {
+      records.push({
+        id: record.id?.toString() || '',
+        type: 'advance',
+        memberId: record.memberId
+      });
+    });
+
+    // Get pending group collections
+    const groupCollections = await db.groupCollections
+      .filter(record => record.syncStatus === 'pending' || (!record.synced && !record.syncStatus))
+      .toArray();
+    groupCollections.forEach(record => {
+      records.push({
+        id: record.id?.toString() || '',
+        type: 'group',
+        memberId: record.groupId
+      });
+    });
+
+    return records;
+  },
+  
   async updateCashCollectionStatus(id: string, status: 'pending' | 'failed' | 'synced'): Promise<boolean> {
     try {
       const numericId = parseInt(id);

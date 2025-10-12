@@ -162,4 +162,23 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Mobile-optimized scrolling */
+  html, body {
+    overflow: hidden;
+    height: 100vh;
+    height: 100svh;
+  }
+
+  /* Hide scrollbars on mobile while maintaining scroll functionality */
+  .mobile-content,
+  *:not(input):not(textarea) {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  .mobile-content::-webkit-scrollbar,
+  *:not(input):not(textarea)::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
 }

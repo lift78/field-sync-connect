@@ -282,19 +282,10 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     label: string,
     fieldName: string,
     value: any,
-    fieldType: 'text' | 'number' = 'text',
-    minValue?: number
+    fieldType: 'text' | 'number' = 'text'
   ) => {
     const currentValue = editValues[fieldName] !== undefined ? editValues[fieldName] : value;
     const isEditing = editingField === fieldName;
-
-    // Validation for cash amount - cannot be decreased
-    const isValidValue = () => {
-      if (fieldName === 'cashAmount' && fieldType === 'number' && minValue !== undefined) {
-        return currentValue >= minValue;
-      }
-      return true;
-    };
 
     return (
       <div className="space-y-2">
@@ -305,17 +296,15 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
               <Input
                 type={fieldType}
                 value={currentValue}
-                min={minValue}
                 onChange={(e) => setEditValues({
                   ...editValues,
                   [fieldName]: fieldType === 'number' ? Number(e.target.value) : e.target.value
                 })}
-                className={`flex-1 ${!isValidValue() ? 'border-destructive' : ''}`}
+                className="flex-1"
               />
               <Button
                 size="sm"
                 onClick={() => handleFieldSave(fieldName)}
-                disabled={!isValidValue()}
                 className="px-3"
               >
                 <CheckCircle className="h-4 w-4" />
@@ -348,11 +337,6 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
             </>
           )}
         </div>
-        {fieldName === 'cashAmount' && minValue !== undefined && (
-          <p className="text-xs text-muted-foreground">
-            Cash amount can only be increased (minimum: {formatAmount(minValue)})
-          </p>
-        )}
       </div>
     );
   };
@@ -413,7 +397,6 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
       return <p className="text-muted-foreground">No data available</p>;
     }
 
-    const originalCashAmount = getOriginalCashAmount();
     const currentAllocations = editValues.allocations || data.allocations || [];
     
     // Calculate current values
@@ -427,7 +410,7 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     return (
       <>
         {/* Transaction amounts */}
-        {renderEditableField('Cash Amount', 'cashAmount', data.cashAmount || 0, 'number', originalCashAmount)}
+        {renderEditableField('Cash Amount', 'cashAmount', data.cashAmount || 0, 'number')}
         {renderEditableField('M-Pesa Amount', 'mpesaAmount', data.mpesaAmount || 0, 'number')}
         {renderReadOnlyField('Total Amount (Cash + M-Pesa)', formatAmount(calculatedTotal))}
         {renderReadOnlyField('Total Allocations', formatAmount(totalAllocations))}

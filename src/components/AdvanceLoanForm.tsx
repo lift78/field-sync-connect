@@ -193,6 +193,28 @@ export function AdvanceLoanForm() {
 
   const handleSave = async () => {
     try {
+      // Check for existing pending records
+      const existingRecords = await dbOperations.getPendingRecords();
+      const duplicates: string[] = [];
+
+      for (const application of applications) {
+        const hasPendingRecord = existingRecords.some(
+          record => record.type === 'advance' && record.memberId === application.memberId
+        );
+        if (hasPendingRecord) {
+          duplicates.push(`${application.memberName} (${application.memberId})`);
+        }
+      }
+
+      if (duplicates.length > 0) {
+        toast({
+          title: "❌ Duplicate Records Found",
+          description: `The following members already have pending advance loans: ${duplicates.join(', ')}. Please edit or delete existing records first.`,
+          variant: "destructive"
+        });
+        return;
+      }
+
       for (const application of applications) {
         if (application.advanceAmount > 0) {
           await dbOperations.addAdvanceLoan({

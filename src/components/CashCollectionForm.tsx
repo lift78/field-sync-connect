@@ -356,6 +356,21 @@ export function CashCollectionForm() {
         return;
       }
 
+      // Check for existing pending records for this member
+      const existingRecords = await dbOperations.getPendingRecords();
+      const hasPendingRecord = existingRecords.some(
+        record => record.type === 'cash' && record.memberId === memberId
+      );
+
+      if (hasPendingRecord) {
+        toast({
+          title: "❌ Duplicate Record",
+          description: "You have already done a cash collection record for this member. Please edit the existing record or delete it first.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       // Prepare allocations without individual IDs
       const formattedAllocations = allocations
         .filter(allocation => allocation.amount > 0) // Only save allocations with amounts

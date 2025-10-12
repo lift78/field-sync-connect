@@ -403,6 +403,28 @@ export function LoanApplicationForm() {
 
   const handleSave = async () => {
     try {
+      // Check for existing pending records
+      const existingRecords = await dbOperations.getPendingRecords();
+      const duplicates: string[] = [];
+
+      for (const application of applications) {
+        const hasPendingRecord = existingRecords.some(
+          record => record.type === 'loan' && record.memberId === application.memberId
+        );
+        if (hasPendingRecord) {
+          duplicates.push(`${application.memberName} (${application.memberId})`);
+        }
+      }
+
+      if (duplicates.length > 0) {
+        toast({
+          title: "❌ Duplicate Records Found",
+          description: `The following members already have pending loan applications: ${duplicates.join(', ')}. Please edit or delete existing records first.`,
+          variant: "destructive"
+        });
+        return;
+      }
+
       for (const application of applications) {
         await dbOperations.addLoanApplication({
           memberId: application.memberId,
