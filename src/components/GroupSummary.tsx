@@ -141,7 +141,7 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         group.totalLoans += loan.principalAmount || 0;
       });
       
-      // Process group collections (fines and cash from office)
+      // Process group collections (fines)
       groupCollections.forEach(collection => {
         if (!groupsMap.has(collection.groupId)) {
           groupsMap.set(collection.groupId, {
@@ -160,9 +160,14 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         
         const group = groupsMap.get(collection.groupId)!;
         group.totalFines += collection.finesCollected || 0;
-        group.cashFromOffice += collection.cashFromOffice || 0;
         group.groupCollectionId = collection.id;
       });
+      
+      // Load office cash for each group
+      for (const [groupId, group] of groupsMap.entries()) {
+        const officeCash = await dbOperations.getOfficeCash(groupId);
+        group.cashFromOffice = officeCash;
+      }
       
       // Calculate net cash remitted for each group
       groupsMap.forEach(group => {
@@ -251,28 +256,7 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
     setIsSubmitting(true);
     
     try {
-      if (selectedGroup.groupCollectionId) {
-        // Update existing record
-        const existingRecord = await dbOperations.getUnsyncedGroupCollections();
-        const record = existingRecord.find(r => r.id === selectedGroup.groupCollectionId);
-        
-        if (record) {
-          await dbOperations.updateGroupCollection(selectedGroup.groupCollectionId.toString(), {
-            ...record,
-            cashFromOffice: (record.cashFromOffice || 0) + cashAmount
-          });
-        }
-      } else {
-        // Create new record
-        await dbOperations.addGroupCollection({
-          groupId: selectedGroup.groupId,
-          groupName: selectedGroup.groupName,
-          cashCollected: 0,
-          finesCollected: 0,
-          cashFromOffice: cashAmount,
-          timestamp: new Date()
-        });
-      }
+      await dbOperations.setOfficeCash(selectedGroup.groupId, cashAmount);
       
       toast({
         title: "Cash Added",
@@ -295,25 +279,15 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
   };
 
   const handleRemoveCashFromOffice = async (group: GroupSummaryData) => {
-    if (!group.groupCollectionId) return;
-    
     try {
-      const existingRecords = await dbOperations.getUnsyncedGroupCollections();
-      const record = existingRecords.find(r => r.id === group.groupCollectionId);
+      await dbOperations.removeOfficeCash(group.groupId);
       
-      if (record) {
-        await dbOperations.updateGroupCollection(group.groupCollectionId.toString(), {
-          ...record,
-          cashFromOffice: 0
-        });
-        
-        toast({
-          title: "Cash Removed",
-          description: "Cash from office has been removed",
-        });
-        
-        loadGroupsSummary();
-      }
+      toast({
+        title: "Cash Removed",
+        description: "Cash from office has been removed",
+      });
+      
+      loadGroupsSummary();
     } catch (error) {
       toast({
         title: "Remove Failed",

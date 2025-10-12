@@ -126,11 +126,17 @@ export interface GroupCollection {
   groupName: string;
   cashCollected: number;
   finesCollected: number;
-  cashFromOffice?: number; // Cash received from office for this group
   timestamp: Date;
   synced: boolean;
   syncStatus?: 'pending' | 'failed' | 'synced';
   syncError?: string;
+}
+
+export interface OfficeCash {
+  id?: number;
+  groupId: string;
+  amount: number;
+  timestamp: Date;
 }
 
 // Database class
@@ -141,19 +147,21 @@ export class FieldOfficerDB extends Dexie {
   loanDisbursements!: Table<LoanDisbursement>;
   advanceLoans!: Table<AdvanceLoan>;
   groupCollections!: Table<GroupCollection>;
+  officeCash!: Table<OfficeCash>;
   userCredentials!: Table<UserCredentials>;
   memberBalances!: Table<MemberBalance>;
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(10).stores({
+    this.version(11).stores({
       // Enhanced indexing for better search performance
       cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp',
       loans: '++id, loan_id, database_id, [member.member_id], [group.id], status, applicationDate',
       loanDisbursements: '++id, loan_id, database_id, timestamp',
       advanceLoans: '++id, memberId, memberName, amount, timestamp',
-      groupCollections: '++id, groupId, groupName, cashCollected, finesCollected, cashFromOffice, timestamp',
+      groupCollections: '++id, groupId, groupName, cashCollected, finesCollected, timestamp',
+      officeCash: '++id, &groupId, amount, timestamp', // Not synced, just for calculations
       userCredentials: '++id, username, lastLogin',
       memberBalances: '++id, member_id, name, phone, group_id, group_name, last_updated'
     });
@@ -910,6 +918,27 @@ export const dbOperations = {
     ]);
     
     return results.reduce((sum, count) => sum + count, 0);
+  },
+
+  // =============================================================================
+  // OFFICE CASH (for calculations, not synced)
+  // =============================================================================
+  
+  async setOfficeCash(groupId: string, amount: number): Promise<void> {
+    await db.officeCash.put({
+      groupId,
+      amount,
+      timestamp: new Date()
+    });
+  },
+
+  async getOfficeCash(groupId: string): Promise<number> {
+    const record = await db.officeCash.get({ groupId });
+    return record?.amount || 0;
+  },
+
+  async removeOfficeCash(groupId: string): Promise<void> {
+    await db.officeCash.where('groupId').equals(groupId).delete();
   },
 
   // =============================================================================

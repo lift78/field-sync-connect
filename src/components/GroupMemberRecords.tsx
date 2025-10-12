@@ -57,10 +57,11 @@ export function GroupMemberRecords({ groupId, groupName, onBack, onEditMember, o
       const thisGroupCollection = groupCollections.find(gc => gc.groupId === groupId);
       
       if (thisGroupCollection) {
+        const officeCash = await dbOperations.getOfficeCash(groupId);
         setGroupCollection({
           groupName: thisGroupCollection.groupName,
           finesCollected: thisGroupCollection.finesCollected || 0,
-          cashFromOffice: thisGroupCollection.cashFromOffice || 0,
+          cashFromOffice: officeCash,
           recordId: thisGroupCollection.id
         });
       }
