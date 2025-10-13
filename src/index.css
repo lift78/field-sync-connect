@@ -170,4 +170,10 @@
     height: 100svh;
   }
 
+  /* Ensure mobile content is scrollable */
+  .mobile-content {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
 }
