@@ -170,27 +170,13 @@
     height: 100svh;
   }
 
-  /* Thin scrollbars */
+  /* Hide scrollbars while maintaining scroll functionality */
   .mobile-content {
-    scrollbar-width: thin; /* Firefox */
-    scrollbar-color: hsl(var(--border)) transparent;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
   }
 
   .mobile-content::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-
-  .mobile-content::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .mobile-content::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
-    border-radius: 2px;
-  }
-
-  .mobile-content::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--border) / 0.8);
+    display: none; /* Chrome, Safari, Opera */
   }
 }
