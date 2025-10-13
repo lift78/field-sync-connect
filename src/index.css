@@ -170,13 +170,4 @@
     height: 100svh;
   }
 
-  /* Hide scrollbars while maintaining scroll functionality */
-  .mobile-content {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE and Edge */
-  }
-
-  .mobile-content::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
-  }
 }
