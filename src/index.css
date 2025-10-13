@@ -170,15 +170,13 @@
     height: 100svh;
   }
 
-  /* Hide scrollbars on mobile while maintaining scroll functionality */
-  .mobile-content,
-  *:not(input):not(textarea) {
+  /* Hide scrollbars while maintaining scroll functionality */
+  .mobile-content {
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE and Edge */
   }
 
-  .mobile-content::-webkit-scrollbar,
-  *:not(input):not(textarea)::-webkit-scrollbar {
+  .mobile-content::-webkit-scrollbar {
     display: none; /* Chrome, Safari, Opera */
   }
 }
