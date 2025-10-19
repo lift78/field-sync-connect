@@ -353,6 +353,21 @@ export const dbOperations = {
     return uniqueGroups;
   },
 
+  async getAllGroups() {
+    const members = await db.memberBalances.toArray();
+    const uniqueGroups = members.reduce((acc, member) => {
+      const existing = acc.find(g => g.id === member.group_id);
+      if (!existing) {
+        acc.push({ 
+          id: member.group_id, 
+          name: member.group_name 
+        });
+      }
+      return acc;
+    }, [] as Array<{ id: number; name: string }>);
+    return uniqueGroups.sort((a, b) => a.name.localeCompare(b.name));
+  },
+
   // =============================================================================
   // LOAN DISBURSEMENTS
   // =============================================================================

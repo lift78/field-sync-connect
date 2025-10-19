@@ -23,7 +23,7 @@ interface GroupSummaryData {
   groupCollectionId?: number;
 }
 
-export function GroupSummary({ onBack }: { onBack?: () => void }) {
+export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; onEditRecord?: (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group') => void }) {
   const [groupsSummary, setGroupsSummary] = useState<GroupSummaryData[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<GroupSummaryData | null>(null);
   const [finesAmount, setFinesAmount] = useState('');
