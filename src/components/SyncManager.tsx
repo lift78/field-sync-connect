@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { RecordsList } from "./RecordsList";
 import { dbOperations } from "@/lib/database";
-import { syncService } from "@/lib/syncService"; // Import syncService for member data updates
+import { syncService } from "@/lib/syncService";
 import { 
   RefreshCw, 
   Wifi, 
@@ -25,7 +25,8 @@ import {
   User,
   Key,
   X,
-  Users // New icon for member data
+  Users,
+  ChevronRight
 } from "lucide-react";
 
 interface SyncData {
@@ -41,11 +42,11 @@ interface SyncManagerProps {
 export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isUpdatingMembers, setIsUpdatingMembers] = useState(false); // New state for member updates
+  const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
-  const [memberUpdateProgress, setMemberUpdateProgress] = useState(0); // New state for member update progress
+  const [memberUpdateProgress, setMemberUpdateProgress] = useState(0);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [lastMemberUpdateTime, setLastMemberUpdateTime] = useState<string | null>(null); // New state for last member update
+  const [lastMemberUpdateTime, setLastMemberUpdateTime] = useState<string | null>(null);
   const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(null);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [offlineData, setOfflineData] = useState<SyncData[]>([]);
@@ -53,27 +54,25 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [showCredentialModal, setShowCredentialModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Load actual data from IndexedDB
   useEffect(() => {
     const loadCredentials = async () => {
       const creds = await dbOperations.getUserCredentials();
       if (creds) {
         setCredentials({ 
           username: creds.username, 
-          password: "••••••••" // Masked password
+          password: "••••••••"
         });
       }
     };
     
     const loadOfflineData = async () => {
       try {
-        // FIX: Load UNSYNCED records instead of all records
         const [cash, loans, advances, disbursements, groups] = await Promise.all([
-          dbOperations.getUnsyncedCashCollections(),      // ✅ Only unsynced
-          dbOperations.getUnsyncedLoanApplications(),     // ✅ Only unsynced
-          dbOperations.getUnsyncedAdvanceLoans(),         // ✅ Only unsynced
-          dbOperations.getUnsyncedLoanDisbursements(),    // ✅ Only unsynced
-          dbOperations.getUnsyncedGroupCollections()      // ✅ Only unsynced
+          dbOperations.getUnsyncedCashCollections(),
+          dbOperations.getUnsyncedLoanApplications(),
+          dbOperations.getUnsyncedAdvanceLoans(),
+          dbOperations.getUnsyncedLoanDisbursements(),
+          dbOperations.getUnsyncedGroupCollections()
         ]);
 
         setOfflineData([
@@ -108,11 +107,10 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
       }
     };
 
-    // Run both functions
     loadCredentials();
     loadOfflineData();
     
-    const interval = setInterval(loadOfflineData, 5000); // Refresh every 5 seconds
+    const interval = setInterval(loadOfflineData, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -153,13 +151,11 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
       setIsOnline(false);
     };
 
-    // Initial check
     updateConnectionStatus();
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Check connectivity every 30 seconds
     const interval = setInterval(updateConnectionStatus, 30000);
 
     return () => {
@@ -181,7 +177,6 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     try {
       const result = await performSync();
   
-      // Simulate progress visually
       for (let i = 0; i <= 100; i += 25) {
         setSyncProgress(i);
         await new Promise(resolve => setTimeout(resolve, 150));
@@ -204,7 +199,6 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     }
   };
 
-  // NEW: Handle member data update
   const handleMemberDataUpdate = async () => {
     if (!isOnline) {
       alert('No internet connection. Please check your connection and try again.');
@@ -215,21 +209,18 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     setMemberUpdateProgress(0);
 
     try {
-      // Simulate progress visually
       const progressInterval = setInterval(() => {
         setMemberUpdateProgress(prev => {
-          if (prev >= 90) return prev; // Stop at 90% until actual completion
+          if (prev >= 90) return prev;
           return prev + 10;
         });
       }, 200);
 
       const result = await syncService.syncMemberDataOnly();
 
-      // Clear progress interval and complete
       clearInterval(progressInterval);
       setMemberUpdateProgress(100);
 
-      // Wait a moment to show 100%
       await new Promise(resolve => setTimeout(resolve, 500));
 
       setLastMemberUpdateTime(new Date().toISOString());
@@ -249,7 +240,6 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     }
   };
   
-  // FIX: Updated getTypeIcon to include disbursement and group
   const getTypeIcon = (type: SyncData['type']) => {
     switch (type) {
       case 'cash':
@@ -267,7 +257,6 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     }
   };
 
-  // FIX: Updated getTypeLabel to include disbursement and group
   const getTypeLabel = (type: SyncData['type']) => {
     switch (type) {
       case 'cash':
@@ -287,7 +276,6 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
 
   const handleUpdateCredentials = async () => {
     try {
-      // Only update if password was changed (not masked)
       const actualPassword = credentials.password === "••••••••" 
         ? "" 
         : credentials.password;
@@ -300,7 +288,6 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
       alert("✅ Credentials updated successfully!");
       setShowCredentialModal(false);
       
-      // Update local state with masked password
       setCredentials({
         username: credentials.username,
         password: "••••••••"
@@ -318,7 +305,6 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     }
   };
 
-  // Show records view if selected
   if (viewingRecords) {
     return (
       <RecordsList
@@ -330,347 +316,328 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Connection Status */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center">
-            {isOnline ? (
-              <Wifi className="h-5 w-5 mr-2 text-success" />
-            ) : (
-              <WifiOff className="h-5 w-5 mr-2 text-destructive" />
-            )}
-            Connection Status
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <Badge 
-                variant={isOnline ? "default" : "destructive"}
-                className={isOnline ? "bg-success text-success-foreground" : ""}
-              >
-                {isOnline ? "Online" : "Offline"}
-              </Badge>
-              <p className="text-sm text-muted-foreground mt-1">
-                {isOnline 
-                  ? "Ready to sync data to server"
-                  : "Working in offline mode"
-                }
-              </p>
-            </div>
-            {!isOnline && (
-              <AlertCircle className="h-8 w-8 text-warning" />
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Offline Data Summary */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center">
-            <Database className="h-5 w-5 mr-2" />
-            Unsynced Data Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {offlineData.map((data) => (
-            <div 
-              key={data.type} 
-              className="flex items-center justify-between p-3 bg-background/50 rounded-lg cursor-pointer hover:bg-background/70 transition-colors"
-              onClick={() => setViewingRecords(data.type)}
-            >
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">{getTypeIcon(data.type)}</span>
+    <div className="min-h-screen bg-background">
+      <div className="w-full space-y-3 sm:space-y-4 px-0.5 py-3 pb-24">
+        {/* Connection Status */}
+        <Card className="shadow-sm border-2">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full ${
+                  isOnline ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30'
+                }`}>
+                  {isOnline ? (
+                    <Wifi className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <WifiOff className="h-5 w-5 sm:h-6 sm:w-6 text-red-600 dark:text-red-400" />
+                  )}
+                </div>
                 <div>
-                  <p className="font-medium">{getTypeLabel(data.type)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {data.count > 0 
-                      ? `Last updated: ${formatDateTime(data.lastUpdated)}`
-                      : "All records synced"
+                  <p className="font-bold text-sm sm:text-base">
+                    {isOnline ? "Connected" : "Offline Mode"}
+                  </p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    {isOnline 
+                      ? "Ready to sync"
+                      : "Working offline"
                     }
                   </p>
                 </div>
               </div>
-              <Badge variant={data.count > 0 ? "destructive" : "default"} className={data.count > 0 ? "" : "bg-success text-success-foreground"}>
-                {data.count > 0 
-                  ? `${data.count} unsynced`
-                  : "✅ All synced"
+              <Badge 
+                className={isOnline 
+                  ? "bg-emerald-100 text-emerald-700 border-emerald-200" 
+                  : "bg-red-100 text-red-700 border-red-200"
                 }
+              >
+                {isOnline ? "Online" : "Offline"}
               </Badge>
             </div>
-          ))}
+          </CardContent>
+        </Card>
 
-          <div className="border-t pt-4">
-            <div className="flex justify-between items-center">
-              <span className="font-semibold">Total Unsynced Records:</span>
-              <Badge variant={totalRecords > 0 ? "destructive" : "default"} className={totalRecords > 0 ? "text-lg px-3 py-1" : "bg-success text-success-foreground text-lg px-3 py-1"}>
-                {totalRecords > 0 ? totalRecords : "✅ All synced"}
-              </Badge>
+        {/* Unsynced Data Summary */}
+        <Card className="shadow-sm">
+          <CardHeader className="border-b bg-muted/30 p-3 sm:p-4">
+            <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+              <Database className="h-4 w-4 sm:h-5 sm:w-5" />
+              Unsynced Records
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4 space-y-2">
+            {offlineData.map((data) => (
+              <button
+                key={data.type}
+                onClick={() => setViewingRecords(data.type)}
+                className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted rounded-lg transition-colors text-left"
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="text-xl sm:text-2xl flex-shrink-0">{getTypeIcon(data.type)}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm sm:text-base truncate">{getTypeLabel(data.type)}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                      {data.count > 0 
+                        ? formatDateTime(data.lastUpdated)
+                        : "All synced"
+                      }
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Badge 
+                    className={data.count > 0 
+                      ? "bg-red-100 text-red-700 border-red-200" 
+                      : "bg-emerald-100 text-emerald-700 border-emerald-200"
+                    }
+                  >
+                    {data.count > 0 ? `${data.count} unsynced` : "All synced"}
+                  </Badge>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
+              </button>
+            ))}
+
+            <div className="border-t pt-3 mt-3">
+              <div className="flex justify-between items-center p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                <span className="font-bold text-sm sm:text-base">Total Unsynced:</span>
+                <Badge className={totalRecords > 0 
+                  ? "bg-red-100 text-red-700 border-red-200 text-base sm:text-lg px-3 py-1" 
+                  : "bg-emerald-100 text-emerald-700 border-emerald-200 text-base sm:text-lg px-3 py-1"
+                }>
+                  {totalRecords > 0 ? `${totalRecords} unsynced` : "All synced"}
+                </Badge>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Sync Progress */}
-      {isSyncing && (
-        <Card className="shadow-card bg-gradient-card">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center">
-            <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-              Syncing Data...
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Progress value={syncProgress} className="w-full" />
-            <p className="text-center text-sm text-muted-foreground">
-              {syncProgress}% complete
-            </p>
           </CardContent>
         </Card>
-      )}
 
-      {/* NEW: Member Data Update Progress */}
-      {isUpdatingMembers && (
-        <Card className="shadow-card bg-gradient-card">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center">
-              <Users className="h-5 w-5 mr-2 animate-pulse" />
-              Updating Member Data...
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Progress value={memberUpdateProgress} className="w-full" />
-            <p className="text-center text-sm text-muted-foreground">
-              {memberUpdateProgress}% complete
-            </p>
-          </CardContent>
-        </Card>
-      )}
+        {/* Sync Progress */}
+        {isSyncing && (
+          <Card className="shadow-sm border-2 border-blue-500">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
+                <span className="font-bold">Syncing Data...</span>
+              </div>
+              <Progress value={syncProgress} className="w-full h-2" />
+              <p className="text-center text-sm text-muted-foreground">
+                {syncProgress}% complete
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Last Sync Info */}
-      {(lastSyncTime || lastMemberUpdateTime) && (
-        <Card className="shadow-card">
-          <CardContent className="pt-6">
-            <div className="space-y-3">
+        {/* Member Data Update Progress */}
+        {isUpdatingMembers && (
+          <Card className="shadow-sm border-2 border-purple-500">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 animate-pulse text-purple-600" />
+                <span className="font-bold">Updating Members...</span>
+              </div>
+              <Progress value={memberUpdateProgress} className="w-full h-2" />
+              <p className="text-center text-sm text-muted-foreground">
+                {memberUpdateProgress}% complete
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Last Sync Info */}
+        {(lastSyncTime || lastMemberUpdateTime) && (
+          <Card className="shadow-sm bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900">
+            <CardContent className="p-4 space-y-3">
               {lastSyncTime && (
-                <div className="flex items-center justify-center space-x-2 text-success">
-                  <CheckCircle className="h-5 w-5" />
-                  <div className="text-center">
-                    <p className="font-medium">Last successful sync</p>
-                    <p className="text-sm text-muted-foreground">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">Last data sync</p>
+                    <p className="text-xs text-muted-foreground truncate">
                       {formatDateTime(lastSyncTime)}
                     </p>
                   </div>
                 </div>
               )}
               
-              {/* NEW: Last member update info */}
               {lastMemberUpdateTime && (
-                <div className="flex items-center justify-center space-x-2 text-blue-600">
-                  <Users className="h-5 w-5" />
-                  <div className="text-center">
-                    <p className="font-medium">Last member data update</p>
-                    <p className="text-sm text-muted-foreground">
+                <div className="flex items-center gap-3">
+                  <Users className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">Last member update</p>
+                    <p className="text-xs text-muted-foreground truncate">
                       {formatDateTime(lastMemberUpdateTime)}
                     </p>
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Auto-sync Toggle */}
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <Settings className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <p className="font-medium text-sm sm:text-base">Auto-sync</p>
+                </div>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Sync automatically when online
+                </p>
+              </div>
+              <Switch
+                checked={autoSyncEnabled}
+                onCheckedChange={setAutoSyncEnabled}
+              />
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Sync Configuration */}
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center">
-            <Settings className="h-5 w-5 mr-2" />
-            Sync Configuration
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">Auto-sync when online</p>
-              <p className="text-sm text-muted-foreground">
-                Automatically sync data when internet connection is available
-              </p>
-            </div>
-            <Switch
-              checked={autoSyncEnabled}
-              onCheckedChange={setAutoSyncEnabled}
-            />
-          </div>
-          
-          <div className="border-t pt-4">
-            <Badge variant={autoSyncEnabled ? "default" : "secondary"} className="mb-2">
-              {autoSyncEnabled ? "Auto-sync enabled" : "Manual sync only"}
-            </Badge>
-            <p className="text-xs text-muted-foreground">
-              {autoSyncEnabled 
-                ? "Data will sync automatically when you come online"
-                : "You need to manually press the sync button to upload data"
-              }
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* NEW: Updated Sync Buttons Section */}
-      <Card className="shadow-card">
-        <CardContent className="pt-6">
-          <div className="text-center space-y-4">
-            {/* Member Data Update Button */}
-            <div className="border-b pb-4">
-              <p className="text-sm text-muted-foreground mb-3">
-                Update member balances and group data from the server
+        {/* Action Buttons */}
+        <div className="space-y-3">
+          {/* Member Data Update Button */}
+          <Card className="shadow-sm">
+            <CardContent className="p-3 sm:p-4">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-3 text-center">
+                Update member balances from server
               </p>
               <Button 
                 variant="outline" 
-                size="mobile"
+                size="lg"
                 onClick={handleMemberDataUpdate}
                 disabled={!isOnline || isUpdatingMembers || isSyncing}
-                className="w-full"
+                className="w-full h-12 sm:h-14 text-sm sm:text-base border-2"
               >
                 {isUpdatingMembers ? (
                   <>
-                    <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-                    Updating Members...
+                    <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5 mr-2 animate-spin" />
+                    Updating...
                   </>
                 ) : (
                   <>
-                    <Users className="h-5 w-5 mr-2" />
+                    <Users className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                     Update Member Data
                   </>
                 )}
               </Button>
-              {!isOnline && (
-                <p className="text-sm text-warning mt-2">
-                  ⚠️ Internet connection required for member data update
-                </p>
-              )}
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Main Sync Button */}
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">
+          {/* Main Sync Button */}
+          <Card className="shadow-sm">
+            <CardContent className="p-3 sm:p-4">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-3 text-center">
                 {totalRecords > 0 
-                  ? `Ready to sync ${totalRecords} unsynced records to the server`
-                  : "All records are synced to the server"
+                  ? `${totalRecords} records ready to sync`
+                  : "All records synced"
                 }
               </p>
-              {!isOnline && totalRecords > 0 && (
-                <p className="text-sm text-warning mb-4">
-                  ⚠️ Internet connection required for syncing
-                </p>
-              )}
-              
               <Button 
-                variant="mobile" 
-                size="mobile"
+                size="lg"
                 onClick={handleSync}
                 disabled={!isOnline || isSyncing || totalRecords === 0 || isUpdatingMembers}
-                className="w-full"
+                className="w-full h-12 sm:h-14 text-sm sm:text-base font-bold bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
               >
                 {isSyncing ? (
                   <>
-                    <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                    <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5 mr-2 animate-spin" />
                     Syncing...
                   </>
                 ) : (
                   <>
-                    <Upload className="h-5 w-5 mr-2" />
-                    {autoSyncEnabled ? "Manual Sync" : "Sync All Data"}
+                    <Upload className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                    Sync All Data
                   </>
                 )}
               </Button>
-
-              {totalRecords === 0 && (
-                <p className="text-sm text-success mt-2">
-                  ✅ All data is synced to the server
+              
+              {!isOnline && totalRecords > 0 && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-2 text-center">
+                  ⚠️ Internet required
                 </p>
               )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Sync Tips */}
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center">
-            <Clock className="h-4 w-4 mr-2" />
-            Sync Tips
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="text-sm text-muted-foreground space-y-2">
-            <li>• Use "Update Member Data" to refresh balances before transactions</li>
-            <li>• Sync regularly when you have internet connection</li>
-            <li>• Data is safely stored offline until synced</li>
-            <li>• All records are backed up locally</li>
-            <li>• Sync will retry automatically if it fails</li>
-          </ul>
-        </CardContent>
-      </Card>
+        {/* Tips */}
+        <Card className="shadow-sm">
+          <CardHeader className="border-b bg-muted/30 p-3 sm:p-4">
+            <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Quick Tips
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4">
+            <ul className="text-xs sm:text-sm text-muted-foreground space-y-2">
+              <li className="flex items-start gap-2">
+                <span className="flex-shrink-0">•</span>
+                <span>Update member data before transactions</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex-shrink-0">•</span>
+                <span>Sync regularly when online</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex-shrink-0">•</span>
+                <span>Data is stored safely offline</span>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
 
-      {/* Credentials Management */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center">
-            <User className="h-5 w-5 mr-2" />
-            Account Credentials
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-medium mb-1">Username</p>
-              <div className="flex items-center justify-between bg-background/50 p-3 rounded-lg">
-                <span>{credentials.username || "Not set"}</span>
-              </div>
+        {/* Credentials */}
+        <Card className="shadow-sm">
+          <CardHeader className="border-b bg-muted/30 p-3 sm:p-4">
+            <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Account
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4 space-y-3">
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Username</p>
+              <p className="font-medium text-sm">{credentials.username || "Not set"}</p>
             </div>
             
-            <div>
-              <p className="text-sm font-medium mb-1">Password</p>
-              <div className="flex items-center justify-between bg-background/50 p-3 rounded-lg">
-                <span>{credentials.password ? "••••••••" : "Not set"}</span>
-              </div>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Password</p>
+              <p className="font-medium text-sm">{credentials.password ? "••••••••" : "Not set"}</p>
             </div>
             
             <Button
               variant="outline"
-              className="w-full mt-2"
+              className="w-full"
               onClick={() => setShowCredentialModal(true)}
             >
               <Key className="h-4 w-4 mr-2" />
               Update Credentials
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Credential Update Modal */}
+      {/* Credential Modal */}
       {showCredentialModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background border border-border rounded-xl w-full max-w-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Update Credentials</h3>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={() => setShowCredentialModal(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="space-y-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="border-b">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-lg">Update Credentials</CardTitle>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => setShowCredentialModal(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
               <div>
-                <Label>Username</Label>
+                <Label className="text-sm mb-2 block">Username</Label>
                 <Input
                   value={credentials.username}
                   onChange={(e) => setCredentials({...credentials, username: e.target.value})}
@@ -679,7 +646,7 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
               </div>
               
               <div>
-                <Label>Password</Label>
+                <Label className="text-sm mb-2 block">Password</Label>
                 <div className="relative">
                   <Input
                     type={showPassword ? "text" : "password"}
@@ -705,14 +672,14 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
               </div>
               
               <Button 
-                className="w-full mt-2"
+                className="w-full"
                 onClick={handleUpdateCredentials}
                 disabled={!credentials.username || !credentials.password}
               >
                 Save Credentials
               </Button>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

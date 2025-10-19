@@ -165,32 +165,28 @@
 
   /* Mobile-optimized scrolling */
   html, body {
-    overflow: hidden;
-    height: 100vh;
-    height: 100svh;
+    overflow: auto;
+    height: 100%;
+    width: 100%;
   }
 
-  /* Thin scrollbars */
+  /* Hidden scrollbars - still scrollable */
   .mobile-content {
-    scrollbar-width: thin; /* Firefox */
-    scrollbar-color: hsl(var(--border)) transparent;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
   }
 
   .mobile-content::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    display: none; /* Chrome, Safari, Opera */
   }
-
-  .mobile-content::-webkit-scrollbar-track {
-    background: transparent;
+  
+  /* Apply to body as well for full page scrolling */
+  body {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
   }
-
-  .mobile-content::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
-    border-radius: 2px;
-  }
-
-  .mobile-content::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--border) / 0.8);
+  
+  body::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
 }

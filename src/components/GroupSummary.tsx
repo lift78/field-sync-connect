@@ -20,10 +20,10 @@ interface GroupSummaryData {
   totalFines: number;
   cashFromOffice: number;
   netCashRemitted: number;
-  groupCollectionId?: number; // ID of the group collection record for updates
+  groupCollectionId?: number;
 }
 
-export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; onEditRecord?: (record: any) => void }) {
+export function GroupSummary({ onBack }: { onBack?: () => void }) {
   const [groupsSummary, setGroupsSummary] = useState<GroupSummaryData[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<GroupSummaryData | null>(null);
   const [finesAmount, setFinesAmount] = useState('');
@@ -37,26 +37,21 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
 
   const loadGroupsSummary = async () => {
     try {
-      // Get all unsynced records
       const cashCollections = await dbOperations.getUnsyncedCashCollections();
       const advanceLoans = await dbOperations.getUnsyncedAdvanceLoans();
       const loanDisbursements = await dbOperations.getUnsyncedLoanDisbursements();
       const groupCollections = await dbOperations.getUnsyncedGroupCollections();
       
-      // Track which groups already have existing records
       const existingRecordsSet = new Set<string>();
       groupCollections.forEach(collection => {
         existingRecordsSet.add(collection.groupId);
       });
       setGroupsWithExistingRecords(existingRecordsSet);
       
-      // Get member balances to map members to groups
       const members = await dbOperations.getAllMembers();
       
-      // Create a map of member_id to group info
       const memberGroupMap = new Map();
       members.forEach(member => {
-        // Extract the numeric ID from formats like "MEM/2025/1182"
         const parts = member.member_id.split('/');
         const memberId = parts[parts.length - 1] || member.member_id;
         memberGroupMap.set(memberId, {
@@ -65,10 +60,8 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         });
       });
       
-      // Group data by group
       const groupsMap = new Map<string, GroupSummaryData>();
       
-      // Process cash collections
       cashCollections.forEach(collection => {
         const groupInfo = memberGroupMap.get(collection.memberId);
         if (!groupInfo) return;
@@ -92,7 +85,6 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         group.totalMpesa += collection.mpesaAmount || 0;
       });
       
-      // Process advance loans
       advanceLoans.forEach(advance => {
         const groupInfo = memberGroupMap.get(advance.memberId);
         if (!groupInfo) return;
@@ -115,7 +107,6 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         group.totalAdvances += advance.amount || 0;
       });
       
-      // Process loan disbursements
       const loans = await dbOperations.getAllLoans();
       loanDisbursements.forEach(disbursement => {
         const loan = loans.find(l => l.loan_id === disbursement.loan_id);
@@ -141,7 +132,6 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         group.totalLoans += loan.principalAmount || 0;
       });
       
-      // Process group collections (fines)
       groupCollections.forEach(collection => {
         if (!groupsMap.has(collection.groupId)) {
           groupsMap.set(collection.groupId, {
@@ -163,13 +153,11 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         group.groupCollectionId = collection.id;
       });
       
-      // Load office cash for each group
       for (const [groupId, group] of groupsMap.entries()) {
         const officeCash = await dbOperations.getOfficeCash(groupId);
         group.cashFromOffice = officeCash;
       }
       
-      // Calculate net cash remitted for each group
       groupsMap.forEach(group => {
         group.netCashRemitted = (group.totalCash + group.totalFines + group.cashFromOffice) - group.totalAdvances;
       });
@@ -314,8 +302,8 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         onBack={() => {
           setShowMemberRecords(false);
           setSelectedGroup(null);
+          loadGroupsSummary();
         }}
-        onEditRecord={onEditRecord}
       />
     );
   }
@@ -323,35 +311,36 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
   // Show cash from office input view
   if (selectedGroup && showCashFromOfficeInput) {
     return (
-      <div className="space-y-6 p-1">
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => {
-              setShowCashFromOfficeInput(false);
-              setSelectedGroup(null);
-              setCashFromOfficeAmount('');
-            }}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-        </div>
-
+      <div className="space-y-3 px-0.5 py-3 pb-20 overflow-x-hidden">
         <Card className="shadow-sm border-l-4 border-l-blue-500">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Banknote className="h-5 w-5 text-blue-600" />
-              Add Cash from Office
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {selectedGroup.groupName}
-            </p>
+          <CardHeader className="p-3">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => {
+                  setShowCashFromOfficeInput(false);
+                  setSelectedGroup(null);
+                  setCashFromOfficeAmount('');
+                }}
+                className="h-9 w-9 rounded-full border-2 hover:bg-accent flex-shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0 flex-1">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Banknote className="h-4 w-4 text-blue-600" />
+                  Add Funds from Office
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {selectedGroup.groupName}
+                </p>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 p-3">
             <div>
-              <Label htmlFor="cash-from-office-amount">Cash Amount from Office (KES)</Label>
+              <Label htmlFor="cash-from-office-amount" className="text-xs">Amount from Office (KES)</Label>
               <Input
                 id="cash-from-office-amount"
                 type="number"
@@ -359,19 +348,19 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
                 placeholder="0.00"
                 value={cashFromOfficeAmount}
                 onChange={(e) => setCashFromOfficeAmount(e.target.value)}
-                className="mt-2"
+                className="mt-1.5 h-9 text-sm"
               />
-              <p className="text-xs text-muted-foreground mt-2">
-                This cash will be added to the net cash remitted calculation
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                This amount will be added to the net cash remitted calculation
               </p>
             </div>
             
             <Button 
               onClick={handleAddCashFromOffice}
               disabled={isSubmitting || !cashFromOfficeAmount || parseFloat(cashFromOfficeAmount) <= 0}
-              className="w-full"
+              className="w-full h-9 text-sm"
             >
-              {isSubmitting ? 'Saving...' : 'Add Cash'}
+              {isSubmitting ? 'Saving...' : 'Add Funds'}
             </Button>
           </CardContent>
         </Card>
@@ -381,35 +370,36 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
 
   if (selectedGroup && showFinesInput) {
     return (
-      <div className="space-y-6 p-1">
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => {
-              setShowFinesInput(false);
-              setSelectedGroup(null);
-              setFinesAmount('');
-            }}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-        </div>
-
+      <div className="space-y-3 px-0.5 py-3 pb-20 overflow-x-hidden">
         <Card className="shadow-sm border-l-4 border-l-orange-500">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-600" />
-              Add Fines & Penalties
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {selectedGroup.groupName}
-            </p>
+          <CardHeader className="p-3">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => {
+                  setShowFinesInput(false);
+                  setSelectedGroup(null);
+                  setFinesAmount('');
+                }}
+                className="h-9 w-9 rounded-full border-2 hover:bg-accent flex-shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0 flex-1">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                  Add Fines & Penalties
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {selectedGroup.groupName}
+                </p>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 p-3">
             <div>
-              <Label htmlFor="fines-amount">Fines & Penalties Amount (KES)</Label>
+              <Label htmlFor="fines-amount" className="text-xs">Fines & Penalties Amount (KES)</Label>
               <Input
                 id="fines-amount"
                 type="number"
@@ -417,14 +407,14 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
                 placeholder="0.00"
                 value={finesAmount}
                 onChange={(e) => setFinesAmount(e.target.value)}
-                className="mt-2"
+                className="mt-1.5 h-9 text-sm"
               />
             </div>
             
             <Button 
               onClick={handleAddFines}
               disabled={isSubmitting || !finesAmount || parseFloat(finesAmount) <= 0}
-              className="w-full"
+              className="w-full h-9 text-sm"
             >
               {isSubmitting ? 'Saving...' : 'Save Fines'}
             </Button>
@@ -435,19 +425,29 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
   }
 
   return (
-    <div className="space-y-6 p-1">
+    <div className="space-y-3 px-0.5 py-3 pb-20 overflow-x-hidden">
       {/* Header */}
       <Card className="shadow-sm bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-primary/20">
-        <CardContent className="py-4">
-          <div className="text-center space-y-1">
-            <div className="flex items-center justify-center gap-2">
-              <Users className="h-6 w-6 text-primary" />
-              <h2 className="text-xl font-bold tracking-tight">Group Summary</h2>
+        <CardContent className="p-3">
+          <div className="flex items-center gap-2 mb-2">
+            {onBack && (
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={onBack}
+                className="h-9 w-9 rounded-full border-2 hover:bg-accent flex-shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
+            <div className="flex items-center gap-2 flex-1">
+              <Users className="h-5 w-5 text-primary" />
+              <h2 className="text-base font-bold tracking-tight">Group Summary</h2>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Summary of unsynced data by group
-            </p>
           </div>
+          <p className="text-xs text-muted-foreground text-center">
+            Summary of unsynced data by group
+          </p>
         </CardContent>
       </Card>
 
@@ -455,58 +455,28 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
         <Card className="shadow-sm">
           <CardContent className="p-6 text-center text-muted-foreground">
             <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p>No unsynced data available</p>
-            <p className="text-sm mt-1">Record collections, advances, or loans to see summaries</p>
+            <p className="text-sm">No unsynced data available</p>
+            <p className="text-xs mt-1">Record collections, advances, or loans to see summaries</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {groupsSummary.map((group) => (
             <Card key={group.groupId} className="shadow-sm hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg">{group.groupName}</CardTitle>
-                    <p className="text-xs text-muted-foreground">ID: {group.groupId}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedGroup(group);
-                        setShowCashFromOfficeInput(true);
-                      }}
-                      className="flex items-center gap-1"
-                    >
-                      <Banknote className="h-3 w-3" />
-                      + Cash
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedGroup(group);
-                        setShowFinesInput(true);
-                      }}
-                      disabled={groupsWithExistingRecords.has(group.groupId)}
-                      className="flex items-center gap-1"
-                    >
-                      <AlertTriangle className="h-3 w-3" />
-                      {groupsWithExistingRecords.has(group.groupId) ? 'Record Exists' : 'Add Fines'}
-                    </Button>
-                  </div>
+              <CardHeader className="pb-2 p-3">
+                <div>
+                  <CardTitle className="text-sm">{group.groupName}</CardTitle>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">ID: {group.groupId}</p>
                 </div>
                 
-                {/* Cash from Office Badge */}
                 {group.cashFromOffice > 0 && (
-                  <div className="mt-3">
+                  <div className="mt-2">
                     <Badge 
                       variant="secondary" 
-                      className="bg-blue-500/10 text-blue-600 border border-blue-500/30 hover:bg-blue-500/20"
+                      className="bg-blue-500/10 text-blue-600 border border-blue-500/30 hover:bg-blue-500/20 text-xs"
                     >
                       <Banknote className="h-3 w-3 mr-1" />
-                      Cash from Office: {formatAmount(group.cashFromOffice)}
+                      Office Funds: {formatAmount(group.cashFromOffice)}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -520,81 +490,102 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
                   </div>
                 )}
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-success/10 rounded-lg border border-success/20">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Banknote className="h-4 w-4 text-success" />
-                      <span className="text-xs text-muted-foreground">Cash</span>
+              <CardContent className="space-y-3 p-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 bg-success/10 rounded-lg border border-success/20">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Banknote className="h-3.5 w-3.5 text-success" />
+                      <span className="text-[10px] text-muted-foreground">Cash</span>
                     </div>
-                    <p className="font-semibold text-success">{formatAmount(group.totalCash)}</p>
+                    <p className="font-semibold text-success text-xs">{formatAmount(group.totalCash)}</p>
                   </div>
                   
-                  <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Banknote className="h-4 w-4 text-primary" />
-                      <span className="text-xs text-muted-foreground">M-Pesa</span>
+                  <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Banknote className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-[10px] text-muted-foreground">M-Pesa</span>
                     </div>
-                    <p className="font-semibold text-primary">{formatAmount(group.totalMpesa)}</p>
+                    <p className="font-semibold text-primary text-xs">{formatAmount(group.totalMpesa)}</p>
                   </div>
                   
-                  <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                    <div className="flex items-center gap-2 mb-1">
-                      <TrendingUp className="h-4 w-4 text-blue-500" />
-                      <span className="text-xs text-muted-foreground">Advances</span>
+                  <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <TrendingUp className="h-3.5 w-3.5 text-blue-500" />
+                      <span className="text-[10px] text-muted-foreground">Advances</span>
                     </div>
-                    <p className="font-semibold text-blue-500">{formatAmount(group.totalAdvances)}</p>
+                    <p className="font-semibold text-blue-500 text-xs">{formatAmount(group.totalAdvances)}</p>
                   </div>
                   
-                  <div className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/20">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Coins className="h-4 w-4 text-purple-500" />
-                      <span className="text-xs text-muted-foreground">Loans</span>
+                  <div className="p-2 bg-purple-500/10 rounded-lg border border-purple-500/20">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Coins className="h-3.5 w-3.5 text-purple-500" />
+                      <span className="text-[10px] text-muted-foreground">Loans</span>
                     </div>
-                    <p className="font-semibold text-purple-500">{formatAmount(group.totalLoans)}</p>
+                    <p className="font-semibold text-purple-500 text-xs">{formatAmount(group.totalLoans)}</p>
                   </div>
                   
                   {group.totalFines > 0 && (
-                    <div className="col-span-2 p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
-                      <div className="flex items-center gap-2 mb-1">
-                        <AlertTriangle className="h-4 w-4 text-orange-500" />
-                        <span className="text-xs text-muted-foreground">Fines & Penalties</span>
+                    <div className="col-span-2 p-2 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
+                        <span className="text-[10px] text-muted-foreground">Fines & Penalties</span>
                       </div>
-                      <p className="font-semibold text-orange-500">{formatAmount(group.totalFines)}</p>
+                      <p className="font-semibold text-orange-500 text-xs">{formatAmount(group.totalFines)}</p>
                     </div>
                   )}
                   
-                  <div className="col-span-2 p-3 bg-green-500/10 rounded-lg border border-green-500/20">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Banknote className="h-4 w-4 text-green-600" />
-                      <span className="text-xs text-muted-foreground">Net Cash Remitted</span>
+                  <div className="col-span-2 p-2 bg-green-500/10 rounded-lg border border-green-500/20">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Banknote className="h-3.5 w-3.5 text-green-600" />
+                      <span className="text-[10px] text-muted-foreground">Net Cash Remitted</span>
                     </div>
-                    <p className="font-semibold text-green-600">{formatAmount(group.netCashRemitted)}</p>
+                    <p className="font-semibold text-green-600 text-xs">{formatAmount(group.netCashRemitted)}</p>
                   </div>
                 </div>
                 
-                <div className="flex justify-center pt-2">
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedGroup(group);
+                      setShowCashFromOfficeInput(true);
+                    }}
+                    className="flex items-center justify-center gap-1.5 h-8 text-xs"
+                  >
+                    <Banknote className="h-3.5 w-3.5" />
+                    Add Funds
+                  </Button>
+                  
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleViewRecords(group)}
-                    className="flex items-center gap-2"
+                    className="flex items-center justify-center gap-1.5 h-8 text-xs"
                   >
-                    <FileText className="h-4 w-4" />
+                    <FileText className="h-3.5 w-3.5" />
                     View Records
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedGroup(group);
+                      setShowFinesInput(true);
+                    }}
+                    disabled={groupsWithExistingRecords.has(group.groupId)}
+                    className="col-span-2 flex items-center justify-center gap-1.5 h-8 text-xs"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {groupsWithExistingRecords.has(group.groupId) ? 'Fines Already Recorded' : 'Add Fines & Penalties'}
                   </Button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
-      )}
-
-      {onBack && (
-        <Button variant="outline" onClick={onBack} className="w-full">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
       )}
     </div>
   );

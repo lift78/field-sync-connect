@@ -13,6 +13,9 @@ import { AdvanceLoanForm } from "./AdvanceLoanForm";
 import { SyncManager } from "./SyncManager";
 import { RecordDetailView } from "./RecordDetailView";
 import { QuickCollections } from "./QuickCollections";
+import { GroupSummary } from "./GroupSummary";
+import { AddMemberForm } from "./AddMemberForm";
+import { MoreMenu } from "./MoreMenu";
 import { 
   Wallet, 
   CreditCard, 
@@ -22,14 +25,16 @@ import {
   X,
   Moon,
   Sun,
-  Users
+  Users,
+  MoreHorizontal,
+  ArrowLeft
 } from "lucide-react";
 import { CashCollection, LoanApplication, AdvanceLoan } from "@/lib/database";
 
-type AppSection = 'cash' | 'loan' | 'advance' | 'sync';
+type AppSection = 'cash' | 'loan' | 'advance' | 'sync' | 'more';
 
 interface RecordView {
-  type: 'cash' | 'loan' | 'advance';
+  type: 'cash' | 'loan' | 'advance' | 'group';
   record: {
     id: string;
     memberId: string;
@@ -56,8 +61,6 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
     setError("");
     
     try {
-      // In a real app, this would be an API call
-      // For demo, just validate locally
       if (username && password) {
         await dbOperations.saveUserCredentials({ username, password });
         onLogin();
@@ -78,16 +81,13 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
 
   return (
     <div className={`min-h-screen ${bgClass} flex flex-col items-center justify-center p-4 relative overflow-hidden`}>
-      {/* Background decoration */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute top-20 left-20 w-32 h-32 rounded-full bg-primary/20 animate-pulse"></div>
         <div className="absolute bottom-32 right-16 w-24 h-24 rounded-full bg-primary/15 animate-pulse delay-1000"></div>
       </div>
 
-      {/* Main content */}
       <div className="relative z-10 w-full max-w-md">
         <div className="bg-background/90 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-border">
-          {/* Logo */}
           <div className="flex justify-center mb-6">
             <img 
               src={theme === 'dark' ? "/lovable-uploads/logo2.png" : "/lovable-uploads/logo1.png"}
@@ -96,13 +96,11 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
             />
           </div>
 
-          {/* Title */}
           <h1 className="text-2xl font-bold text-center mb-2">Field Officer Login</h1>
           <p className="text-muted-foreground text-center mb-8">
             Access your workspace securely
           </p>
 
-          {/* Form */}
           <form className="space-y-4">
             <div>
               <Label htmlFor="username">Username</Label>
@@ -147,7 +145,6 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
             </Button>
           </form>
 
-          {/* Status badges */}
           <div className="flex flex-wrap justify-center gap-2 mt-8">
             <Badge variant="outline" className="bg-background">
               🔒 Secure Login
@@ -158,7 +155,6 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
           </div>
         </div>
 
-        {/* Bottom branding */}
         <div className="mt-8 text-center text-muted-foreground text-sm">
           <p>Powered by LIFT Financial Solutions</p>
         </div>
@@ -174,32 +170,32 @@ export function FieldOfficerApp() {
   const [showLogin, setShowLogin] = useState(true);
   const [showQuickCollections, setShowQuickCollections] = useState(false);
   const [quickDrawerOpen, setQuickDrawerOpen] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [morePage, setMorePage] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
   
-  // Initialize keyboard handler
   useKeyboardHandler();
 
   const sections = [
-    { id: 'cash' as const, title: 'Cash Collection', icon: Wallet, color: 'bg-gradient-primary' },
-    { id: 'loan' as const, title: 'Loan Management', icon: CreditCard, color: 'bg-gradient-accent' },
-    { id: 'advance' as const, title: 'Advance Loan', icon: Zap, color: 'bg-gradient-warning' },
-    { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-secondary' },
+    { id: 'cash' as const, title: 'Cash', icon: Wallet, color: 'bg-emerald-500' },
+    { id: 'loan' as const, title: 'Loans', icon: CreditCard, color: 'bg-blue-500' },
+    { id: 'advance' as const, title: 'Advance', icon: Zap, color: 'bg-amber-500' },
+    { id: 'sync' as const, title: 'Sync', icon: RefreshCw, color: 'bg-purple-500' },
+    { id: 'more' as const, title: 'More', icon: MoreHorizontal, color: 'bg-slate-500' },
   ];
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
 
-  // Transform database record to the format expected by RecordDetailView
-  const transformRecordForDetailView = (type: 'cash' | 'loan' | 'advance', dbRecord: CashCollection | LoanApplication | AdvanceLoan) => {
+  const transformRecordForDetailView = (type: 'cash' | 'loan' | 'advance' | 'group', dbRecord: any) => {
     let amount: number | undefined;
     let timestamp: Date;
 
-    // Extract the appropriate amount and timestamp based on record type
     switch (type) {
       case 'cash':
-      const cashRecord = dbRecord as CashCollection;
-      amount = cashRecord.totalAmount; 
-      timestamp = cashRecord.timestamp;
-      break;
+        const cashRecord = dbRecord as CashCollection;
+        amount = cashRecord.totalAmount; 
+        timestamp = cashRecord.timestamp;
+        break;
       case 'loan':
         const loanRecord = dbRecord as LoanApplication;
         amount = loanRecord.loanAmount;
@@ -210,6 +206,10 @@ export function FieldOfficerApp() {
         amount = advanceRecord.amount;
         timestamp = advanceRecord.timestamp;
         break;
+      case 'group':
+        amount = dbRecord.finesCollected || 0;
+        timestamp = dbRecord.timestamp;
+        break;
       default:
         amount = undefined;
         timestamp = new Date();
@@ -217,19 +217,16 @@ export function FieldOfficerApp() {
 
     return {
       id: dbRecord.id?.toString() || '',
-      memberId: dbRecord.memberId,
+      memberId: dbRecord.memberId || dbRecord.groupId,
       amount,
       status: dbRecord.synced ? 'synced' as const : 'pending' as const,
       lastUpdated: timestamp.toISOString(),
-      data: dbRecord // This is the key fix - pass the full record as data
+      data: dbRecord
     };
   };
 
-  const handleEditRecord = (type: 'cash' | 'loan' | 'advance', recordData: any) => {
-    // Transform the record data to the expected format
+  const handleEditRecord = (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group') => {
     const transformedRecord = transformRecordForDetailView(type, recordData);
-    
-    // Open record detail view
     setRecordView({ type, record: transformedRecord });
   };
 
@@ -237,13 +234,24 @@ export function FieldOfficerApp() {
     setRecordView(null);
   };
 
+  const handleMoreNavigate = (page: string) => {
+    setMorePage(page);
+    setShowMoreMenu(false);
+    setActiveSection('more');
+  };
+
+  const handleBackFromMorePage = () => {
+    setMorePage(null);
+    setShowMoreMenu(true);
+  };
+
   const renderActiveSection = () => {
-    // If showing quick collections, render it fullscreen
+    // If showing quick collections
     if (showQuickCollections) {
       return <QuickCollections onBack={() => setShowQuickCollections(false)} />;
     }
 
-    // If viewing a record, show the record detail view
+    // If viewing a record
     if (recordView) {
       return (
         <RecordDetailView
@@ -254,7 +262,58 @@ export function FieldOfficerApp() {
       );
     }
 
-    // Otherwise show the normal sections
+    // If in More menu
+    if (showMoreMenu) {
+      return <MoreMenu onBack={() => setShowMoreMenu(false)} onNavigate={handleMoreNavigate} />;
+    }
+
+    // If viewing a More page
+    if (morePage) {
+      switch (morePage) {
+        case 'group-summary':
+          return <GroupSummary onBack={handleBackFromMorePage} onEditRecord={handleEditRecord} />;
+        case 'add-member':
+          return <AddMemberForm onBack={handleBackFromMorePage} />;
+        case 'add-group':
+          return (
+            <div className="space-y-3 px-4 py-3 max-w-2xl mx-auto">
+              <Card>
+                <CardHeader className="p-3">
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={handleBackFromMorePage} className="h-9 w-9 rounded-full border-2">
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <CardTitle className="text-sm">Add New Group</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-3">
+                  <p className="text-sm text-muted-foreground">Group creation form coming soon...</p>
+                </CardContent>
+              </Card>
+            </div>
+          );
+        default:
+          return (
+            <div className="space-y-3 px-4 py-3 max-w-2xl mx-auto">
+              <Card>
+                <CardHeader className="p-3">
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={handleBackFromMorePage} className="h-9 w-9 rounded-full border-2">
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <CardTitle className="text-sm">{morePage}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-3">
+                  <p className="text-sm text-muted-foreground">Feature coming soon...</p>
+                </CardContent>
+              </Card>
+            </div>
+          );
+      }
+    }
+
+    // Normal sections
     switch (activeSection) {
       case 'cash':
         return <CashCollectionForm />;
@@ -264,17 +323,17 @@ export function FieldOfficerApp() {
         return <AdvanceLoanForm />;
       case 'sync':
         return <SyncManager onEditRecord={handleEditRecord} />;
+      case 'more':
+        return <MoreMenu onBack={() => setActiveSection('cash')} onNavigate={handleMoreNavigate} />;
       default:
         return <CashCollectionForm />;
     }
   };
 
-  // Show splash screen first
   if (showLogin) {
     return <LoginScreen onLogin={() => setShowLogin(false)} />;
   }
 
-  // Show quick collections fullscreen
   if (showQuickCollections) {
     return <QuickCollections onBack={() => setShowQuickCollections(false)} />;
   }
@@ -284,76 +343,38 @@ export function FieldOfficerApp() {
       {/* Mobile Header */}
       <header className="bg-background text-foreground p-3 sticky top-0 z-50 border-b border-border">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <img 
-                src={theme === 'dark' ? "/lovable-uploads/logo2.png" : "/lovable-uploads/logo1.png"}
-                alt="Company Logo" 
-                className="h-6 w-6"
-              />
-              <Badge variant="outline" className="text-xs">
-                Offline Mode
-              </Badge>
-            </div>
-            <p className="text-sm opacity-90 hidden sm:block">{activeTitle}</p>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <img 
+              src={theme === 'dark' ? "/lovable-uploads/logo2.png" : "/lovable-uploads/logo1.png"}
+              alt="Company Logo" 
+              className="h-6 w-6 flex-shrink-0"
+            />
+            <Badge variant="outline" className="text-xs flex-shrink-0">
+              Offline
+            </Badge>
+            <p className="text-xs opacity-90 truncate hidden sm:block">{activeTitle}</p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Quick Collections Button - Both Desktop and Mobile */}
+          <div className="flex items-center gap-1 flex-shrink-0">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setQuickDrawerOpen(true)}
-              className="hover:bg-accent"
+              className="hover:bg-accent h-9 w-9"
               title="Quick Collections"
             >
-              <Users className="h-5 w-5" />
+              <Users className="h-4 w-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="hover:bg-accent"
+              className="hover:bg-accent h-9 w-9"
             >
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="hover:bg-accent"
-            >
-              {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
           </div>
         </div>
       </header>
-
-      {/* Mobile Navigation Overlay */}
-      {menuOpen && (
-        <div className="fixed inset-0 z-40 bg-background/95 backdrop-blur-sm">
-          <div className="p-6 pt-20">
-            <div className="grid gap-4">
-              {sections.map((section) => (
-                <Button
-                  key={section.id}
-                  variant={activeSection === section.id ? "default" : "outline"}
-                  size="xl"
-                  onClick={() => {
-                    setActiveSection(section.id);
-                    setMenuOpen(false);
-                  }}
-                  className={`justify-start ${
-                    activeSection === section.id ? section.color : ''
-                  }`}
-                >
-                  <section.icon className="mr-3 h-5 w-5" />
-                  {section.title}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Quick Collections Drawer */}
       {quickDrawerOpen && (
@@ -362,15 +383,14 @@ export function FieldOfficerApp() {
         </div>
       )}
 
-
       {/* Main Content */}
-      <main className="p-4 pb-20 mobile-content">
+      <main className="pb-20 px-4">
         {renderActiveSection()}
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 z-40 mobile-fixed-nav">
-        <div className="grid grid-cols-4 gap-1">
+      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40">
+        <div className="grid grid-cols-5 gap-0">
           {sections.map((section) => {
             const isActive = activeSection === section.id;
             return (
@@ -379,17 +399,24 @@ export function FieldOfficerApp() {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setActiveSection(section.id);
-                  setShowQuickCollections(false);
+                  if (section.id === 'more') {
+                    setShowMoreMenu(true);
+                    setActiveSection('more');
+                  } else {
+                    setActiveSection(section.id);
+                    setShowQuickCollections(false);
+                    setShowMoreMenu(false);
+                    setMorePage(null);
+                  }
                 }}
-                className={`flex-col h-16 p-2 ${
+                className={`flex-col h-16 p-1.5 rounded-none ${
                   isActive 
-                    ? 'text-primary bg-primary/10' 
+                    ? 'text-primary bg-primary/10 border-t-2 border-t-primary' 
                     : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
                 }`}
               >
                 <section.icon className="h-5 w-5 mb-1" />
-                <span className="text-xs font-medium">{section.title.split(' ')[0]}</span>
+                <span className="text-[10px] font-medium">{section.title}</span>
               </Button>
             );
           })}

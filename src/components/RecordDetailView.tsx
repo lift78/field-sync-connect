@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-// import { Keyboard } from "@capacitor/keyboard";
 
 import { 
   ArrowLeft, 
@@ -16,11 +15,15 @@ import {
   Clock, 
   AlertTriangle,
   User,
-  Banknote,
-  CreditCard,
   Plus,
   Trash2,
-  Loader2
+  Loader2,
+  X,
+  Check,
+  Calendar,
+  DollarSign,
+  Users,
+  FileText
 } from "lucide-react";
 import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, GroupCollection } from "@/lib/database";
 
@@ -35,16 +38,16 @@ interface RecordDetailViewProps {
   };
   type: 'cash' | 'loan' | 'advance' | 'group';
   onBack: () => void;
+  onSaved?: () => void;
 }
 
-export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps) {
+export function RecordDetailView({ record, type, onBack, onSaved }: RecordDetailViewProps) {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
-  // Available allocation types and reasons
   const allocationTypes = ['savings', 'loan', 'advance', 'other'];
   const allocationReasons = [
     'Monthly Contribution',
@@ -64,9 +67,6 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     'Other'
   ];
 
-  // Mobile keyboard handling will be added later when Capacitor is properly configured
-
-  // Helper function to get display name for allocation type
   const getDisplayName = (allocationType: string): string => {
     switch (allocationType) {
       case 'amount_for_advance_payment':
@@ -79,30 +79,44 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
       case 'other':
         return 'Other';
       default:
-        // Fallback: capitalize first letter and replace underscores with spaces
         return allocationType.charAt(0).toUpperCase() + allocationType.slice(1).replace(/_/g, ' ');
     }
   };
 
-  // Get original cash amount for validation
-  const getOriginalCashAmount = () => {
-    if (type === 'cash') {
-      const data = record.data as CashCollection;
-      return data.cashAmount || 0;
-    }
-    return 0;
+  const getAvailableAllocationTypes = () => {
+    const data = record.data as CashCollection;
+    const currentAllocations = editValues.allocations || data.allocations || [];
+    
+    const usedTypes = currentAllocations
+      .map((a: any) => a.type)
+      .filter((t: string) => t !== 'other');
+    
+    return allocationTypes.filter(type => 
+      type === 'other' || !usedTypes.includes(type)
+    );
+  };
+
+  const getAvailableReasons = () => {
+    const data = record.data as CashCollection;
+    const currentAllocations = editValues.allocations || data.allocations || [];
+    
+    const usedReasons = currentAllocations
+      .filter((a: any) => a.type === 'other' && a.reason)
+      .map((a: any) => a.reason);
+    
+    return allocationReasons.filter(reason => !usedReasons.includes(reason));
   };
 
   const getTypeTitle = () => {
     switch (type) {
       case 'cash':
-        return 'Cash Collection Details';
+        return 'Collections & Allocations';
       case 'loan':
-        return 'Loan Application Details';
+        return 'Loan Application';
       case 'advance':
-        return 'Advance Loan Details';
+        return 'Advance Loan';
       case 'group':
-        return 'Group Collection Details';
+        return 'Group Collection';
       default:
         return 'Record Details';
     }
@@ -111,22 +125,22 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'synced':
-        return <CheckCircle className="h-4 w-4 text-success" />;
+        return <CheckCircle className="h-4 w-4 text-emerald-500" />;
       case 'pending':
-        return <Clock className="h-4 w-4 text-warning" />;
+        return <Clock className="h-4 w-4 text-amber-500" />;
       case 'failed':
-        return <AlertTriangle className="h-4 w-4 text-destructive" />;
+        return <AlertTriangle className="h-4 w-4 text-red-500" />;
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'synced':
-        return <Badge variant="default" className="bg-success text-success-foreground">Synced</Badge>;
+        return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 px-2 py-0.5 text-xs">Synced</Badge>;
       case 'pending':
-        return <Badge variant="secondary" className="bg-warning text-warning-foreground">Pending</Badge>;
+        return <Badge className="bg-amber-100 text-amber-700 border-amber-200 px-2 py-0.5 text-xs">Pending</Badge>;
       case 'failed':
-        return <Badge variant="destructive">Failed</Badge>;
+        return <Badge className="bg-red-100 text-red-700 border-red-200 px-2 py-0.5 text-xs">Failed</Badge>;
     }
   };
 
@@ -147,7 +161,7 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
       }
       return new Intl.DateTimeFormat('en-KE', {
         year: 'numeric',
-        month: 'long',
+        month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
@@ -217,6 +231,10 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
 
       setEditValues({});
       
+      if (onSaved) {
+        onSaved();
+      }
+      
     } catch (error) {
       console.error('Failed to update record:', error);
       toast({
@@ -264,7 +282,7 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
         description: "Record deleted successfully",
       });
 
-      onBack(); // Go back to the list
+      onBack();
       
     } catch (error) {
       console.error('Failed to delete record:', error);
@@ -282,70 +300,86 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     label: string,
     fieldName: string,
     value: any,
-    fieldType: 'text' | 'number' = 'text'
+    fieldType: 'text' | 'number' = 'text',
+    icon?: React.ReactNode
   ) => {
     const currentValue = editValues[fieldName] !== undefined ? editValues[fieldName] : value;
     const isEditing = editingField === fieldName;
 
     return (
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">{label}</Label>
-        <div className="flex items-center gap-2">
+      <div className="group relative">
+        <Label className="text-sm font-semibold mb-2 flex items-center gap-2">
+          {icon}
+          {label}
+        </Label>
+        <div className="relative">
           {isEditing ? (
-            <>
-              <Input
-                type={fieldType}
-                value={currentValue}
-                onChange={(e) => setEditValues({
-                  ...editValues,
-                  [fieldName]: fieldType === 'number' ? Number(e.target.value) : e.target.value
-                })}
-                className="flex-1"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Input
+                  type={fieldType}
+                  value={currentValue}
+                  onChange={(e) => setEditValues({
+                    ...editValues,
+                    [fieldName]: fieldType === 'number' ? Number(e.target.value) : e.target.value
+                  })}
+                  className="pr-10 border-2 border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all text-base h-11"
+                  autoFocus
+                />
+                {fieldType === 'number' && (
+                  <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
               <Button
                 size="sm"
                 onClick={() => handleFieldSave(fieldName)}
-                className="px-3"
+                className="bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white px-2.5 h-11 w-11"
               >
-                <CheckCircle className="h-4 w-4" />
+                <Check className="h-4 w-4" />
               </Button>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={handleCancelEdit}
-                className="px-3"
+                className="px-2.5 h-11 w-11"
               >
-                ×
+                <X className="h-4 w-4" />
               </Button>
-            </>
+            </div>
           ) : (
-            <>
-              <div className="flex-1 p-2 bg-muted/30 rounded border">
-                {fieldType === 'number' && typeof currentValue === 'number' 
-                  ? formatAmount(currentValue)
-                  : currentValue || 'N/A'
-                }
+            <div 
+              className="relative flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border hover:border-blue-500 dark:hover:border-blue-600 transition-all cursor-pointer group-hover:shadow-sm"
+              onClick={() => handleEdit(fieldName, value)}
+            >
+              <div className="flex items-center gap-3">
+                {fieldType === 'number' && (
+                  <div className="flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                    <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                )}
+                <span className="font-medium text-base">
+                  {fieldType === 'number' && typeof currentValue === 'number' 
+                    ? formatAmount(currentValue)
+                    : currentValue || 'N/A'
+                  }
+                </span>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleEdit(fieldName, value)}
-                className="px-3"
-              >
-                <Edit3 className="h-4 w-4" />
-              </Button>
-            </>
+              <Edit3 className="h-4 w-4 text-blue-500 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
           )}
         </div>
       </div>
     );
   };
 
-  const renderReadOnlyField = (label: string, value: any) => (
-    <div className="space-y-2">
-      <Label className="text-sm font-medium">{label}</Label>
-      <div className="p-2 bg-muted/50 rounded border text-muted-foreground">
-        {value || 'N/A'}
+  const renderReadOnlyField = (label: string, value: any, icon?: React.ReactNode) => (
+    <div>
+      <Label className="text-sm font-semibold mb-2 flex items-center gap-2">
+        {icon}
+        {label}
+      </Label>
+      <div className="p-3 bg-muted/50 rounded-lg border border-border">
+        <span className="font-medium text-base">{value || 'N/A'}</span>
       </div>
     </div>
   );
@@ -354,7 +388,7 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
     const data = record.data as CashCollection;
     const currentAllocations = editValues.allocations || data.allocations || [];
     const newAllocation = {
-      type: 'savings',
+      type: '',
       amount: 0,
       reason: ''
     };
@@ -368,7 +402,7 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   const removeAllocation = (index: number) => {
     const data = record.data as CashCollection;
     const currentAllocations = editValues.allocations || data.allocations || [];
-    const updatedAllocations = currentAllocations.filter((_, i) => i !== index);
+    const updatedAllocations = currentAllocations.filter((_: any, i: number) => i !== index);
     
     setEditValues({
       ...editValues,
@@ -394,122 +428,191 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   const renderCashCollectionDetails = () => {
     const data = record.data as CashCollection;
     if (!data) {
-      return <p className="text-muted-foreground">No data available</p>;
+      return <p className="text-muted-foreground text-sm">No data available</p>;
     }
 
     const currentAllocations = editValues.allocations || data.allocations || [];
-    
-    // Calculate current values
     const currentCashAmount = editValues.cashAmount !== undefined ? editValues.cashAmount : (data.cashAmount || 0);
     const currentMpesaAmount = editValues.mpesaAmount !== undefined ? editValues.mpesaAmount : (data.mpesaAmount || 0);
     const calculatedTotal = currentCashAmount + currentMpesaAmount;
-    
-    // Calculate total allocations
-    const totalAllocations = currentAllocations.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+    const totalAllocations = currentAllocations.reduce((sum: number, allocation: any) => sum + (allocation.amount || 0), 0);
     
     return (
       <>
-        {/* Transaction amounts */}
-        {renderEditableField('Cash Amount', 'cashAmount', data.cashAmount || 0, 'number')}
-        {renderEditableField('M-Pesa Amount', 'mpesaAmount', data.mpesaAmount || 0, 'number')}
-        {renderReadOnlyField('Total Amount (Cash + M-Pesa)', formatAmount(calculatedTotal))}
-        {renderReadOnlyField('Total Allocations', formatAmount(totalAllocations))}
-        
-        {/* Member Allocations */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium">Member Allocations</Label>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={addNewAllocation}
-              className="flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Add Allocation
-            </Button>
-          </div>
-          
-          <div className="space-y-2">
-            {currentAllocations.length > 0 ? (
-              currentAllocations.map((allocation, index) => (
-                <Card key={index} className="p-3">
-                  <div className="grid grid-cols-1 gap-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">Allocation {index + 1}</Label>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeAllocation(index)}
-                        className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label className="text-sm">Type</Label>
-                        <Select
-                          value={allocation.type}
-                          onValueChange={(value) => updateAllocation(index, 'type', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type">
-                              {allocation.type ? getDisplayName(allocation.type) : 'Select type'}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allocationTypes.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {getDisplayName(type)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label className="text-sm">Amount</Label>
-                        <Input
-                          type="number"
-                          value={allocation.amount}
-                          onChange={(e) => updateAllocation(index, 'amount', Number(e.target.value))}
-                          min="0"
-                        />
-                      </div>
-                    </div>
-                    
-                    {allocation.type === 'other' && (
-                      <div className="space-y-2">
-                        <Label className="text-sm">Reason</Label>
-                        <Select
-                          value={allocation.reason || ''}
-                          onValueChange={(value) => updateAllocation(index, 'reason', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select reason">
-                              {allocation.reason || 'Select reason'}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allocationReasons.map((reason) => (
-                              <SelectItem key={reason} value={reason}>
-                                {reason}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              ))
-            ) : (
-              <p className="text-muted-foreground text-sm">No allocations recorded</p>
+        <Card className="shadow-card bg-card">
+          <CardHeader className="border-b bg-muted/30 p-4">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              Transaction Amounts
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-4">
+            {renderEditableField('Cash Amount', 'cashAmount', data.cashAmount || 0, 'number')}
+            {renderEditableField('M-Pesa Amount', 'mpesaAmount', data.mpesaAmount || 0, 'number')}
+            
+            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-border">
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-900">
+                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase mb-1">Collected</p>
+                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{formatAmount(calculatedTotal)}</p>
+              </div>
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-900">
+                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase mb-1">Allocated</p>
+                <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{formatAmount(totalAllocations)}</p>
+              </div>
+            </div>
+            
+            {Math.abs(calculatedTotal - totalAllocations) > 0.01 && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-sm text-amber-900 dark:text-amber-100">Mismatch</p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    Difference: {formatAmount(Math.abs(calculatedTotal - totalAllocations))}
+                  </p>
+                </div>
+              </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-card bg-card">
+          <CardHeader className="border-b bg-muted/30 p-4">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <Users className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              Member Allocations
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="space-y-3">
+              {currentAllocations.length > 0 ? (
+                <>
+                  {currentAllocations.map((allocation: any, index: number) => (
+                    <Card key={index} className="border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-all shadow-sm">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-lg flex-1 mr-3">
+                            <Label className="text-sm font-bold block">
+                              Allocation {index + 1} {allocation.type ? `- ${getDisplayName(allocation.type)}` : ''}
+                            </Label>
+                            {allocation.type === 'other' && allocation.reason && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {allocation.reason}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeAllocation(index)}
+                            className="h-9 w-9 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg flex-shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-sm font-semibold mb-2 block">Type</Label>
+                            <Select
+                              value={allocation.type}
+                              onValueChange={(value) => updateAllocation(index, 'type', value)}
+                            >
+                              <SelectTrigger className="border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-colors h-11 text-base">
+                                <SelectValue placeholder="Select type">
+                                  {allocation.type ? getDisplayName(allocation.type) : 'Select type'}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getAvailableAllocationTypes().map((type) => (
+                                  <SelectItem key={type} value={type} className="text-base">
+                                    {getDisplayName(type)}
+                                  </SelectItem>
+                                ))}
+                                {allocation.type && !getAvailableAllocationTypes().includes(allocation.type) && (
+                                  <SelectItem value={allocation.type} className="text-base">
+                                    {getDisplayName(allocation.type)}
+                                  </SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label className="text-sm font-semibold mb-2 block">Amount</Label>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                value={allocation.amount}
+                                onChange={(e) => updateAllocation(index, 'amount', Number(e.target.value))}
+                                min="0"
+                                className="pr-10 border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-colors h-11 text-base"
+                              />
+                              <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {allocation.type === 'other' && (
+                          <div className="mt-4">
+                            <Label className="text-sm font-semibold mb-2 block">Reason</Label>
+                            <Select
+                              value={allocation.reason || ''}
+                              onValueChange={(value) => updateAllocation(index, 'reason', value)}
+                            >
+                              <SelectTrigger className="border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-colors h-11 text-base">
+                                <SelectValue placeholder="Select reason">
+                                  {allocation.reason || 'Select reason'}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getAvailableReasons().map((reason) => (
+                                  <SelectItem key={reason} value={reason} className="text-base">
+                                    {reason}
+                                  </SelectItem>
+                                ))}
+                                {allocation.reason && !getAvailableReasons().includes(allocation.reason) && (
+                                  <SelectItem value={allocation.reason} className="text-base">
+                                    {allocation.reason}
+                                  </SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                  
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={addNewAllocation}
+                    className="w-full border-2 border-dashed hover:border-blue-500 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 h-12 text-base"
+                    disabled={getAvailableAllocationTypes().length === 0}
+                  >
+                    <Plus className="h-5 w-5 mr-2" />
+                    Add Allocation
+                  </Button>
+                </>
+              ) : (
+                <div className="text-center py-12 bg-muted/30 rounded-xl border-2 border-dashed">
+                  <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-foreground font-medium text-base mb-2">No allocations</p>
+                  <p className="text-sm text-muted-foreground mb-4">Add your first allocation</p>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={addNewAllocation}
+                    className="border-2 hover:border-blue-500 dark:hover:border-blue-600"
+                  >
+                    <Plus className="h-5 w-5 mr-2" />
+                    Add Allocation
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </>
     );
   };
@@ -517,51 +620,49 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   const renderLoanApplicationDetails = () => {
     const data = record.data as LoanApplication;
     if (!data) {
-      return <p className="text-muted-foreground">No data available</p>;
+      return <p className="text-muted-foreground text-sm">No data available</p>;
     }
     
     return (
-      <>
-        {/* Loan details */}
-        {renderEditableField('Loan Amount', 'loanAmount', data.loanAmount || 0, 'number')}
-        {renderEditableField('Purpose', 'purpose', data.purpose || '')}
-        {renderEditableField('Tenure (Months)', 'tenure', data.tenure || 0, 'number')}
+      <div className="space-y-4">
+        {renderEditableField('Loan Amount', 'loanAmount', data.loanAmount || 0, 'number', <DollarSign className="h-4 w-4 text-blue-600" />)}
+        {renderEditableField('Purpose', 'purpose', data.purpose || '', 'text', <FileText className="h-4 w-4 text-purple-600" />)}
+        {renderEditableField('Tenure (Months)', 'tenure', data.tenure || 0, 'number', <Calendar className="h-4 w-4 text-emerald-600" />)}
         {renderReadOnlyField('Interest Rate', `${data.interestRate || 0}%`)}
         {renderReadOnlyField('Monthly Installment', formatAmount(data.installments || 0))}
-        {renderReadOnlyField('Guarantors', data.guarantors?.join(', ') || 'None')}
-      </>
+        {renderReadOnlyField('Guarantors', data.guarantors?.join(', ') || 'None', <Users className="h-4 w-4 text-blue-600" />)}
+      </div>
     );
   };
 
   const renderAdvanceLoanDetails = () => {
     const data = record.data as AdvanceLoan;
     if (!data) {
-      return <p className="text-muted-foreground">No data available</p>;
+      return <p className="text-muted-foreground text-sm">No data available</p>;
     }
     
     return (
-      <>
-        {/* Advance loan details */}
-        {renderEditableField('Amount', 'amount', data.amount || 0, 'number')}
-        {renderEditableField('Reason', 'reason', data.reason || '')}
-        {renderEditableField('Repayment Date', 'repaymentDate', data.repaymentDate || '')}
-      </>
+      <div className="space-y-4">
+        {renderEditableField('Amount', 'amount', data.amount || 0, 'number', <DollarSign className="h-4 w-4 text-blue-600" />)}
+        {renderEditableField('Reason', 'reason', data.reason || '', 'text', <FileText className="h-4 w-4 text-purple-600" />)}
+        {renderEditableField('Repayment Date', 'repaymentDate', data.repaymentDate || '', 'text', <Calendar className="h-4 w-4 text-emerald-600" />)}
+      </div>
     );
   };
 
   const renderGroupCollectionDetails = () => {
     const data = record.data as GroupCollection;
     if (!data) {
-      return <p className="text-muted-foreground">No data available</p>;
+      return <p className="text-muted-foreground text-sm">No data available</p>;
     }
     
     return (
-      <>
-        {renderEditableField('Group Name', 'groupName', data.groupName || '')}
-        {renderEditableField('Cash Collected', 'cashCollected', data.cashCollected || 0, 'number')}
-        {renderEditableField('Fines Collected', 'finesCollected', data.finesCollected || 0, 'number')}
+      <div className="space-y-4">
+        {renderEditableField('Group Name', 'groupName', data.groupName || '', 'text', <Users className="h-4 w-4 text-purple-600" />)}
+        {renderEditableField('Cash Collected', 'cashCollected', data.cashCollected || 0, 'number', <DollarSign className="h-4 w-4 text-blue-600" />)}
+        {renderEditableField('Fines Collected', 'finesCollected', data.finesCollected || 0, 'number', <DollarSign className="h-4 w-4 text-red-600" />)}
         {renderReadOnlyField('Total Collection', formatAmount((data.cashCollected || 0) + (data.finesCollected || 0)))}
-      </>
+      </div>
     );
   };
 
@@ -583,105 +684,113 @@ export function RecordDetailView({ record, type, onBack }: RecordDetailViewProps
   const hasChanges = Object.keys(editValues).length > 0;
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <div className="flex items-center space-x-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onBack}
-              className="h-8 w-8 cursor-pointer hover:bg-accent/50"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <CardTitle className="text-lg">{getTypeTitle()}</CardTitle>
-          </div>
-        </CardHeader>
-      </Card>
-
-      {/* Member Info Card - Shows member info only once */}
-      <Card className="shadow-card">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-full">
-                <User className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h3 className="font-semibold text-lg">
-                    {getMemberDisplayName()}
-                  </h3>
-                  {getStatusIcon(record.status)}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Record ID: {record.id}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Last updated: {formatDateTime(record.lastUpdated)}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {getStatusBadge(record.status)}
+    <div className="min-h-screen bg-background pb-24">
+      <div className="w-full space-y-3 px-1 py-3">
+        <Card className="shadow-card bg-card">
+          <CardHeader className="p-4">
+            <div className="flex items-center gap-3">
               <Button
                 variant="outline"
-                size="sm"
-                onClick={handleDeleteRecord}
-                disabled={isDeleting}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                size="icon"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onBack();
+                }}
+                className="h-10 w-10 rounded-full border-2 hover:bg-accent flex-shrink-0"
               >
-                {isDeleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Delete
-                  </>
-                )}
+                <ArrowLeft className="h-5 w-5" />
               </Button>
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-base font-bold truncate">{getTypeTitle()}</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">Review and edit transaction</p>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+
+        <Card className="shadow-card bg-card overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="flex items-center justify-center w-14 h-14 bg-white/20 backdrop-blur rounded-full border-2 border-white/40 flex-shrink-0">
+                  <User className="h-7 w-7 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-bold text-base text-white truncate">
+                      {getMemberDisplayName()}
+                    </h3>
+                    {getStatusIcon(record.status)}
+                  </div>
+                  <p className="text-xs text-blue-100 dark:text-blue-200 truncate">Record ID: {record.id}</p>
+                  <p className="text-xs text-blue-100 dark:text-blue-200 flex items-center gap-1 mt-1">
+                    <Calendar className="h-3 w-3 flex-shrink-0" />
+                    <span className="truncate">{formatDateTime(record.lastUpdated)}</span>
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 items-end flex-shrink-0">
+                {getStatusBadge(record.status)}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-white/20 border-white/40 text-white hover:bg-white/30 backdrop-blur h-8 text-xs px-3"
+                  onClick={handleDeleteRecord}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-1" />
+                  )}
+                  Delete
+                </Button>
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Transaction Details - Only shows transaction-specific fields */}
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="text-base">Transaction Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {renderDetailsByType()}
-        </CardContent>
-      </Card>
-
-      {/* Save Changes Button */}
-      {hasChanges && (
-        <Card className="shadow-card">
-          <CardContent className="p-4">
-            <Button 
-              onClick={handleSaveChanges}
-              disabled={isSaving}
-              className="w-full"
-              size="lg"
-            >
-              {isSaving ? (
-                <>
-                  <Save className="mr-2 h-4 w-4 animate-spin" />
-                  Saving Changes...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </Button>
-          </CardContent>
         </Card>
-      )}
+
+        {type !== 'cash' && (
+          <Card className="shadow-card bg-card">
+            <CardHeader className="border-b bg-muted/30 p-4">
+              <CardTitle className="text-base font-bold">Transaction Details</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              {renderDetailsByType()}
+            </CardContent>
+          </Card>
+        )}
+
+        {type === 'cash' && renderDetailsByType()}
+
+        {hasChanges && (
+          <div className="fixed bottom-3 left-1 right-1 z-50">
+            <Card className="shadow-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 dark:from-emerald-600 dark:to-emerald-700 border-0">
+              <CardContent className="p-3">
+                <Button 
+                  onClick={handleSaveChanges}
+                  disabled={isSaving}
+                  className="w-full bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 hover:bg-gray-50 dark:hover:bg-slate-800 font-bold text-base h-12 shadow-lg"
+                  size="lg"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-5 w-5" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

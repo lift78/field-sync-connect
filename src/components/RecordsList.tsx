@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   ArrowLeft, 
   Edit3, 
@@ -12,20 +14,23 @@ import {
   Loader2,
   AlertCircle,
   RotateCcw,
-  Trash2
+  Trash2,
+  Search,
+  Filter,
+  X
 } from "lucide-react";
 import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement, GroupCollection } from "@/lib/database";
 import { EditableDisbursementPreview } from "@/components/EditableDisbursementPreview";
 
 interface Record {
   id: string;
-  memberId?: string; // Made optional for disbursements
-  loanId?: string; // Added for disbursements
+  memberId?: string;
+  loanId?: string;
   amount?: number;
   status: 'synced' | 'pending' | 'failed';
-  syncError?: string; // Added to show sync errors
+  syncError?: string;
   lastUpdated: string;
-  data: any; // Full form data for editing
+  data: any;
 }
 
 interface RecordsListProps {
@@ -36,11 +41,16 @@ interface RecordsListProps {
 
 export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
   const [records, setRecords] = useState<Record[]>([]);
+  const [filteredRecords, setFilteredRecords] = useState<Record[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resolvingRecords, setResolvingRecords] = useState<Set<string>>(new Set());
   const [deletingRecords, setDeletingRecords] = useState<Set<string>>(new Set());
   const [editingDisbursement, setEditingDisbursement] = useState<LoanDisbursement | null>(null);
+  
+  // Filter and search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'synced' | 'pending' | 'failed'>('all');
 
   useEffect(() => {
     const loadRecords = async () => {
@@ -68,9 +78,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             break;
         }
 
-        // Convert database records to Record interface with proper status mapping
         const formattedRecords: Record[] = data.map((item) => {
-          // Determine status from syncStatus field first, then fallback to synced boolean
           let status: 'synced' | 'pending' | 'failed' = 'pending';
           if (item.syncStatus) {
             status = item.syncStatus as 'synced' | 'pending' | 'failed';
@@ -78,7 +86,6 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             status = 'synced';
           }
 
-          // Safely extract amount with proper type assertions
           let amount: number = 0;
           if ('amount' in item && typeof item.amount === 'number') {
             amount = item.amount;
@@ -106,6 +113,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         });
 
         setRecords(formattedRecords);
+        setFilteredRecords(formattedRecords);
       } catch (err) {
         console.error('Failed to load records:', err);
         setError('Failed to load records from database');
@@ -117,19 +125,43 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     loadRecords();
   }, [type]);
 
+  // Apply filters and search
+  useEffect(() => {
+    let filtered = [...records];
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(record => record.status === statusFilter);
+    }
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(record => {
+        const displayName = getRecordDisplayName(record).toLowerCase();
+        const memberId = record.memberId?.toLowerCase() || '';
+        const loanId = record.loanId?.toLowerCase() || '';
+        
+        return displayName.includes(query) || 
+               memberId.includes(query) || 
+               loanId.includes(query);
+      });
+    }
+
+    setFilteredRecords(filtered);
+  }, [searchQuery, statusFilter, records]);
+
   const handleRecordClick = (record: Record) => {
     if (type === 'disbursement' && !record.data.synced) {
-      // Show editable preview for unsynced disbursements
       setEditingDisbursement(record.data as LoanDisbursement);
     } else {
-      // Use regular edit for other types or synced disbursements
       onEditRecord(record);
     }
   };
 
   const handleDisbursementSaved = () => {
     setEditingDisbursement(null);
-    // Reload records to reflect changes
+    // Reload records
     const loadRecords = async () => {
       try {
         setLoading(true);
@@ -201,15 +233,15 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
   const getTypeTitle = () => {
     switch (type) {
       case 'cash':
-        return 'Cash Collection Records';
+        return 'Collections & Allocations';
       case 'loan':
-        return 'Loan Application Records';
+        return 'Loan Applications';
       case 'advance':
-        return 'Advance Loan Records';
+        return 'Advance Loans';
       case 'disbursement':
-        return 'Loan Disbursement Records';
+        return 'Loan Disbursements';
       case 'group':
-        return 'Group Collection Records';
+        return 'Group Collections';
       default:
         return 'Records';
     }
@@ -218,22 +250,22 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
   const getStatusIcon = (status: Record['status']) => {
     switch (status) {
       case 'synced':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
+        return <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />;
       case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-600" />;
+        return <Clock className="h-3.5 w-3.5 text-amber-600" />;
       case 'failed':
-        return <AlertTriangle className="h-4 w-4 text-red-600" />;
+        return <AlertTriangle className="h-3.5 w-3.5 text-red-600" />;
     }
   };
 
   const getStatusBadge = (status: Record['status']) => {
     switch (status) {
       case 'synced':
-        return <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">Synced</Badge>;
+        return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs px-2 py-0.5">Synced</Badge>;
       case 'pending':
-        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending</Badge>;
+        return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs px-2 py-0.5">Pending</Badge>;
       case 'failed':
-        return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200">Failed</Badge>;
+        return <Badge className="bg-red-100 text-red-700 border-red-200 text-xs px-2 py-0.5">Failed</Badge>;
     }
   };
 
@@ -255,7 +287,6 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     }).format(amount);
   };
 
-  // Updated to handle disbursements and group collections
   const getRecordDisplayName = (record: Record) => {
     const fullData = record.data as any;
     
@@ -276,7 +307,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     
     if (type === 'disbursement') {
       if (fullData?.amountType === 'custom' && fullData?.customAmount) {
-        return `Custom Amount: ${formatAmount(fullData.customAmount)}`;
+        return `Custom: ${formatAmount(fullData.customAmount)}`;
       } else if (fullData?.amountType === 'all') {
         return 'Full Loan Amount';
       }
@@ -293,15 +324,8 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     }
   };
 
-  // Helper function to truncate error messages for display
-  const truncateError = (error?: string, maxLength: number = 50) => {
-    if (!error) return '';
-    return error.length > maxLength ? `${error.substring(0, maxLength)}...` : error;
-  };
-
-  // Function to resolve failed record back to pending
   const handleResolveRecord = async (recordId: string, event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent triggering the card click
+    event.stopPropagation();
     
     setResolvingRecords(prev => new Set([...prev, recordId]));
     
@@ -309,7 +333,6 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
       const record = records.find(r => r.id === recordId);
       if (!record) return;
 
-      // Update the record status back to pending in the database
       let updateResult;
       switch (type) {
         case 'cash':
@@ -330,7 +353,6 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
       }
 
       if (updateResult) {
-        // Update local state
         setRecords(prev => prev.map(r => 
           r.id === recordId 
             ? { ...r, status: 'pending' as const, syncError: undefined }
@@ -348,7 +370,6 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     }
   };
 
-  // Function to delete a record
   const handleDeleteRecord = async (recordId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     
@@ -379,7 +400,6 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
       }
 
       if (deleteResult !== undefined) {
-        // Remove from local state
         setRecords(prev => prev.filter(r => r.id !== recordId));
       }
     } catch (err) {
@@ -394,270 +414,320 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     }
   };
 
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+  };
+
   if (loading) {
     return (
-      <div className="space-y-4">
-        {/* Header */}
-        <Card className="shadow-card bg-gradient-card">
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onBack}
-                className="h-8 w-8 cursor-pointer hover:bg-accent/50"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <CardTitle className="text-lg">{getTypeTitle()}</CardTitle>
-            </div>
-          </CardHeader>
-        </Card>
-
-        {/* Loading State */}
-        <Card className="shadow-card">
-          <CardContent className="p-8 text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Loading records...</p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background px-0.5 py-3">
+        <div className="w-full space-y-3">
+          <Card className="shadow-sm">
+            <CardContent className="p-6 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+              <p className="text-muted-foreground text-sm">Loading records...</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="space-y-4">
-        {/* Header */}
-        <Card className="shadow-card bg-gradient-card">
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onBack}
-                className="h-8 w-8 cursor-pointer hover:bg-accent/50"
+      <div className="min-h-screen bg-background px-0.5 py-3">
+        <div className="w-full space-y-3">
+          <Card className="shadow-sm">
+            <CardContent className="p-6 text-center">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-destructive" />
+              <p className="text-muted-foreground mb-3 text-sm">{error}</p>
+              <Button 
+                variant="outline" 
+                onClick={() => window.location.reload()}
+                className="text-sm h-9"
               >
-                <ArrowLeft className="h-4 w-4" />
+                Retry
               </Button>
-              <CardTitle className="text-lg">{getTypeTitle()}</CardTitle>
-            </div>
-          </CardHeader>
-        </Card>
-
-        {/* Error State */}
-        <Card className="shadow-card">
-          <CardContent className="p-8 text-center">
-            <AlertTriangle className="h-8 w-8 mx-auto mb-4 text-destructive" />
-            <p className="text-muted-foreground">{error}</p>
-            <Button 
-              variant="outline" 
-              onClick={() => window.location.reload()} 
-              className="mt-4"
-            >
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <div className="flex items-center space-x-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onBack}
-              className="h-8 w-8 cursor-pointer hover:bg-accent/50"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <CardTitle className="text-lg">{getTypeTitle()}</CardTitle>
-          </div>
-        </CardHeader>
-      </Card>
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      <div className="w-full space-y-3 px-0.5 py-3 pb-20">
+        {/* Combined Header with Search */}
+        <Card className="shadow-sm">
+          <CardContent className="p-3 space-y-3">
+            {/* Title Row */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onBack}
+                className="h-9 w-9 rounded-full border-2 hover:bg-accent flex-shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-base font-bold truncate">{getTypeTitle()}</h1>
+                <p className="text-xs text-muted-foreground truncate">
+                  {records.length} {records.length === 1 ? 'record' : 'records'} total
+                </p>
+              </div>
+            </div>
 
-      {/* Records List */}
-      <div className="space-y-3">
-        {records.map((record) => (
-          <Card 
-            key={record.id} 
-            className={`shadow-card cursor-pointer hover:shadow-lg transition-shadow ${
-              record.status === 'failed' ? 'border-l-4 border-l-red-500' : ''
-            }`}
-            onClick={() => handleRecordClick(record)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-full">
-                    <User className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <p className="font-semibold">{getRecordDisplayName(record)}</p>
-                      {getStatusIcon(record.status)}
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search by name, member ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-9 h-9 text-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter and Clear */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
+                  <SelectTrigger className="w-full h-9 text-sm">
+                    <div className="flex items-center gap-1.5">
+                      <Filter className="h-3.5 w-3.5" />
+                      <SelectValue />
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {formatDateTime(record.lastUpdated)}
-                    </p>
-                    {getRecordSubtitle(record) && (
-                      <p className="text-sm font-medium text-primary">
-                        {getRecordSubtitle(record)}
-                      </p>
-                    )}
-                    
-                    {/* Error Message Display */}
-                    {record.status === 'failed' && record.syncError && (
-                      <div className="mt-2 flex items-start space-x-2">
-                        <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-xs text-red-600 font-medium">Sync Failed:</p>
-                          <p className="text-xs text-red-500" title={record.syncError}>
-                            {truncateError(record.syncError, 80)}
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-sm">All Status</SelectItem>
+                    <SelectItem value="synced" className="text-sm">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                        Synced
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="pending" className="text-sm">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-amber-600" />
+                        Pending
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="failed" className="text-sm">
+                      <div className="flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+                        Failed
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {(searchQuery || statusFilter !== 'all') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="flex-shrink-0 h-9 text-xs px-2"
+                >
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
+
+            {/* Active Filters Info */}
+            {(searchQuery || statusFilter !== 'all') && (
+              <div className="text-xs text-muted-foreground">
+                Showing {filteredRecords.length} of {records.length} records
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Records List */}
+        <div className="space-y-2.5">
+          {filteredRecords.map((record) => (
+            <Card 
+              key={record.id} 
+              className={`shadow-sm transition-all ${
+                record.status === 'failed' ? 'border-l-4 border-l-red-500' : ''
+              }`}
+            >
+              <CardContent className="p-3">
+                <div className="space-y-2.5">
+                  {/* Top Row - Name and Actions */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2 flex-1 min-w-0">
+                      <div className="flex items-center justify-center w-9 h-9 bg-blue-100 dark:bg-blue-900/30 rounded-full flex-shrink-0">
+                        <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <p className="font-semibold truncate text-sm">{getRecordDisplayName(record)}</p>
+                          {getStatusIcon(record.status)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateTime(record.lastUpdated)}
+                        </p>
+                        {getRecordSubtitle(record) && (
+                          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-0.5 truncate">
+                            {getRecordSubtitle(record)}
                           </p>
-                          <div className="flex items-center justify-between mt-2">
-                            <p className="text-xs text-muted-foreground italic">
-                              Click to edit and retry sync
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => handleResolveRecord(record.id, e)}
-                                disabled={resolvingRecords.has(record.id)}
-                                className="h-6 px-2 text-xs"
-                              >
-                                {resolvingRecords.has(record.id) ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <>
-                                    <RotateCcw className="h-3 w-3 mr-1" />
-                                    Resolve
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => handleDeleteRecord(record.id, e)}
-                                disabled={deletingRecords.has(record.id)}
-                                className="h-6 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                {deletingRecords.has(record.id) ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <>
-                                    <Trash2 className="h-3 w-3 mr-1" />
-                                    Delete
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {getStatusBadge(record.status)}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => handleDeleteRecord(record.id, e)}
+                        disabled={deletingRecords.has(record.id)}
+                        className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      >
+                        {deletingRecords.has(record.id) ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Edit Button */}
+                  {record.status !== 'synced' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRecordClick(record)}
+                      className="w-full h-8 border-2 hover:border-blue-500 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 text-sm"
+                    >
+                      <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                      Edit Record
+                    </Button>
+                  )}
+
+                  {/* Error Message */}
+                  {record.status === 'failed' && record.syncError && (
+                    <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg p-2.5">
+                      <div className="flex items-start gap-1.5 mb-2">
+                        <AlertCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-semibold text-red-700 dark:text-red-300 mb-0.5">Sync Failed</p>
+                          <p className="text-[10px] text-red-600 dark:text-red-400 break-words">
+                            {record.syncError}
+                          </p>
                         </div>
                       </div>
-                    )}
-                  </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResolveRecord(record.id, e);
+                        }}
+                        disabled={resolvingRecords.has(record.id)}
+                        className="h-7 text-xs w-full"
+                      >
+                        {resolvingRecords.has(record.id) ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                        )}
+                        Retry Sync
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                
-                <div className="flex items-center space-x-2">
-                  {getStatusBadge(record.status)}
-                  <Edit3 className="h-4 w-4 text-muted-foreground" />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => handleDeleteRecord(record.id, e)}
-                    disabled={deletingRecords.has(record.id)}
-                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    {deletingRecords.has(record.id) ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Empty State */}
+        {filteredRecords.length === 0 && !loading && (
+          <Card className="shadow-sm">
+            <CardContent className="p-8 text-center">
+              <div className="flex flex-col items-center">
+                {searchQuery || statusFilter !== 'all' ? (
+                  <>
+                    <Search className="h-10 w-10 text-muted-foreground mb-3" />
+                    <p className="text-sm font-medium text-foreground mb-1">No matching records</p>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Try adjusting your search or filter
+                    </p>
+                    <Button variant="outline" onClick={clearFilters} className="text-sm h-9">
+                      <X className="h-3.5 w-3.5 mr-1.5" />
+                      Clear Filters
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <User className="h-10 w-10 text-muted-foreground mb-3" />
+                    <p className="text-sm font-medium text-foreground mb-1">No records yet</p>
+                    <p className="text-xs text-muted-foreground">
+                      Records you create will appear here
+                    </p>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Summary Stats */}
+        {records.length > 0 && (
+          <Card className="shadow-sm">
+            <CardContent className="p-3">
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <div className="flex items-center justify-center gap-1 mb-0.5">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="text-xl font-bold">{records.filter(r => r.status === 'synced').length}</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Synced</p>
+                </div>
+                <div>
+                  <div className="flex items-center justify-center gap-1 mb-0.5">
+                    <Clock className="h-3.5 w-3.5 text-amber-600" />
+                    <span className="text-xl font-bold">{records.filter(r => r.status === 'pending').length}</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Pending</p>
+                </div>
+                <div>
+                  <div className="flex items-center justify-center gap-1 mb-0.5">
+                    <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+                    <span className="text-xl font-bold">{records.filter(r => r.status === 'failed').length}</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Failed</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        ))}
+        )}
+
+        {/* Editable Disbursement Preview Modal */}
+        {editingDisbursement && (
+          <EditableDisbursementPreview
+            disbursement={editingDisbursement}
+            onClose={() => setEditingDisbursement(null)}
+            onSaved={handleDisbursementSaved}
+          />
+        )}
       </div>
-
-      {records.length === 0 && (
-        <Card className="shadow-card">
-          <CardContent className="p-8 text-center">
-            <p className="text-muted-foreground">No {type} records found</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Records you create will appear here
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Summary Stats */}
-      {records.length > 0 && (
-        <Card className="shadow-card">
-          <CardContent className="p-4">
-            <div className="text-center mb-2">
-              <p className="text-sm font-medium text-muted-foreground">
-                {(() => {
-                  const syncedCount = records.filter(r => r.status === 'synced').length;
-                  const pendingCount = records.filter(r => r.status === 'pending').length;
-                  const failedCount = records.filter(r => r.status === 'failed').length;
-                  
-                  if (syncedCount === records.length) {
-                    return "All synced";
-                  }
-                  
-                  const parts = [];
-                  if (pendingCount > 0) parts.push(`${pendingCount} unsynced`);
-                  if (failedCount > 0) parts.push(`${failedCount} failed`);
-                  
-                  return parts.join(', ');
-                })()}
-              </p>
-            </div>
-            <div className="flex justify-center space-x-6 text-sm">
-              <div className="text-center">
-                <div className="flex items-center space-x-1">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span className="font-medium">{records.filter(r => r.status === 'synced').length}</span>
-                </div>
-                <p className="text-muted-foreground">Synced</p>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center space-x-1">
-                  <Clock className="h-4 w-4 text-yellow-600" />
-                  <span className="font-medium">{records.filter(r => r.status === 'pending').length}</span>
-                </div>
-                <p className="text-muted-foreground">Unsynced</p>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center space-x-1">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
-                  <span className="font-medium">{records.filter(r => r.status === 'failed').length}</span>
-                </div>
-                <p className="text-muted-foreground">Failed</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Editable Disbursement Preview Modal */}
-      {editingDisbursement && (
-        <EditableDisbursementPreview
-          disbursement={editingDisbursement}
-          onClose={() => setEditingDisbursement(null)}
-          onSaved={handleDisbursementSaved}
-        />
-      )}
     </div>
   );
 }
