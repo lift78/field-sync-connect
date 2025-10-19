@@ -36,10 +36,12 @@ interface SyncData {
 }
 
 interface SyncManagerProps {
-  onEditRecord?: (type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group', recordData: any) => void;
+  onEditRecord?: (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group') => void;
+  viewingRecords?: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null;
+  onViewingRecordsChange?: (type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null) => void;
 }
 
-export function SyncManager({ onEditRecord }: SyncManagerProps) {
+export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecords, onViewingRecordsChange }: SyncManagerProps) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
@@ -47,12 +49,35 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
   const [memberUpdateProgress, setMemberUpdateProgress] = useState(0);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [lastMemberUpdateTime, setLastMemberUpdateTime] = useState<string | null>(null);
-  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(null);
+  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(externalViewingRecords || null);
+  const [recordsListKey, setRecordsListKey] = useState(0);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [offlineData, setOfflineData] = useState<SyncData[]>([]);
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [showCredentialModal, setShowCredentialModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Sync viewingRecords with external state and force RecordsList reload when coming back
+  useEffect(() => {
+    if (externalViewingRecords !== undefined) {
+      const wasNull = viewingRecords === null;
+      const isNowSet = externalViewingRecords !== null;
+      
+      setViewingRecords(externalViewingRecords);
+      
+      // If we're coming back to viewing records (was null, now set), increment key to force reload
+      if (wasNull && isNowSet) {
+        setRecordsListKey(prev => prev + 1);
+      }
+    }
+  }, [externalViewingRecords]);
+
+  // Notify parent when viewingRecords changes
+  useEffect(() => {
+    if (onViewingRecordsChange) {
+      onViewingRecordsChange(viewingRecords);
+    }
+  }, [viewingRecords, onViewingRecordsChange]);
 
   useEffect(() => {
     const loadCredentials = async () => {
@@ -298,18 +323,66 @@ export function SyncManager({ onEditRecord }: SyncManagerProps) {
     }
   };
 
-  const handleEditRecord = (record: any) => {
-    if (onEditRecord && viewingRecords) {
-      onEditRecord(viewingRecords, record.data);
-      setViewingRecords(null);
+  const handleEditRecord = (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group') => {
+    if (onEditRecord) {
+      // Don't clear viewingRecords here - keep it so we return to the list after editing
+      onEditRecord(recordData, type);
     }
+  };
+
+  const handleBackFromRecords = async () => {
+    setViewingRecords(null);
+    // Reload offline data to reflect any changes
+    const loadOfflineData = async () => {
+      try {
+        const [cash, loans, advances, disbursements, groups] = await Promise.all([
+          dbOperations.getUnsyncedCashCollections(),
+          dbOperations.getUnsyncedLoanApplications(),
+          dbOperations.getUnsyncedAdvanceLoans(),
+          dbOperations.getUnsyncedLoanDisbursements(),
+          dbOperations.getUnsyncedGroupCollections()
+        ]);
+
+        setOfflineData([
+          { 
+            type: 'cash', 
+            count: cash.length, 
+            lastUpdated: cash.length > 0 ? cash[0].timestamp.toISOString() : new Date().toISOString()
+          },
+          { 
+            type: 'loan', 
+            count: loans.length, 
+            lastUpdated: loans.length > 0 ? loans[0].timestamp.toISOString() : new Date().toISOString()
+          },
+          { 
+            type: 'advance', 
+            count: advances.length, 
+            lastUpdated: advances.length > 0 ? advances[0].timestamp.toISOString() : new Date().toISOString()
+          },
+          { 
+            type: 'disbursement', 
+            count: disbursements.length, 
+            lastUpdated: disbursements.length > 0 ? disbursements[0].timestamp.toISOString() : new Date().toISOString()
+          },
+          { 
+            type: 'group', 
+            count: groups.length, 
+            lastUpdated: groups.length > 0 ? groups[0].timestamp.toISOString() : new Date().toISOString()
+          }
+        ]);
+      } catch (error) {
+        console.error('Failed to reload offline data:', error);
+      }
+    };
+    await loadOfflineData();
   };
 
   if (viewingRecords) {
     return (
       <RecordsList
+        key={recordsListKey}
         type={viewingRecords}
-        onBack={() => setViewingRecords(null)}
+        onBack={handleBackFromRecords}
         onEditRecord={handleEditRecord}
       />
     );

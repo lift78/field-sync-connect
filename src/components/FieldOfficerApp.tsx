@@ -172,6 +172,7 @@ export function FieldOfficerApp() {
   const [quickDrawerOpen, setQuickDrawerOpen] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [morePage, setMorePage] = useState<string | null>(null);
+  const [syncViewingRecords, setSyncViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(null);
   const { theme, setTheme } = useTheme();
   
   useKeyboardHandler();
@@ -231,7 +232,13 @@ export function FieldOfficerApp() {
   };
 
   const handleBackFromRecord = () => {
+    // Clear the record view and stay in current section
+    // Reload sync records if we were viewing them
     setRecordView(null);
+  };
+
+  const handleSyncRecordView = (type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null) => {
+    setSyncViewingRecords(type);
   };
 
   const handleMoreNavigate = (page: string) => {
@@ -258,6 +265,7 @@ export function FieldOfficerApp() {
           record={recordView.record}
           type={recordView.type}
           onBack={handleBackFromRecord}
+          onSaved={handleBackFromRecord}
         />
       );
     }
@@ -322,7 +330,7 @@ export function FieldOfficerApp() {
       case 'advance':
         return <AdvanceLoanForm />;
       case 'sync':
-        return <SyncManager onEditRecord={handleEditRecord} />;
+        return <SyncManager onEditRecord={handleEditRecord} viewingRecords={syncViewingRecords} onViewingRecordsChange={handleSyncRecordView} />;
       case 'more':
         return <MoreMenu onBack={() => setActiveSection('cash')} onNavigate={handleMoreNavigate} />;
       default:

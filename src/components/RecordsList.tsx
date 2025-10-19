@@ -36,7 +36,7 @@ interface Record {
 interface RecordsListProps {
   type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group';
   onBack: () => void;
-  onEditRecord: (record: Record) => void;
+  onEditRecord: (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group') => void;
 }
 
 export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
@@ -155,7 +155,8 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     if (type === 'disbursement' && !record.data.synced) {
       setEditingDisbursement(record.data as LoanDisbursement);
     } else {
-      onEditRecord(record);
+      // Pass the full database record data and the type
+      onEditRecord(record.data, type as 'cash' | 'loan' | 'advance' | 'group');
     }
   };
 
