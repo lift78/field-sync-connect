@@ -1,10 +1,20 @@
-
 body {
   height: 100vh;
   height: 100svh; /* Use small viewport height for mobile */
   overflow: hidden;
   margin: 0;
   padding: 0;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+* {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
 
 /* Ensure your main content area is scrollable instead */
@@ -22,6 +32,21 @@ nav[class*="fixed bottom-0"] {
   transform: translateZ(0); /* Force hardware acceleration */
 }
 
+/* Additional mobile optimizations for Capacitor */
+html, body {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Smooth scrolling for better mobile experience */
+.mobile-content,
+main {
+  scroll-behavior: smooth;
+}
 
 #root {
   max-width: 1280px;

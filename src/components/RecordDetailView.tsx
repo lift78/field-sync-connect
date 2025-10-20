@@ -207,7 +207,29 @@ export function RecordDetailView({ record, type, onBack, onSaved }: RecordDetail
     try {
       setIsSaving(true);
       
-      const updatedData = { ...record.data, ...editValues };
+      let updatedData = { ...record.data, ...editValues };
+      
+      // For cash collections, recalculate totalAmount and validate allocations
+      if (type === 'cash') {
+        const cashAmount = editValues.cashAmount !== undefined ? editValues.cashAmount : (record.data as CashCollection).cashAmount || 0;
+        const mpesaAmount = editValues.mpesaAmount !== undefined ? editValues.mpesaAmount : (record.data as CashCollection).mpesaAmount || 0;
+        const calculatedTotal = cashAmount + mpesaAmount;
+        updatedData.totalAmount = calculatedTotal;
+        
+        // Validate allocations match collected amount
+        const currentAllocations = editValues.allocations || (record.data as CashCollection).allocations || [];
+        const totalAllocations = currentAllocations.reduce((sum: number, allocation: any) => sum + (allocation.amount || 0), 0);
+        
+        if (Math.abs(calculatedTotal - totalAllocations) > 0.01) {
+          toast({
+            title: "Allocation Mismatch",
+            description: `Total collected (${formatAmount(calculatedTotal)}) must match total allocated (${formatAmount(totalAllocations)})`,
+            variant: "destructive",
+          });
+          setIsSaving(false);
+          return;
+        }
+      }
       
       switch (type) {
         case 'cash':

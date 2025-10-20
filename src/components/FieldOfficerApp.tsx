@@ -173,9 +173,33 @@ export function FieldOfficerApp() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [morePage, setMorePage] = useState<string | null>(null);
   const [syncViewingRecords, setSyncViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [showNavMenu, setShowNavMenu] = useState(false);
   const { theme, setTheme } = useTheme();
   
   useKeyboardHandler();
+
+  // Detect keyboard visibility on mobile
+  useEffect(() => {
+    const handleFocusIn = () => {
+      // Small delay to ensure keyboard is showing
+      setTimeout(() => setIsKeyboardVisible(true), 100);
+    };
+
+    const handleFocusOut = () => {
+      // Small delay to ensure keyboard is hidden
+      setTimeout(() => setIsKeyboardVisible(false), 100);
+    };
+
+    // Listen for focus events on input elements
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, []);
 
   const sections = [
     { id: 'cash' as const, title: 'Cash', icon: Wallet, color: 'bg-emerald-500' },
@@ -186,6 +210,9 @@ export function FieldOfficerApp() {
   ];
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
+
+  // Determine if we should show the bottom navbar
+  const shouldShowNavbar = !showQuickCollections && !recordView && !morePage && !syncViewingRecords && !isKeyboardVisible;
 
   const transformRecordForDetailView = (type: 'cash' | 'loan' | 'advance' | 'group', dbRecord: any) => {
     let amount: number | undefined;
@@ -380,6 +407,15 @@ export function FieldOfficerApp() {
             >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowNavMenu(!showNavMenu)}
+              className="hover:bg-accent h-9 w-9"
+              title="Navigation Menu"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </header>
@@ -391,45 +427,131 @@ export function FieldOfficerApp() {
         </div>
       )}
 
+      {/* Full Screen Navigation Menu */}
+      {showNavMenu && (
+        <div className="fixed inset-0 z-50 bg-background animate-in fade-in duration-200">
+          <div className="h-full flex flex-col">
+            {/* Menu Header */}
+            <div className="bg-background border-b border-border p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <img 
+                  src={theme === 'dark' ? "/lovable-uploads/logo2.png" : "/lovable-uploads/logo1.png"}
+                  alt="Company Logo" 
+                  className="h-8 w-8"
+                />
+                <h2 className="text-lg font-semibold">Navigation</h2>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowNavMenu(false)}
+                className="h-10 w-10"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Menu Items */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid gap-3 max-w-md mx-auto">
+                {sections.map((section) => {
+                  const isActive = activeSection === section.id;
+                  return (
+                    <button
+                      key={section.id}
+                      onClick={() => {
+                        if (section.id === 'more') {
+                          setShowMoreMenu(true);
+                          setActiveSection('more');
+                        } else {
+                          setActiveSection(section.id);
+                          setShowQuickCollections(false);
+                          setShowMoreMenu(false);
+                          setMorePage(null);
+                          setRecordView(null);
+                          setSyncViewingRecords(null);
+                        }
+                        setShowNavMenu(false);
+                      }}
+                      className={`flex items-center gap-4 p-6 rounded-xl border-2 transition-all ${
+                        isActive 
+                          ? 'bg-primary/10 border-primary shadow-lg' 
+                          : 'bg-card border-border hover:border-primary/50 hover:shadow-md'
+                      }`}
+                    >
+                      <div className={`p-3 rounded-lg ${section.color}`}>
+                        <section.icon className="h-6 w-6 text-white" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <h3 className="font-semibold text-base">{section.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {section.id === 'cash' && 'Collect member payments'}
+                          {section.id === 'loan' && 'Process loan applications'}
+                          {section.id === 'advance' && 'Manage advance loans'}
+                          {section.id === 'sync' && 'Sync data to server'}
+                          {section.id === 'more' && 'Additional options'}
+                        </p>
+                      </div>
+                      {isActive && (
+                        <Badge className="bg-primary text-primary-foreground">Active</Badge>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-border p-4 bg-muted/30">
+              <p className="text-center text-xs text-muted-foreground">
+                Powered by LIFT Financial Solutions
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
-      <main className="pb-20 px-4">
+      <main className={`px-1.5 pt-2 ${shouldShowNavbar ? 'pb-20' : 'pb-4'}`}>
         {renderActiveSection()}
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40">
-        <div className="grid grid-cols-5 gap-0">
-          {sections.map((section) => {
-            const isActive = activeSection === section.id;
-            return (
-              <Button
-                key={section.id}
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (section.id === 'more') {
-                    setShowMoreMenu(true);
-                    setActiveSection('more');
-                  } else {
-                    setActiveSection(section.id);
-                    setShowQuickCollections(false);
-                    setShowMoreMenu(false);
-                    setMorePage(null);
-                  }
-                }}
-                className={`flex-col h-16 p-1.5 rounded-none ${
-                  isActive 
-                    ? 'text-primary bg-primary/10 border-t-2 border-t-primary' 
-                    : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
-                }`}
-              >
-                <section.icon className="h-5 w-5 mb-1" />
-                <span className="text-[10px] font-medium">{section.title}</span>
-              </Button>
-            );
-          })}
-        </div>
-      </nav>
+      {shouldShowNavbar && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40">
+          <div className="grid grid-cols-5 gap-0">
+            {sections.map((section) => {
+              const isActive = activeSection === section.id;
+              return (
+                <Button
+                  key={section.id}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (section.id === 'more') {
+                      setShowMoreMenu(true);
+                      setActiveSection('more');
+                    } else {
+                      setActiveSection(section.id);
+                      setShowQuickCollections(false);
+                      setShowMoreMenu(false);
+                      setMorePage(null);
+                    }
+                  }}
+                  className={`flex-col h-16 p-1.5 rounded-none ${
+                    isActive 
+                      ? 'text-primary bg-primary/10 border-t-2 border-t-primary' 
+                      : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
+                  }`}
+                >
+                  <section.icon className="h-5 w-5 mb-1" />
+                  <span className="text-[10px] font-medium">{section.title}</span>
+                </Button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   );
 }

@@ -6,11 +6,12 @@ import {
   ArrowLeft,
   GraduationCap,
   UserPlus,
-  UsersRound,
   Users,
   History,
   TrendingUp,
-  Settings
+  Bell,
+  ArrowLeftRight,
+  PiggyBank
 } from "lucide-react";
 
 interface MoreMenuProps {
@@ -42,14 +43,6 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
       action: () => onNavigate('add-member')
     },
     {
-      id: 'add-group',
-      title: 'Add New Group',
-      description: 'Create a new member group',
-      icon: UsersRound,
-      color: 'from-purple-500 to-purple-600',
-      action: () => onNavigate('add-group')
-    },
-    {
       id: 'group-summary',
       title: 'Group Summary',
       description: 'View group collection summaries',
@@ -58,11 +51,35 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
       action: () => onNavigate('group-summary')
     },
     {
+      id: 'notifications',
+      title: 'Notifications',
+      description: 'View and manage your notifications',
+      icon: Bell,
+      color: 'from-purple-500 to-purple-600',
+      action: () => onNavigate('notifications')
+    },
+    {
+      id: 'account-offset',
+      title: 'Account Offset Request',
+      description: 'Submit account offset requests',
+      icon: ArrowLeftRight,
+      color: 'from-cyan-500 to-cyan-600',
+      action: () => onNavigate('account-offset')
+    },
+    {
+      id: 'savings-transfer',
+      title: 'Savings Transfer Request',
+      description: 'Request savings account transfers',
+      icon: PiggyBank,
+      color: 'from-pink-500 to-pink-600',
+      action: () => onNavigate('savings-transfer')
+    },
+    {
       id: 'history',
       title: 'Summary History',
       description: 'View past transaction summaries',
       icon: History,
-      color: 'from-cyan-500 to-cyan-600',
+      color: 'from-amber-500 to-amber-600',
       action: () => onNavigate('history')
     },
     {
@@ -70,16 +87,8 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
       title: 'Performance Analysis',
       description: 'View your performance metrics',
       icon: TrendingUp,
-      color: 'from-pink-500 to-pink-600',
+      color: 'from-indigo-500 to-indigo-600',
       action: () => onNavigate('performance')
-    },
-    {
-      id: 'settings',
-      title: 'Settings',
-      description: 'Configure app preferences',
-      icon: Settings,
-      color: 'from-slate-500 to-slate-600',
-      action: () => onNavigate('settings')
     }
   ];
 
