@@ -43,7 +43,6 @@ interface RecordView {
     lastUpdated: string;
     data: any;
   };
-  readOnly?: boolean;
 }
 
 interface LoginScreenProps {
@@ -102,7 +101,7 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
             Access your workspace securely
           </p>
 
-          <form className="space-y-4">
+          <div className="space-y-4">
             <div>
               <Label htmlFor="username">Username</Label>
               <Input
@@ -111,6 +110,7 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
                 autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                 placeholder="Enter your username"
                 className="mt-1"
               />
@@ -125,6 +125,7 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                 placeholder="Enter your password"
                 className="mt-1"
               />
@@ -138,13 +139,12 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
 
             <Button
               onClick={handleLogin}
-              type="submit"
               className="w-full mt-4"
               disabled={isLoading}
             >
               {isLoading ? "Logging in..." : "Login"}
             </Button>
-          </form>
+          </div>
 
           <div className="flex flex-wrap justify-center gap-2 mt-8">
             <Badge variant="outline" className="bg-background">
@@ -164,9 +164,128 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
   );
 }
 
+// Full Screen Menu Component
+function FullScreenMenu({ 
+  onClose, 
+  onNavigate,
+  activeSection 
+}: { 
+  onClose: () => void; 
+  onNavigate: (section: AppSection) => void;
+  activeSection: AppSection;
+}) {
+  const { theme } = useTheme();
+  
+  const menuItems = [
+    { id: 'cash' as const, title: 'Cash Collections', icon: Wallet, color: 'bg-emerald-500', description: 'Record member payments' },
+    { id: 'loan' as const, title: 'Loan Applications', icon: CreditCard, color: 'bg-blue-500', description: 'Process loan requests' },
+    { id: 'advance' as const, title: 'Advance Loans', icon: Zap, color: 'bg-amber-500', description: 'Quick loan advances' },
+    { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-purple-500', description: 'Synchronize records' },
+    { id: 'more' as const, title: 'More Options', icon: MoreHorizontal, color: 'bg-slate-500', description: 'Additional features' },
+  ];
+
+  const bgClass = theme === "dark" 
+    ? "bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" 
+    : "bg-gradient-to-br from-blue-50 via-white to-purple-50";
+
+  return (
+    <div className={`fixed inset-0 z-[60] ${bgClass} animate-in fade-in duration-300`}>
+      {/* Decorative background elements */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute top-20 left-10 w-40 h-40 rounded-full bg-primary/30 blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-32 right-16 w-32 h-32 rounded-full bg-primary/20 blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-primary/10 blur-3xl animate-pulse delay-500"></div>
+      </div>
+
+      {/* Header */}
+      <div className="relative z-10 flex items-center justify-between p-4 border-b border-border/50 backdrop-blur-sm bg-background/30">
+        <div className="flex items-center gap-3">
+          <img 
+            src={theme === 'dark' ? "/lovable-uploads/logo2.png" : "/lovable-uploads/logo1.png"}
+            alt="Company Logo" 
+            className="h-8 w-8"
+          />
+          <div>
+            <h2 className="text-lg font-bold">Navigation Menu</h2>
+            <p className="text-xs text-muted-foreground">Select an option below</p>
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="h-10 w-10 rounded-full hover:bg-destructive/10 hover:text-destructive"
+        >
+          <X className="h-5 w-5" />
+        </Button>
+      </div>
+
+      {/* Menu Items */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-80px)] p-6 overflow-y-auto">
+        <div className="w-full max-w-md space-y-3 animate-in slide-in-from-bottom duration-500">
+          {menuItems.map((item, index) => {
+            const isActive = activeSection === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  onNavigate(item.id);
+                  onClose();
+                }}
+                className={`w-full group relative overflow-hidden rounded-2xl transition-all duration-300 transform hover:scale-105 hover:shadow-2xl ${
+                  isActive ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''
+                }`}
+                style={{
+                  animationDelay: `${index * 100}ms`,
+                  animation: 'slideInFromBottom 0.5s ease-out forwards'
+                }}
+              >
+                <div className={`absolute inset-0 ${item.color} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
+                <div className="relative bg-card/80 backdrop-blur-sm border border-border p-5 flex items-center gap-4">
+                  <div className={`${item.color} p-3 rounded-xl shadow-lg group-hover:scale-110 transition-transform`}>
+                    <item.icon className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <h3 className="font-semibold text-base mb-0.5">{item.title}</h3>
+                    <p className="text-xs text-muted-foreground">{item.description}</p>
+                  </div>
+                  {isActive && (
+                    <Badge className="bg-primary text-primary-foreground text-xs">Active</Badge>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-8 text-center">
+          <p className="text-xs text-muted-foreground">
+            LIFT Financial Solutions © 2025
+          </p>
+        </div>
+      </div>
+
+       <style>{`
+        @keyframes slideInFromBottom {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export function FieldOfficerApp() {
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [fullScreenMenuOpen, setFullScreenMenuOpen] = useState(false);
   const [recordView, setRecordView] = useState<RecordView | null>(null);
   const [showLogin, setShowLogin] = useState(true);
   const [showQuickCollections, setShowQuickCollections] = useState(false);
@@ -174,33 +293,9 @@ export function FieldOfficerApp() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [morePage, setMorePage] = useState<string | null>(null);
   const [syncViewingRecords, setSyncViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(null);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const [showNavMenu, setShowNavMenu] = useState(false);
   const { theme, setTheme } = useTheme();
   
   useKeyboardHandler();
-
-  // Detect keyboard visibility on mobile
-  useEffect(() => {
-    const handleFocusIn = () => {
-      // Small delay to ensure keyboard is showing
-      setTimeout(() => setIsKeyboardVisible(true), 100);
-    };
-
-    const handleFocusOut = () => {
-      // Small delay to ensure keyboard is hidden
-      setTimeout(() => setIsKeyboardVisible(false), 100);
-    };
-
-    // Listen for focus events on input elements
-    document.addEventListener('focusin', handleFocusIn);
-    document.addEventListener('focusout', handleFocusOut);
-
-    return () => {
-      document.removeEventListener('focusin', handleFocusIn);
-      document.removeEventListener('focusout', handleFocusOut);
-    };
-  }, []);
 
   const sections = [
     { id: 'cash' as const, title: 'Cash', icon: Wallet, color: 'bg-emerald-500' },
@@ -213,7 +308,7 @@ export function FieldOfficerApp() {
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
 
   // Determine if we should show the bottom navbar
-  const shouldShowNavbar = !showQuickCollections && !recordView && !morePage && !syncViewingRecords && !isKeyboardVisible;
+  const shouldShowNavbar = !showQuickCollections && !recordView && !morePage && !syncViewingRecords;
 
   const transformRecordForDetailView = (type: 'cash' | 'loan' | 'advance' | 'group', dbRecord: any) => {
     let amount: number | undefined;
@@ -254,14 +349,12 @@ export function FieldOfficerApp() {
     };
   };
 
-  const handleEditRecord = (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group', readOnly: boolean = false) => {
+  const handleEditRecord = (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group') => {
     const transformedRecord = transformRecordForDetailView(type, recordData);
-    setRecordView({ type, record: transformedRecord, readOnly });
+    setRecordView({ type, record: transformedRecord });
   };
 
   const handleBackFromRecord = () => {
-    // Clear the record view and stay in current section
-    // Reload sync records if we were viewing them
     setRecordView(null);
   };
 
@@ -280,6 +373,18 @@ export function FieldOfficerApp() {
     setShowMoreMenu(true);
   };
 
+  const handleMenuNavigate = (section: AppSection) => {
+    if (section === 'more') {
+      setShowMoreMenu(true);
+      setActiveSection('more');
+    } else {
+      setActiveSection(section);
+      setShowQuickCollections(false);
+      setShowMoreMenu(false);
+      setMorePage(null);
+    }
+  };
+
   const renderActiveSection = () => {
     // If showing quick collections
     if (showQuickCollections) {
@@ -294,7 +399,6 @@ export function FieldOfficerApp() {
           type={recordView.type}
           onBack={handleBackFromRecord}
           onSaved={handleBackFromRecord}
-          readOnly={recordView.readOnly}
         />
       );
     }
@@ -377,6 +481,15 @@ export function FieldOfficerApp() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Full Screen Menu */}
+      {fullScreenMenuOpen && (
+        <FullScreenMenu 
+          onClose={() => setFullScreenMenuOpen(false)} 
+          onNavigate={handleMenuNavigate}
+          activeSection={activeSection}
+        />
+      )}
+
       {/* Mobile Header */}
       <header className="bg-background text-foreground p-3 sticky top-0 z-50 border-b border-border">
         <div className="flex items-center justify-between">
@@ -412,11 +525,11 @@ export function FieldOfficerApp() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setShowNavMenu(!showNavMenu)}
+              onClick={() => setFullScreenMenuOpen(true)}
               className="hover:bg-accent h-9 w-9"
-              title="Navigation Menu"
+              title="Menu"
             >
-              <Menu className="h-4 w-4" />
+              <Menu className="h-5 w-5" />
             </Button>
           </div>
         </div>
@@ -426,90 +539,6 @@ export function FieldOfficerApp() {
       {quickDrawerOpen && (
         <div className="fixed inset-0 z-50 bg-background">
           <QuickCollections onBack={() => setQuickDrawerOpen(false)} />
-        </div>
-      )}
-
-      {/* Full Screen Navigation Menu */}
-      {showNavMenu && (
-        <div className="fixed inset-0 z-50 bg-background animate-in fade-in duration-200">
-          <div className="h-full flex flex-col">
-            {/* Menu Header */}
-            <div className="bg-background border-b border-border p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <img 
-                  src={theme === 'dark' ? "/lovable-uploads/logo2.png" : "/lovable-uploads/logo1.png"}
-                  alt="Company Logo" 
-                  className="h-8 w-8"
-                />
-                <h2 className="text-lg font-semibold">Navigation</h2>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowNavMenu(false)}
-                className="h-10 w-10"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-
-            {/* Menu Items */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid gap-3 max-w-md mx-auto">
-                {sections.map((section) => {
-                  const isActive = activeSection === section.id;
-                  return (
-                    <button
-                      key={section.id}
-                      onClick={() => {
-                        if (section.id === 'more') {
-                          setShowMoreMenu(true);
-                          setActiveSection('more');
-                        } else {
-                          setActiveSection(section.id);
-                          setShowQuickCollections(false);
-                          setShowMoreMenu(false);
-                          setMorePage(null);
-                          setRecordView(null);
-                          setSyncViewingRecords(null);
-                        }
-                        setShowNavMenu(false);
-                      }}
-                      className={`flex items-center gap-4 p-6 rounded-xl border-2 transition-all ${
-                        isActive 
-                          ? 'bg-primary/10 border-primary shadow-lg' 
-                          : 'bg-card border-border hover:border-primary/50 hover:shadow-md'
-                      }`}
-                    >
-                      <div className={`p-3 rounded-lg ${section.color}`}>
-                        <section.icon className="h-6 w-6 text-white" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <h3 className="font-semibold text-base">{section.title}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {section.id === 'cash' && 'Collect member payments'}
-                          {section.id === 'loan' && 'Process loan applications'}
-                          {section.id === 'advance' && 'Manage advance loans'}
-                          {section.id === 'sync' && 'Sync data to server'}
-                          {section.id === 'more' && 'Additional options'}
-                        </p>
-                      </div>
-                      {isActive && (
-                        <Badge className="bg-primary text-primary-foreground">Active</Badge>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="border-t border-border p-4 bg-muted/30">
-              <p className="text-center text-xs text-muted-foreground">
-                Powered by LIFT Financial Solutions
-              </p>
-            </div>
-          </div>
         </div>
       )}
 
@@ -529,17 +558,7 @@ export function FieldOfficerApp() {
                   key={section.id}
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    if (section.id === 'more') {
-                      setShowMoreMenu(true);
-                      setActiveSection('more');
-                    } else {
-                      setActiveSection(section.id);
-                      setShowQuickCollections(false);
-                      setShowMoreMenu(false);
-                      setMorePage(null);
-                    }
-                  }}
+                  onClick={() => handleMenuNavigate(section.id)}
                   className={`flex-col h-16 p-1.5 rounded-none ${
                     isActive 
                       ? 'text-primary bg-primary/10 border-t-2 border-t-primary' 
