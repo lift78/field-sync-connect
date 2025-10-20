@@ -260,6 +260,8 @@ export function GroupMemberRecords({ groupId, groupName, onBack }: GroupMemberRe
           loadMemberRecords();
         }}
         onSaved={() => {
+          setEditingRecord(null);
+          setEditType('cash');
           loadMemberRecords();
         }}
       />

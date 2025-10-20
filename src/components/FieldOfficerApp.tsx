@@ -43,6 +43,7 @@ interface RecordView {
     lastUpdated: string;
     data: any;
   };
+  readOnly?: boolean;
 }
 
 interface LoginScreenProps {
@@ -253,9 +254,9 @@ export function FieldOfficerApp() {
     };
   };
 
-  const handleEditRecord = (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group') => {
+  const handleEditRecord = (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group', readOnly: boolean = false) => {
     const transformedRecord = transformRecordForDetailView(type, recordData);
-    setRecordView({ type, record: transformedRecord });
+    setRecordView({ type, record: transformedRecord, readOnly });
   };
 
   const handleBackFromRecord = () => {
@@ -293,6 +294,7 @@ export function FieldOfficerApp() {
           type={recordView.type}
           onBack={handleBackFromRecord}
           onSaved={handleBackFromRecord}
+          readOnly={recordView.readOnly}
         />
       );
     }

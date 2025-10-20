@@ -39,9 +39,10 @@ interface RecordDetailViewProps {
   type: 'cash' | 'loan' | 'advance' | 'group';
   onBack: () => void;
   onSaved?: () => void;
+  readOnly?: boolean;
 }
 
-export function RecordDetailView({ record, type, onBack, onSaved }: RecordDetailViewProps) {
+export function RecordDetailView({ record, type, onBack, onSaved, readOnly = false }: RecordDetailViewProps) {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -328,6 +329,11 @@ export function RecordDetailView({ record, type, onBack, onSaved }: RecordDetail
     const currentValue = editValues[fieldName] !== undefined ? editValues[fieldName] : value;
     const isEditing = editingField === fieldName;
 
+    // If read-only, render as read-only field
+    if (readOnly) {
+      return renderReadOnlyField(label, fieldType === 'number' ? formatAmount(value) : value, icon);
+    }
+
     return (
       <div className="group relative">
         <Label className="text-sm font-semibold mb-2 flex items-center gap-2">
@@ -522,114 +528,139 @@ export function RecordDetailView({ record, type, onBack, onSaved }: RecordDetail
                               </p>
                             )}
                           </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeAllocation(index)}
-                            className="h-9 w-9 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg flex-shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {!readOnly && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => removeAllocation(index)}
+                              className="h-9 w-9 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg flex-shrink-0"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                         
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <Label className="text-sm font-semibold mb-2 block">Type</Label>
-                            <Select
-                              value={allocation.type}
-                              onValueChange={(value) => updateAllocation(index, 'type', value)}
-                            >
-                              <SelectTrigger className="border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-colors h-11 text-base">
-                                <SelectValue placeholder="Select type">
-                                  {allocation.type ? getDisplayName(allocation.type) : 'Select type'}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {getAvailableAllocationTypes().map((type) => (
-                                  <SelectItem key={type} value={type} className="text-base">
-                                    {getDisplayName(type)}
-                                  </SelectItem>
-                                ))}
-                                {allocation.type && !getAvailableAllocationTypes().includes(allocation.type) && (
-                                  <SelectItem value={allocation.type} className="text-base">
-                                    {getDisplayName(allocation.type)}
-                                  </SelectItem>
-                                )}
-                              </SelectContent>
-                            </Select>
+                            {readOnly ? (
+                              <div className="p-3 bg-muted/50 rounded-lg border border-border h-11 flex items-center">
+                                <span className="font-medium text-base">{getDisplayName(allocation.type)}</span>
+                              </div>
+                            ) : (
+                              <Select
+                                value={allocation.type}
+                                onValueChange={(value) => updateAllocation(index, 'type', value)}
+                              >
+                                <SelectTrigger className="border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-colors h-11 text-base">
+                                  <SelectValue placeholder="Select type">
+                                    {allocation.type ? getDisplayName(allocation.type) : 'Select type'}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getAvailableAllocationTypes().map((type) => (
+                                    <SelectItem key={type} value={type} className="text-base">
+                                      {getDisplayName(type)}
+                                    </SelectItem>
+                                  ))}
+                                  {allocation.type && !getAvailableAllocationTypes().includes(allocation.type) && (
+                                    <SelectItem value={allocation.type} className="text-base">
+                                      {getDisplayName(allocation.type)}
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            )}
                           </div>
                           
                           <div>
                             <Label className="text-sm font-semibold mb-2 block">Amount</Label>
-                            <div className="relative">
-                              <Input
-                                type="number"
-                                value={allocation.amount}
-                                onChange={(e) => updateAllocation(index, 'amount', Number(e.target.value))}
-                                min="0"
-                                className="pr-10 border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-colors h-11 text-base"
-                              />
-                              <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            </div>
+                            {readOnly ? (
+                              <div className="p-3 bg-muted/50 rounded-lg border border-border h-11 flex items-center justify-between">
+                                <span className="font-medium text-base">{formatAmount(allocation.amount)}</span>
+                                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            ) : (
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  value={allocation.amount}
+                                  onChange={(e) => updateAllocation(index, 'amount', Number(e.target.value))}
+                                  min="0"
+                                  className="pr-10 border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-colors h-11 text-base"
+                                />
+                                <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
                           </div>
                         </div>
                         
                         {allocation.type === 'other' && (
                           <div className="mt-4">
                             <Label className="text-sm font-semibold mb-2 block">Reason</Label>
-                            <Select
-                              value={allocation.reason || ''}
-                              onValueChange={(value) => updateAllocation(index, 'reason', value)}
-                            >
-                              <SelectTrigger className="border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-colors h-11 text-base">
-                                <SelectValue placeholder="Select reason">
-                                  {allocation.reason || 'Select reason'}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {getAvailableReasons().map((reason) => (
-                                  <SelectItem key={reason} value={reason} className="text-base">
-                                    {reason}
-                                  </SelectItem>
-                                ))}
-                                {allocation.reason && !getAvailableReasons().includes(allocation.reason) && (
-                                  <SelectItem value={allocation.reason} className="text-base">
-                                    {allocation.reason}
-                                  </SelectItem>
-                                )}
-                              </SelectContent>
-                            </Select>
+                            {readOnly ? (
+                              <div className="p-3 bg-muted/50 rounded-lg border border-border h-11 flex items-center">
+                                <span className="font-medium text-base">{allocation.reason || 'N/A'}</span>
+                              </div>
+                            ) : (
+                              <Select
+                                value={allocation.reason || ''}
+                                onValueChange={(value) => updateAllocation(index, 'reason', value)}
+                              >
+                                <SelectTrigger className="border-2 hover:border-blue-500 dark:hover:border-blue-600 transition-colors h-11 text-base">
+                                  <SelectValue placeholder="Select reason">
+                                    {allocation.reason || 'Select reason'}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getAvailableReasons().map((reason) => (
+                                    <SelectItem key={reason} value={reason} className="text-base">
+                                      {reason}
+                                    </SelectItem>
+                                  ))}
+                                  {allocation.reason && !getAvailableReasons().includes(allocation.reason) && (
+                                    <SelectItem value={allocation.reason} className="text-base">
+                                      {allocation.reason}
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            )}
                           </div>
                         )}
                       </CardContent>
                     </Card>
                   ))}
                   
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    onClick={addNewAllocation}
-                    className="w-full border-2 border-dashed hover:border-blue-500 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 h-12 text-base"
-                    disabled={getAvailableAllocationTypes().length === 0}
-                  >
-                    <Plus className="h-5 w-5 mr-2" />
-                    Add Allocation
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={addNewAllocation}
+                      className="w-full border-2 border-dashed hover:border-blue-500 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 h-12 text-base"
+                      disabled={getAvailableAllocationTypes().length === 0}
+                    >
+                      <Plus className="h-5 w-5 mr-2" />
+                      Add Allocation
+                    </Button>
+                  )}
                 </>
               ) : (
                 <div className="text-center py-12 bg-muted/30 rounded-xl border-2 border-dashed">
                   <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                   <p className="text-foreground font-medium text-base mb-2">No allocations</p>
                   <p className="text-sm text-muted-foreground mb-4">Add your first allocation</p>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    onClick={addNewAllocation}
-                    className="border-2 hover:border-blue-500 dark:hover:border-blue-600"
-                  >
-                    <Plus className="h-5 w-5 mr-2" />
-                    Add Allocation
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={addNewAllocation}
+                      className="border-2 hover:border-blue-500 dark:hover:border-blue-600"
+                    >
+                      <Plus className="h-5 w-5 mr-2" />
+                      Add Allocation
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -754,20 +785,22 @@ export function RecordDetailView({ record, type, onBack, onSaved }: RecordDetail
               </div>
               <div className="flex flex-col gap-2 items-end flex-shrink-0">
                 {getStatusBadge(record.status)}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-white/20 border-white/40 text-white hover:bg-white/30 backdrop-blur h-8 text-xs px-3"
-                  onClick={handleDeleteRecord}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? (
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4 mr-1" />
-                  )}
-                  Delete
-                </Button>
+                {!readOnly && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-white/20 border-white/40 text-white hover:bg-white/30 backdrop-blur h-8 text-xs px-3"
+                    onClick={handleDeleteRecord}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 mr-1" />
+                    )}
+                    Delete
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -786,24 +819,23 @@ export function RecordDetailView({ record, type, onBack, onSaved }: RecordDetail
 
         {type === 'cash' && renderDetailsByType()}
 
-        {hasChanges && (
+        {!readOnly && hasChanges && (
           <div className="fixed bottom-3 left-1 right-1 z-50">
             <Card className="shadow-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 dark:from-emerald-600 dark:to-emerald-700 border-0">
-              <CardContent className="p-3">
+              <CardContent className="p-2.5">
                 <Button 
                   onClick={handleSaveChanges}
                   disabled={isSaving}
-                  className="w-full bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 hover:bg-gray-50 dark:hover:bg-slate-800 font-bold text-base h-12 shadow-lg"
-                  size="lg"
+                  className="w-full bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 hover:bg-gray-50 dark:hover:bg-slate-800 font-semibold text-sm h-9 shadow-lg"
                 >
                   {isSaving ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Saving...
                     </>
                   ) : (
                     <>
-                      <Save className="mr-2 h-5 w-5" />
+                      <Save className="mr-2 h-4 w-4" />
                       Save Changes
                     </>
                   )}

@@ -36,7 +36,7 @@ interface Record {
 interface RecordsListProps {
   type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group';
   onBack: () => void;
-  onEditRecord: (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group') => void;
+  onEditRecord: (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group', readOnly?: boolean) => void;
 }
 
 export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
@@ -151,12 +151,12 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     setFilteredRecords(filtered);
   }, [searchQuery, statusFilter, records]);
 
-  const handleRecordClick = (record: Record) => {
+  const handleRecordClick = (record: Record, readOnly: boolean = false) => {
     if (type === 'disbursement' && !record.data.synced) {
       setEditingDisbursement(record.data as LoanDisbursement);
     } else {
-      // Pass the full database record data and the type
-      onEditRecord(record.data, type as 'cash' | 'loan' | 'advance' | 'group');
+      // Pass the full database record data, the type, and read-only flag
+      onEditRecord(record.data, type as 'cash' | 'loan' | 'advance' | 'group', readOnly);
     }
   };
 
@@ -608,12 +608,22 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
                     </div>
                   </div>
 
-                  {/* Edit Button */}
-                  {record.status !== 'synced' && (
+                  {/* Edit/View Button */}
+                  {record.status === 'synced' ? (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleRecordClick(record)}
+                      onClick={() => handleRecordClick(record, true)}
+                      className="w-full h-8 border-2 hover:border-emerald-500 dark:hover:border-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-sm"
+                    >
+                      <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                      View Record
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRecordClick(record, false)}
                       className="w-full h-8 border-2 hover:border-blue-500 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 text-sm"
                     >
                       <Edit3 className="h-3.5 w-3.5 mr-1.5" />
