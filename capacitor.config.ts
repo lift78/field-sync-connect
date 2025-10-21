@@ -4,15 +4,15 @@ const config: CapacitorConfig = {
   appId: 'app.lovable.da3c5a951a55424bb1b2b102a1fdb4b2',
   appName: 'Lift Offline',
   webDir: 'dist',
-  // REMOVE the server.url block completely
   plugins: {
     CapacitorHttp: {
-      enabled: true
+      enabled: true,
     },
     Keyboard: {
-      resize: "body"   
-    }
-  }
+      resize: 'none',            
+      resizeOnFullScreen: false,   
+    },
+  },
 };
 
 export default config;

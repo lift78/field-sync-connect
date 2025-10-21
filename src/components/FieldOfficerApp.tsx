@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { App as CapacitorApp } from '@capacitor/app';
 import { useKeyboardHandler } from "@/hooks/useKeyboardHandler";
 import { dbOperations } from "@/lib/database";
 import { Button } from "@/components/ui/button";
@@ -296,6 +297,103 @@ export function FieldOfficerApp() {
   const { theme, setTheme } = useTheme();
   
   useKeyboardHandler();
+
+  // Hardware back button handler
+  useEffect(() => {
+    let backButtonListener: any;
+
+    const setupBackButton = async () => {
+      try {
+        // Register the back button listener
+        backButtonListener = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+          // Handle navigation stack
+          
+          // Priority 1: Close full screen menu
+          if (fullScreenMenuOpen) {
+            setFullScreenMenuOpen(false);
+            return;
+          }
+
+          // Priority 2: Close quick drawer
+          if (quickDrawerOpen) {
+            setQuickDrawerOpen(false);
+            return;
+          }
+
+          // Priority 3: Close quick collections view
+          if (showQuickCollections) {
+            setShowQuickCollections(false);
+            return;
+          }
+
+          // Priority 4: Close record detail view
+          if (recordView) {
+            setRecordView(null);
+            return;
+          }
+
+          // Priority 5: Close sync viewing records
+          if (syncViewingRecords) {
+            setSyncViewingRecords(null);
+            return;
+          }
+
+          // Priority 6: Close more page and go back to more menu
+          if (morePage) {
+            setMorePage(null);
+            setShowMoreMenu(true);
+            return;
+          }
+
+          // Priority 7: Close more menu and go to cash section
+          if (showMoreMenu) {
+            setShowMoreMenu(false);
+            setActiveSection('cash');
+            return;
+          }
+
+          // Priority 8: If not on cash section, go to cash section
+          if (activeSection !== 'cash') {
+            setActiveSection('cash');
+            return;
+          }
+
+          // Priority 9: If on cash section and logged in, show exit confirmation
+          if (!showLogin && activeSection === 'cash') {
+            // Show a confirmation dialog or just exit
+            if (confirm('Exit the app?')) {
+              CapacitorApp.exitApp();
+            }
+            return;
+          }
+
+          // Last resort: exit app
+          CapacitorApp.exitApp();
+        });
+      } catch (error) {
+        console.log('Back button setup error (might be running in browser):', error);
+      }
+    };
+
+    setupBackButton();
+
+    // Cleanup
+    return () => {
+      if (backButtonListener) {
+        backButtonListener.remove();
+      }
+    };
+  }, [
+    fullScreenMenuOpen,
+    quickDrawerOpen,
+    showQuickCollections,
+    recordView,
+    syncViewingRecords,
+    morePage,
+    showMoreMenu,
+    activeSection,
+    showLogin
+  ]);
 
   const sections = [
     { id: 'cash' as const, title: 'Cash', icon: Wallet, color: 'bg-emerald-500' },
