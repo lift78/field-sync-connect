@@ -404,7 +404,7 @@ export function GroupMemberRecords({ groupId, groupName, onBack }: GroupMemberRe
                       <div key={index} className="flex items-center justify-between p-2 bg-slate-500/10 rounded border border-slate-500/30">
                         <div className="flex items-center gap-1.5">
                           <div className="h-3.5 w-3.5 rounded-full bg-slate-500/30 flex items-center justify-center border border-slate-500/50">
-                            <span className="text-[8px] text-slate-500 font-bold">•</span>
+                            <span className="text-[8px] text-slate-500 font-bold">â€¢</span>
                           </div>
                           <span className="text-xs font-medium">{other.type}</span>
                         </div>

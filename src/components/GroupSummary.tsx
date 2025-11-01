@@ -484,7 +484,7 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
                         }}
                         className="ml-2 hover:text-destructive"
                       >
-                        ×
+                        Ã—
                       </button>
                     </Badge>
                   </div>

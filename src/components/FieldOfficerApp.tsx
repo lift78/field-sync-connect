@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTheme } from "next-themes";
 import { App as CapacitorApp } from '@capacitor/app';
 import { useKeyboardHandler } from "@/hooks/useKeyboardHandler";
-import { getBackAction, type NavigationState } from "@/lib/navigationFlow";
+import { useNavigation } from "@/hooks/useNavigation";
 import { dbOperations } from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,10 +150,10 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
 
           <div className="flex flex-wrap justify-center gap-2 mt-8">
             <Badge variant="outline" className="bg-background">
-              🔒 Secure Login
+              ðŸ”’ Secure Login
             </Badge>
             <Badge variant="outline" className="bg-background">
-              📱 Mobile Ready
+              ðŸ“± Mobile Ready
             </Badge>
           </div>
         </div>
@@ -192,14 +192,12 @@ function FullScreenMenu({
 
   return (
     <div className={`fixed inset-0 z-[60] ${bgClass} animate-in fade-in duration-300`}>
-      {/* Decorative background elements */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute top-20 left-10 w-40 h-40 rounded-full bg-primary/30 blur-3xl animate-pulse"></div>
         <div className="absolute bottom-32 right-16 w-32 h-32 rounded-full bg-primary/20 blur-3xl animate-pulse delay-1000"></div>
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-primary/10 blur-3xl animate-pulse delay-500"></div>
       </div>
 
-      {/* Header */}
       <div className="relative z-10 flex items-center justify-between p-4 border-b border-border/50 backdrop-blur-sm bg-background/30">
         <div className="flex items-center gap-3">
           <img 
@@ -222,7 +220,6 @@ function FullScreenMenu({
         </Button>
       </div>
 
-      {/* Menu Items */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-80px)] p-6 overflow-y-auto">
         <div className="w-full max-w-md space-y-3 animate-in slide-in-from-bottom duration-500">
           {menuItems.map((item, index) => {
@@ -260,10 +257,9 @@ function FullScreenMenu({
           })}
         </div>
 
-        {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-xs text-muted-foreground">
-            LIFT Financial Solutions © 2025
+            LIFT Financial Solutions Â© 2025
           </p>
         </div>
       </div>
@@ -285,87 +281,75 @@ function FullScreenMenu({
 }
 
 export function FieldOfficerApp() {
+  // All navigation state
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
-  const [menuOpen, setMenuOpen] = useState(false);
   const [fullScreenMenuOpen, setFullScreenMenuOpen] = useState(false);
-  const [recordView, setRecordView] = useState<RecordView | null>(null);
-  const [showLogin, setShowLogin] = useState(true);
-  const [showQuickCollections, setShowQuickCollections] = useState(false);
   const [quickDrawerOpen, setQuickDrawerOpen] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [morePage, setMorePage] = useState<string | null>(null);
+  const [showQuickCollections, setShowQuickCollections] = useState(false);
+  const [recordView, setRecordView] = useState<RecordView | null>(null);
   const [syncViewingRecords, setSyncViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(null);
-  const { theme, setTheme } = useTheme();
+  const [morePage, setMorePage] = useState<string | null>(null);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showLogin, setShowLogin] = useState(true);
   
+  const { theme, setTheme } = useTheme();
   useKeyboardHandler();
 
-  // Hardware back button handler using centralized navigation flow
+  // Create unified navigation control
+  const navigationControl = useNavigation(
+    {
+      activeSection,
+      fullScreenMenuOpen,
+      quickDrawerOpen,
+      showQuickCollections,
+      recordView,
+      syncViewingRecords,
+      morePage,
+      showMoreMenu,
+      showLogin
+    },
+    {
+      setActiveSection,
+      setFullScreenMenuOpen,
+      setQuickDrawerOpen,
+      setShowQuickCollections,
+      setRecordView,
+      setSyncViewingRecords,
+      setMorePage,
+      setShowMoreMenu
+    }
+  );
+
+  // Hardware back button handler - uses unified navigation
   useEffect(() => {
     let backButtonListener: any;
 
     const setupBackButton = async () => {
       try {
-        // Register the back button listener
         backButtonListener = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-          // Build current navigation state
-          const currentState: NavigationState = {
-            activeSection,
-            fullScreenMenuOpen,
-            quickDrawerOpen,
-            showQuickCollections,
-            recordView,
-            syncViewingRecords,
-            morePage,
-            showMoreMenu,
-            showLogin
-          };
-
-          // Get the back action from centralized navigation flow
-          const backAction = getBackAction(currentState);
-
-          console.log('Hardware back button pressed:', backAction);
-
-          // Execute the determined action
-          switch (backAction.action) {
-            case 'close':
-              if (backAction.target === 'fullScreenMenuOpen') {
-                setFullScreenMenuOpen(false);
-              } else if (backAction.target === 'quickDrawerOpen') {
-                setQuickDrawerOpen(false);
-              } else if (backAction.target === 'showQuickCollections') {
-                setShowQuickCollections(false);
-              } else if (backAction.target === 'recordView') {
-                setRecordView(null);
-              } else if (backAction.target === 'syncViewingRecords') {
-                setSyncViewingRecords(null);
-              } else if (backAction.target === 'morePage') {
-                setMorePage(null);
-                if (backAction.value) {
-                  setShowMoreMenu(true);
-                }
-              }
-              break;
-
-            case 'navigate':
-              if (backAction.target === 'cash') {
-                setShowMoreMenu(false);
-                setActiveSection('cash');
-              }
-              break;
-
-            case 'confirm-exit':
-              if (confirm('Exit the app?')) {
-                CapacitorApp.exitApp();
-              }
-              break;
-
-            case 'exit':
+          console.log('Hardware back button pressed');
+          
+          // Special case: At root (cash section), show exit confirmation
+          if (activeSection === 'cash' && 
+              !fullScreenMenuOpen && 
+              !quickDrawerOpen && 
+              !showQuickCollections && 
+              !recordView && 
+              !syncViewingRecords && 
+              !morePage && 
+              !showMoreMenu && 
+              !showLogin) {
+            if (confirm('Exit the app?')) {
               CapacitorApp.exitApp();
-              break;
+            }
+            return;
           }
+          
+          // Use unified navigation for all other cases
+          navigationControl.handleBack();
         });
 
-        console.log('Hardware back button handler registered with navigation flow system');
+        console.log('Hardware back button handler registered');
       } catch (error) {
         console.log('Back button setup error (might be running in browser):', error);
       }
@@ -373,23 +357,12 @@ export function FieldOfficerApp() {
 
     setupBackButton();
 
-    // Cleanup
     return () => {
       if (backButtonListener) {
         backButtonListener.remove();
       }
     };
-  }, [
-    fullScreenMenuOpen,
-    quickDrawerOpen,
-    showQuickCollections,
-    recordView,
-    syncViewingRecords,
-    morePage,
-    showMoreMenu,
-    activeSection,
-    showLogin
-  ]);
+  }, [navigationControl, activeSection, fullScreenMenuOpen, quickDrawerOpen, showQuickCollections, recordView, syncViewingRecords, morePage, showMoreMenu, showLogin]);
 
   const sections = [
     { id: 'cash' as const, title: 'Cash', icon: Wallet, color: 'bg-emerald-500' },
@@ -400,8 +373,6 @@ export function FieldOfficerApp() {
   ];
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
-
-  // Determine if we should show the bottom navbar
   const shouldShowNavbar = !showQuickCollections && !recordView && !morePage && !syncViewingRecords;
 
   const transformRecordForDetailView = (type: 'cash' | 'loan' | 'advance' | 'group', dbRecord: any) => {
@@ -448,25 +419,6 @@ export function FieldOfficerApp() {
     setRecordView({ type, record: transformedRecord });
   };
 
-  const handleBackFromRecord = () => {
-    setRecordView(null);
-  };
-
-  const handleSyncRecordView = (type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null) => {
-    setSyncViewingRecords(type);
-  };
-
-  const handleMoreNavigate = (page: string) => {
-    setMorePage(page);
-    setShowMoreMenu(false);
-    setActiveSection('more');
-  };
-
-  const handleBackFromMorePage = () => {
-    setMorePage(null);
-    setShowMoreMenu(true);
-  };
-
   const handleMenuNavigate = (section: AppSection) => {
     if (section === 'more') {
       setShowMoreMenu(true);
@@ -479,43 +431,45 @@ export function FieldOfficerApp() {
     }
   };
 
+  const handleMoreNavigate = (page: string) => {
+    setMorePage(page);
+    setShowMoreMenu(false);
+    setActiveSection('more');
+  };
+
   const renderActiveSection = () => {
-    // If showing quick collections
     if (showQuickCollections) {
-      return <QuickCollections onBack={() => setShowQuickCollections(false)} />;
+      return <QuickCollections onBack={navigationControl.handleBack} />;
     }
 
-    // If viewing a record
     if (recordView) {
       return (
         <RecordDetailView
           record={recordView.record}
           type={recordView.type}
-          onBack={handleBackFromRecord}
-          onSaved={handleBackFromRecord}
+          onBack={navigationControl.handleBack}
+          onSaved={navigationControl.handleBack}
         />
       );
     }
 
-    // If in More menu
     if (showMoreMenu) {
-      return <MoreMenu onBack={() => setShowMoreMenu(false)} onNavigate={handleMoreNavigate} />;
+      return <MoreMenu onBack={navigationControl.handleBack} onNavigate={handleMoreNavigate} />;
     }
 
-    // If viewing a More page
     if (morePage) {
       switch (morePage) {
         case 'group-summary':
-          return <GroupSummary onBack={handleBackFromMorePage} onEditRecord={handleEditRecord} />;
+          return <GroupSummary onBack={navigationControl.handleBack} onEditRecord={handleEditRecord} />;
         case 'add-member':
-          return <AddMemberForm onBack={handleBackFromMorePage} />;
+          return <AddMemberForm onBack={navigationControl.handleBack} />;
         case 'add-group':
           return (
             <div className="space-y-3 px-4 py-3 max-w-2xl mx-auto">
               <Card>
                 <CardHeader className="p-3">
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={handleBackFromMorePage} className="h-9 w-9 rounded-full border-2">
+                    <Button variant="ghost" size="icon" onClick={navigationControl.handleBack} className="h-9 w-9 rounded-full border-2">
                       <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <CardTitle className="text-sm">Add New Group</CardTitle>
@@ -533,7 +487,7 @@ export function FieldOfficerApp() {
               <Card>
                 <CardHeader className="p-3">
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={handleBackFromMorePage} className="h-9 w-9 rounded-full border-2">
+                    <Button variant="ghost" size="icon" onClick={navigationControl.handleBack} className="h-9 w-9 rounded-full border-2">
                       <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <CardTitle className="text-sm">{morePage}</CardTitle>
@@ -548,7 +502,6 @@ export function FieldOfficerApp() {
       }
     }
 
-    // Normal sections
     switch (activeSection) {
       case 'cash':
         return <CashCollectionForm />;
@@ -557,9 +510,9 @@ export function FieldOfficerApp() {
       case 'advance':
         return <AdvanceLoanForm />;
       case 'sync':
-        return <SyncManager onEditRecord={handleEditRecord} viewingRecords={syncViewingRecords} onViewingRecordsChange={handleSyncRecordView} />;
+        return <SyncManager onEditRecord={handleEditRecord} viewingRecords={syncViewingRecords} onViewingRecordsChange={setSyncViewingRecords} />;
       case 'more':
-        return <MoreMenu onBack={() => setActiveSection('cash')} onNavigate={handleMoreNavigate} />;
+        return <MoreMenu onBack={navigationControl.handleBack} onNavigate={handleMoreNavigate} />;
       default:
         return <CashCollectionForm />;
     }
@@ -570,21 +523,19 @@ export function FieldOfficerApp() {
   }
 
   if (showQuickCollections) {
-    return <QuickCollections onBack={() => setShowQuickCollections(false)} />;
+    return <QuickCollections onBack={navigationControl.handleBack} />;
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Full Screen Menu */}
       {fullScreenMenuOpen && (
         <FullScreenMenu 
-          onClose={() => setFullScreenMenuOpen(false)} 
+          onClose={navigationControl.handleBack}
           onNavigate={handleMenuNavigate}
           activeSection={activeSection}
         />
       )}
 
-      {/* Mobile Header */}
       <header className="bg-background text-foreground p-3 sticky top-0 z-50 border-b border-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -629,19 +580,16 @@ export function FieldOfficerApp() {
         </div>
       </header>
 
-      {/* Quick Collections Drawer */}
       {quickDrawerOpen && (
         <div className="fixed inset-0 z-50 bg-background">
-          <QuickCollections onBack={() => setQuickDrawerOpen(false)} />
+          <QuickCollections onBack={navigationControl.handleBack} />
         </div>
       )}
 
-      {/* Main Content */}
       <main className={`px-1.5 pt-2 ${shouldShowNavbar ? 'pb-20' : 'pb-4'}`}>
         {renderActiveSection()}
       </main>
 
-      {/* Bottom Navigation */}
       {shouldShowNavbar && (
         <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40">
           <div className="grid grid-cols-5 gap-0">

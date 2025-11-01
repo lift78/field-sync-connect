@@ -339,7 +339,7 @@ export function CashCollectionForm() {
     try {
       if (!selectedMember) {
         toast({
-          title: "❌ Member Required",
+          title: "âŒ Member Required",
           description: "Please select a member first",
           variant: "destructive"
         });
@@ -349,7 +349,7 @@ export function CashCollectionForm() {
       // Validate that we have either collection amounts or allocations
       if (totalCollected === 0 && totalAllocated === 0) {
         toast({
-          title: "❌ No Data to Save",
+          title: "âŒ No Data to Save",
           description: "Please enter collection amounts or allocations",
           variant: "destructive"
         });
@@ -364,7 +364,7 @@ export function CashCollectionForm() {
 
       if (hasPendingRecord) {
         toast({
-          title: "❌ Duplicate Record",
+          title: "âŒ Duplicate Record",
           description: "You have already done a cash collection record for this member. Please edit the existing record or delete it first.",
           variant: "destructive"
         });
@@ -392,7 +392,7 @@ export function CashCollectionForm() {
       });
       
       toast({
-        title: "✅ Cash Collection Saved",
+        title: "âœ… Cash Collection Saved",
         description: `${formatAmount(totalCollected)} saved for ${selectedMember.name}${
           cashAmountNum > 0 ? ' (Cash reference generated)' : ''
         }`,
@@ -407,7 +407,7 @@ export function CashCollectionForm() {
       setSelectedRealMember(null);
     } catch (error) {
       toast({
-        title: "❌ Save Failed",
+        title: "âŒ Save Failed",
         description: "Failed to save cash collection",
         variant: "destructive"
       });
@@ -542,7 +542,7 @@ export function CashCollectionForm() {
                 <Banknote className="h-5 w-5 text-success" />
                 <div>
                   <Label htmlFor="cash-amount" className="text-base font-semibold text-success">
-                    💵 CASH Amount (KES)
+                    ðŸ’µ CASH Amount (KES)
                   </Label>
                   <p className="text-xs text-success/80">Physical money received</p>
                 </div>
@@ -558,7 +558,7 @@ export function CashCollectionForm() {
               />
               {cashAmountNum > 0 && (
                 <div className="flex items-center gap-2 text-sm text-success bg-success/10 p-2 rounded">
-                  <span>📄 Cash reference will be generated automatically</span>
+                  <span>ðŸ“„ Cash reference will be generated automatically</span>
                 </div>
               )}
             </div>
@@ -569,7 +569,7 @@ export function CashCollectionForm() {
                 <Smartphone className="h-5 w-5 text-primary" />
                 <div>
                   <Label htmlFor="mpesa-amount" className="text-base font-semibold text-primary">
-                    📱 M-PESA Amount (KES)
+                    ðŸ“± M-PESA Amount (KES)
                   </Label>
                   <p className="text-xs text-primary/80">Mobile money received</p>
                 </div>
@@ -585,7 +585,7 @@ export function CashCollectionForm() {
               />
               {mpesaAmountNum > 0 && (
                 <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 p-2 rounded">
-                  <span>📱 M-Pesa transaction recorded</span>
+                  <span>ðŸ“± M-Pesa transaction recorded</span>
                 </div>
               )}
             </div>
