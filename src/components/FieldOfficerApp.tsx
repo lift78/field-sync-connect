@@ -306,61 +306,92 @@ export function FieldOfficerApp() {
       try {
         // Register the back button listener
         backButtonListener = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-          // Handle navigation stack
+          console.log('Back button pressed - Navigation stack:', {
+            fullScreenMenuOpen,
+            quickDrawerOpen,
+            showQuickCollections,
+            recordView: recordView?.type,
+            syncViewingRecords,
+            morePage,
+            showMoreMenu,
+            activeSection,
+            showLogin
+          });
           
-          // Priority 1: Close full screen menu
+          // Priority 1: Close full screen menu (matches X button)
           if (fullScreenMenuOpen) {
             setFullScreenMenuOpen(false);
             return;
           }
 
-          // Priority 2: Close quick drawer
+          // Priority 2: Close quick drawer (matches back arrow in QuickCollections)
           if (quickDrawerOpen) {
             setQuickDrawerOpen(false);
             return;
           }
 
-          // Priority 3: Close quick collections view
+          // Priority 3: Close quick collections view (matches back arrow)
           if (showQuickCollections) {
             setShowQuickCollections(false);
             return;
           }
 
-          // Priority 4: Close record detail view
+          // Priority 4: Close record detail view (matches back arrow in RecordDetailView)
           if (recordView) {
             setRecordView(null);
+            // If we were viewing records from sync, stay in sync records view
+            if (syncViewingRecords) {
+              // Already handled by closing recordView
+            }
             return;
           }
 
-          // Priority 5: Close sync viewing records
+          // Priority 5: Close sync viewing records (matches back arrow in RecordsList)
           if (syncViewingRecords) {
             setSyncViewingRecords(null);
             return;
           }
 
-          // Priority 6: Close more page and go back to more menu
+          // Priority 6: Close more page (matches back arrow in more pages like GroupSummary, AddMemberForm)
           if (morePage) {
             setMorePage(null);
             setShowMoreMenu(true);
             return;
           }
 
-          // Priority 7: Close more menu and go to cash section
+          // Priority 7: Close more menu (matches back arrow in MoreMenu)
           if (showMoreMenu) {
             setShowMoreMenu(false);
             setActiveSection('cash');
             return;
           }
 
-          // Priority 8: If not on cash section, go to cash section
-          if (activeSection !== 'cash') {
+          // Priority 8: If on sync section, go back to cash
+          if (activeSection === 'sync') {
             setActiveSection('cash');
             return;
           }
 
-          // Priority 9: If on cash section and logged in, show exit confirmation
-          if (!showLogin && activeSection === 'cash') {
-            // Show a confirmation dialog or just exit
+          // Priority 9: If on loan section, go back to cash
+          if (activeSection === 'loan') {
+            setActiveSection('cash');
+            return;
+          }
+
+          // Priority 10: If on advance section, go back to cash
+          if (activeSection === 'advance') {
+            setActiveSection('cash');
+            return;
+          }
+
+          // Priority 11: If on more section without menu open, go to cash
+          if (activeSection === 'more') {
+            setActiveSection('cash');
+            return;
+          }
+
+          // Priority 12: If on cash section, show exit confirmation
+          if (activeSection === 'cash' && !showLogin) {
             if (confirm('Exit the app?')) {
               CapacitorApp.exitApp();
             }
