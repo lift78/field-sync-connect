@@ -45,6 +45,7 @@ interface RecordView {
     lastUpdated: string;
     data: any;
   };
+  readOnly?: boolean;
 }
 
 interface LoginScreenProps {
@@ -291,6 +292,10 @@ export function FieldOfficerApp() {
   const [morePage, setMorePage] = useState<string | null>(null);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showLogin, setShowLogin] = useState(true);
+  const [showGroupSummary, setShowGroupSummary] = useState(false);
+  const [showGroupMemberRecords, setShowGroupMemberRecords] = useState<string | null>(null);
+  const [groupSummaryDialog, setGroupSummaryDialog] = useState<'fines' | 'cashFromOffice' | null>(null);
+  const [groupSummarySource, setGroupSummarySource] = useState<'cash' | 'more'>('cash');
   
   const { theme, setTheme } = useTheme();
   useKeyboardHandler();
@@ -306,7 +311,10 @@ export function FieldOfficerApp() {
       syncViewingRecords,
       morePage,
       showMoreMenu,
-      showLogin
+      showLogin,
+      showGroupSummary,
+      showGroupMemberRecords,
+      groupSummaryDialog
     },
     {
       setActiveSection,
@@ -316,7 +324,10 @@ export function FieldOfficerApp() {
       setRecordView,
       setSyncViewingRecords,
       setMorePage,
-      setShowMoreMenu
+      setShowMoreMenu,
+      setShowGroupSummary,
+      setShowGroupMemberRecords,
+      setGroupSummaryDialog
     }
   );
 
@@ -432,9 +443,15 @@ export function FieldOfficerApp() {
   };
 
   const handleMoreNavigate = (page: string) => {
-    setMorePage(page);
-    setShowMoreMenu(false);
-    setActiveSection('more');
+    if (page === 'group-summary') {
+      setGroupSummarySource('more');
+      setShowGroupSummary(true);
+      setShowMoreMenu(false);
+    } else {
+      setMorePage(page);
+      setShowMoreMenu(false);
+      setActiveSection('more');
+    }
   };
 
   const renderActiveSection = () => {
@@ -449,8 +466,13 @@ export function FieldOfficerApp() {
           type={recordView.type}
           onBack={navigationControl.handleBack}
           onSaved={navigationControl.handleBack}
+          readOnly={recordView.readOnly}
         />
       );
+    }
+
+    if (showGroupSummary) {
+      return <GroupSummary onBack={navigationControl.handleBack} onEditRecord={handleEditRecord} />;
     }
 
     if (showMoreMenu) {
@@ -459,8 +481,6 @@ export function FieldOfficerApp() {
 
     if (morePage) {
       switch (morePage) {
-        case 'group-summary':
-          return <GroupSummary onBack={navigationControl.handleBack} onEditRecord={handleEditRecord} />;
         case 'add-member':
           return <AddMemberForm onBack={navigationControl.handleBack} />;
         case 'add-group':
@@ -504,7 +524,14 @@ export function FieldOfficerApp() {
 
     switch (activeSection) {
       case 'cash':
-        return <CashCollectionForm />;
+        return (
+          <CashCollectionForm 
+            onShowGroupSummary={() => {
+              setGroupSummarySource('cash');
+              setShowGroupSummary(true);
+            }}
+          />
+        );
       case 'loan':
         return <LoanSection />;
       case 'advance':
@@ -514,7 +541,14 @@ export function FieldOfficerApp() {
       case 'more':
         return <MoreMenu onBack={navigationControl.handleBack} onNavigate={handleMoreNavigate} />;
       default:
-        return <CashCollectionForm />;
+        return (
+          <CashCollectionForm 
+            onShowGroupSummary={() => {
+              setGroupSummarySource('cash');
+              setShowGroupSummary(true);
+            }}
+          />
+        );
     }
   };
 

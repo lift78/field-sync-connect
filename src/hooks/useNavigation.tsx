@@ -61,9 +61,15 @@ export function useNavigation(
           return;
         }
       
-        // Priority 4.7: Close Group Summary → back to Cash Collection
+        // Priority 4.7: Close Group Summary → back to where it came from
         if (state.showGroupSummary) {
           actions.setShowGroupSummary(false);
+          // The activeSection determines where to go back:
+          // - If 'more', it will stay on more section (showMoreMenu will be opened next)
+          // - If 'cash', it will stay on cash section
+          if (state.activeSection === 'more') {
+            actions.setShowMoreMenu(true);
+          }
           return;
         }
       

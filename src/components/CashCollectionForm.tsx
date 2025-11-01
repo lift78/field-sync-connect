@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
 import { Calculator } from "lucide-react";
 import { Plus, Trash2, Save, User, Phone, Users, Banknote, Smartphone, AlertCircle, DollarSign } from "lucide-react";
-import { GroupSummary } from "./GroupSummary";
 // import { Keyboard } from "@capacitor/keyboard";
 
 
@@ -59,7 +58,11 @@ const extractMemberId = (memberIdField: string): string => {
   return parts[parts.length - 1] || memberIdField;
 };
 
-export function CashCollectionForm() {
+interface CashCollectionFormProps {
+  onShowGroupSummary?: () => void;
+}
+
+export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormProps = {}) {
   const [memberId, setMemberId] = useState('');
   const [cashAmount, setCashAmount] = useState('');
   const [mpesaAmount, setMpesaAmount] = useState('');
@@ -67,7 +70,6 @@ export function CashCollectionForm() {
   const [memberQuery, setMemberQuery] = useState('');
   const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
   const [selectedRealMember, setSelectedRealMember] = useState<MemberBalance | null>(null);
-  const [showGroupSummary, setShowGroupSummary] = useState(false);
   const { toast } = useToast();
 
 
@@ -414,11 +416,6 @@ export function CashCollectionForm() {
     }
   };
 
-  // Show Group Summary view
-  if (showGroupSummary) {
-    return <GroupSummary onBack={() => setShowGroupSummary(false)} />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Member Selection */}
@@ -428,7 +425,7 @@ export function CashCollectionForm() {
             <Button 
               variant="default" 
               size="sm"
-              onClick={() => setShowGroupSummary(true)}
+              onClick={onShowGroupSummary}
               className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white"
             >
               Group Summary
