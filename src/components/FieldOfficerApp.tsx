@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { App as CapacitorApp } from '@capacitor/app';
 import { useKeyboardHandler } from "@/hooks/useKeyboardHandler";
+import { getBackAction, type NavigationState } from "@/lib/navigationFlow";
 import { dbOperations } from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -298,7 +299,7 @@ export function FieldOfficerApp() {
   
   useKeyboardHandler();
 
-  // Hardware back button handler
+  // Hardware back button handler using centralized navigation flow
   useEffect(() => {
     let backButtonListener: any;
 
@@ -306,101 +307,65 @@ export function FieldOfficerApp() {
       try {
         // Register the back button listener
         backButtonListener = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-          console.log('Back button pressed - Navigation stack:', {
+          // Build current navigation state
+          const currentState: NavigationState = {
+            activeSection,
             fullScreenMenuOpen,
             quickDrawerOpen,
             showQuickCollections,
-            recordView: recordView?.type,
+            recordView,
             syncViewingRecords,
             morePage,
             showMoreMenu,
-            activeSection,
             showLogin
-          });
-          
-          // Priority 1: Close full screen menu (matches X button)
-          if (fullScreenMenuOpen) {
-            setFullScreenMenuOpen(false);
-            return;
-          }
+          };
 
-          // Priority 2: Close quick drawer (matches back arrow in QuickCollections)
-          if (quickDrawerOpen) {
-            setQuickDrawerOpen(false);
-            return;
-          }
+          // Get the back action from centralized navigation flow
+          const backAction = getBackAction(currentState);
 
-          // Priority 3: Close quick collections view (matches back arrow)
-          if (showQuickCollections) {
-            setShowQuickCollections(false);
-            return;
-          }
+          console.log('Hardware back button pressed:', backAction);
 
-          // Priority 4: Close record detail view (matches back arrow in RecordDetailView)
-          if (recordView) {
-            setRecordView(null);
-            // If we were viewing records from sync, stay in sync records view
-            if (syncViewingRecords) {
-              // Already handled by closing recordView
-            }
-            return;
-          }
+          // Execute the determined action
+          switch (backAction.action) {
+            case 'close':
+              if (backAction.target === 'fullScreenMenuOpen') {
+                setFullScreenMenuOpen(false);
+              } else if (backAction.target === 'quickDrawerOpen') {
+                setQuickDrawerOpen(false);
+              } else if (backAction.target === 'showQuickCollections') {
+                setShowQuickCollections(false);
+              } else if (backAction.target === 'recordView') {
+                setRecordView(null);
+              } else if (backAction.target === 'syncViewingRecords') {
+                setSyncViewingRecords(null);
+              } else if (backAction.target === 'morePage') {
+                setMorePage(null);
+                if (backAction.value) {
+                  setShowMoreMenu(true);
+                }
+              }
+              break;
 
-          // Priority 5: Close sync viewing records (matches back arrow in RecordsList)
-          if (syncViewingRecords) {
-            setSyncViewingRecords(null);
-            return;
-          }
+            case 'navigate':
+              if (backAction.target === 'cash') {
+                setShowMoreMenu(false);
+                setActiveSection('cash');
+              }
+              break;
 
-          // Priority 6: Close more page (matches back arrow in more pages like GroupSummary, AddMemberForm)
-          if (morePage) {
-            setMorePage(null);
-            setShowMoreMenu(true);
-            return;
-          }
+            case 'confirm-exit':
+              if (confirm('Exit the app?')) {
+                CapacitorApp.exitApp();
+              }
+              break;
 
-          // Priority 7: Close more menu (matches back arrow in MoreMenu)
-          if (showMoreMenu) {
-            setShowMoreMenu(false);
-            setActiveSection('cash');
-            return;
-          }
-
-          // Priority 8: If on sync section, go back to cash
-          if (activeSection === 'sync') {
-            setActiveSection('cash');
-            return;
-          }
-
-          // Priority 9: If on loan section, go back to cash
-          if (activeSection === 'loan') {
-            setActiveSection('cash');
-            return;
-          }
-
-          // Priority 10: If on advance section, go back to cash
-          if (activeSection === 'advance') {
-            setActiveSection('cash');
-            return;
-          }
-
-          // Priority 11: If on more section without menu open, go to cash
-          if (activeSection === 'more') {
-            setActiveSection('cash');
-            return;
-          }
-
-          // Priority 12: If on cash section, show exit confirmation
-          if (activeSection === 'cash' && !showLogin) {
-            if (confirm('Exit the app?')) {
+            case 'exit':
               CapacitorApp.exitApp();
-            }
-            return;
+              break;
           }
-
-          // Last resort: exit app
-          CapacitorApp.exitApp();
         });
+
+        console.log('Hardware back button handler registered with navigation flow system');
       } catch (error) {
         console.log('Back button setup error (might be running in browser):', error);
       }
