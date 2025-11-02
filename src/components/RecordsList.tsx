@@ -34,7 +34,7 @@ interface Record {
 }
 
 interface RecordsListProps {
-  type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group';
+  type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | 'newmember';
   onBack: () => void;
   onEditRecord: (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group', readOnly?: boolean) => void;
 }
@@ -58,7 +58,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         setLoading(true);
         setError(null);
         
-        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection)[] = [];
+        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection | NewMember)[] = [];
         
         switch (type) {
           case 'cash':
@@ -75,6 +75,9 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             break;
           case 'group':
             data = await dbOperations.getGroupCollections();
+            break;
+          case 'newmember':
+            data = await dbOperations.getNewMembers();
             break;
         }
 
@@ -166,7 +169,7 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     const loadRecords = async () => {
       try {
         setLoading(true);
-        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection)[] = [];
+        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection | NewMember)[] = [];
         
         switch (type) {
           case 'cash':
@@ -183,6 +186,9 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
             break;
           case 'group':
             data = await dbOperations.getGroupCollections();
+            break;
+          case 'newmember':
+            data = await dbOperations.getNewMembers();
             break;
         }
 
@@ -243,6 +249,8 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         return 'Loan Disbursements';
       case 'group':
         return 'Group Collections';
+      case 'newmember':
+        return 'New Members';
       default:
         return 'Records';
     }
@@ -351,6 +359,9 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
         case 'group':
           updateResult = await dbOperations.updateGroupCollectionStatus(recordId, 'pending');
           break;
+        case 'newmember':
+          updateResult = await dbOperations.updateNewMemberStatus(recordId, 'pending');
+          break;
       }
 
       if (updateResult) {
@@ -397,6 +408,9 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
           break;
         case 'group':
           deleteResult = await dbOperations.deleteGroupCollection(recordId);
+          break;
+        case 'newmember':
+          deleteResult = await dbOperations.deleteNewMember(recordId);
           break;
       }
 

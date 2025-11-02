@@ -132,6 +132,24 @@ export interface GroupCollection {
   syncError?: string;
 }
 
+export interface NewMember {
+  id?: number;
+  name: string;
+  phone: string;
+  group: number;
+  location: string;
+  id_number: string;
+  email?: string;
+  occupation?: string;
+  notes?: string;
+  // Initial allocations (stored as cash collection reference)
+  cashCollectionId?: number;
+  timestamp: Date;
+  synced: boolean;
+  syncStatus?: 'pending' | 'failed' | 'synced';
+  syncError?: string;
+}
+
 export interface OfficeCash {
   id?: number;
   groupId: string;
@@ -147,13 +165,14 @@ export class FieldOfficerDB extends Dexie {
   loanDisbursements!: Table<LoanDisbursement>;
   advanceLoans!: Table<AdvanceLoan>;
   groupCollections!: Table<GroupCollection>;
+  newMembers!: Table<NewMember>;
   officeCash!: Table<OfficeCash>;
   userCredentials!: Table<UserCredentials>;
   memberBalances!: Table<MemberBalance>;
 
   constructor() {
     super('FieldOfficerDB');
-    this.version(11).stores({
+    this.version(12).stores({
       // Enhanced indexing for better search performance
       cashCollections: '++id, memberId, memberName, totalAmount, cashAmount, mpesaAmount, allocationId, timestamp',
       loanApplications: '++id, memberId, memberName, loanAmount, installments, timestamp',
@@ -161,6 +180,7 @@ export class FieldOfficerDB extends Dexie {
       loanDisbursements: '++id, loan_id, database_id, timestamp',
       advanceLoans: '++id, memberId, memberName, amount, timestamp',
       groupCollections: '++id, groupId, groupName, cashCollected, finesCollected, timestamp',
+      newMembers: '++id, id_number, name, phone, group, timestamp',
       officeCash: '++id, &groupId, amount, timestamp', // Not synced, just for calculations
       userCredentials: '++id, username, lastLogin',
       memberBalances: '++id, member_id, name, phone, group_id, group_name, last_updated'
@@ -1098,6 +1118,58 @@ export const dbOperations = {
       return true;
     } catch (error) {
       console.error('Failed to update group collection status:', error);
+      return false;
+    }
+  },
+
+  // =============================================================================
+  // NEW MEMBERS
+  // =============================================================================
+  async addNewMember(data: Omit<NewMember, 'id' | 'synced'>) {
+    return await db.newMembers.add({ 
+      ...data, 
+      synced: false,
+      syncStatus: 'pending'
+    });
+  },
+
+  async getNewMembers() {
+    return await db.newMembers.orderBy('timestamp').reverse().toArray();
+  },
+
+  async getUnsyncedNewMembers() {
+    return await db.newMembers.filter(record => record.synced === false).toArray();
+  },
+
+  async markNewMemberSynced(id: number): Promise<number> {
+    return await db.newMembers.update(id, { 
+      synced: true,
+      syncStatus: 'synced',
+      syncError: undefined
+    });
+  },
+
+  async markNewMemberFailed(id: number, error: string): Promise<number> {
+    return await db.newMembers.update(id, { 
+      syncStatus: 'failed', 
+      syncError: error 
+    });
+  },
+
+  async deleteNewMember(id: string | number) {
+    return await db.newMembers.delete(Number(id));
+  },
+
+  async updateNewMemberStatus(id: string, status: 'pending' | 'failed' | 'synced'): Promise<boolean> {
+    try {
+      const numericId = parseInt(id);
+      await db.newMembers.update(numericId, { 
+        syncStatus: status,
+        syncError: status === 'pending' ? undefined : undefined
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to update new member status:', error);
       return false;
     }
   }

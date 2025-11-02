@@ -30,15 +30,15 @@ import {
 } from "lucide-react";
 
 interface SyncData {
-  type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group';
+  type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | 'newmember';
   count: number;
   lastUpdated: string;
 }
 
 interface SyncManagerProps {
   onEditRecord?: (recordData: any, type: 'cash' | 'loan' | 'advance' | 'group') => void;
-  viewingRecords?: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null;
-  onViewingRecordsChange?: (type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null) => void;
+  viewingRecords?: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | 'newmember' | null;
+  onViewingRecordsChange?: (type: 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | 'newmember' | null) => void;
 }
 
 export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecords, onViewingRecordsChange }: SyncManagerProps) {
@@ -49,7 +49,7 @@ export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecor
   const [memberUpdateProgress, setMemberUpdateProgress] = useState(0);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [lastMemberUpdateTime, setLastMemberUpdateTime] = useState<string | null>(null);
-  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(externalViewingRecords || null);
+  const [viewingRecords, setViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | 'newmember' | null>(externalViewingRecords || null);
   const [recordsListKey, setRecordsListKey] = useState(0);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
   const [offlineData, setOfflineData] = useState<SyncData[]>([]);
@@ -90,17 +90,18 @@ export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecor
       }
     };
     
-    const loadOfflineData = async () => {
+  const loadOfflineData = async () => {
       try {
-        const [cash, loans, advances, disbursements, groups] = await Promise.all([
+        const [cash, loans, advances, disbursements, groups, newMembers] = await Promise.all([
           dbOperations.getUnsyncedCashCollections(),
           dbOperations.getUnsyncedLoanApplications(),
           dbOperations.getUnsyncedAdvanceLoans(),
           dbOperations.getUnsyncedLoanDisbursements(),
-          dbOperations.getUnsyncedGroupCollections()
+          dbOperations.getUnsyncedGroupCollections(),
+          dbOperations.getUnsyncedNewMembers()
         ]);
 
-        setOfflineData([
+        const offlineDataArray: SyncData[] = [
           { 
             type: 'cash', 
             count: cash.length, 
@@ -126,7 +127,18 @@ export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecor
             count: groups.length, 
             lastUpdated: groups.length > 0 ? groups[0].timestamp.toISOString() : new Date().toISOString()
           },
-        ]);
+        ];
+
+        // Only add new members if there are any unsynced
+        if (newMembers.length > 0) {
+          offlineDataArray.push({
+            type: 'newmember',
+            count: newMembers.length,
+            lastUpdated: newMembers[0].timestamp.toISOString()
+          });
+        }
+
+        setOfflineData(offlineDataArray);
       } catch (error) {
         console.error('Failed to load offline data:', error);
       }
@@ -277,6 +289,8 @@ export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecor
         return '💸';
       case 'group':
         return '👥';
+      case 'newmember':
+        return '🆕';
       default:
         return '📄';
     }
@@ -294,6 +308,8 @@ export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecor
         return 'Loan Disbursements';
       case 'group':
         return 'Group Summary';
+      case 'newmember':
+        return 'New Members';
       default:
         return 'Unknown';
     }
@@ -335,15 +351,16 @@ export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecor
     // Reload offline data to reflect any changes
     const loadOfflineData = async () => {
       try {
-        const [cash, loans, advances, disbursements, groups] = await Promise.all([
+        const [cash, loans, advances, disbursements, groups, newMembers] = await Promise.all([
           dbOperations.getUnsyncedCashCollections(),
           dbOperations.getUnsyncedLoanApplications(),
           dbOperations.getUnsyncedAdvanceLoans(),
           dbOperations.getUnsyncedLoanDisbursements(),
-          dbOperations.getUnsyncedGroupCollections()
+          dbOperations.getUnsyncedGroupCollections(),
+          dbOperations.getUnsyncedNewMembers()
         ]);
 
-        setOfflineData([
+        const offlineDataArray: SyncData[] = [
           { 
             type: 'cash', 
             count: cash.length, 
@@ -369,7 +386,18 @@ export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecor
             count: groups.length, 
             lastUpdated: groups.length > 0 ? groups[0].timestamp.toISOString() : new Date().toISOString()
           }
-        ]);
+        ];
+
+        // Only add new members if there are any unsynced
+        if (newMembers.length > 0) {
+          offlineDataArray.push({
+            type: 'newmember',
+            count: newMembers.length,
+            lastUpdated: newMembers[0].timestamp.toISOString()
+          });
+        }
+
+        setOfflineData(offlineDataArray);
       } catch (error) {
         console.error('Failed to reload offline data:', error);
       }
