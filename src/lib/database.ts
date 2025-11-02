@@ -225,18 +225,17 @@ export const dbOperations = {
   },
 
   async updateCashCollection(id: string, data: CashCollection) {
+    // CRITICAL: Preserve existing allocationId and cashReference to prevent duplicates
+    // These IDs must NEVER change once created, even on retry or update
     const updates: Partial<CashCollection> = { 
       ...data, 
       synced: false,
       syncStatus: 'pending',
-      syncError: undefined
+      syncError: undefined,
+      // Keep the original allocationId and cashReference - NEVER regenerate
+      allocationId: data.allocationId,
+      cashReference: data.cashReference
     };
-    
-    if (data.cashAmount > 0 && !data.cashReference) {
-      updates.cashReference = generateCashReference();
-    } else if (data.cashAmount === 0) {
-      updates.cashReference = undefined;
-    }
     
     return await db.cashCollections.update(Number(id), updates);
   },
