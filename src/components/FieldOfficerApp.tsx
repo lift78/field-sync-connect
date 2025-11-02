@@ -608,7 +608,7 @@ export function FieldOfficerApp() {
               className="hover:bg-accent h-9 w-9"
               title="Menu"
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-5 w-5" /> 
             </Button>
           </div>
         </div>
