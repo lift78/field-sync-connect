@@ -394,7 +394,7 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
       });
       
       toast({
-        title: "âœ… Cash Collection Saved",
+        title: "Cash Collection Saved",
         description: `${formatAmount(totalCollected)} saved for ${selectedMember.name}${
           cashAmountNum > 0 ? ' (Cash reference generated)' : ''
         }`,
