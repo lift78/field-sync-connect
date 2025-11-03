@@ -303,6 +303,9 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
       return `Loan ID: ${record.loanId || fullData?.loanId || 'Unknown'}`;
     } else if (type === 'group') {
       return `${fullData?.groupName || 'Unknown Group'} (${record.memberId})`;
+    } else if (type === 'newmember') {
+      // For new members, show name directly from the NewMember data
+      return fullData?.name || 'New Member';
     } else {
       if (fullData?.memberName) {
         return `${fullData.memberName} (${record.memberId})`;
@@ -325,6 +328,9 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
       const cashCollected = fullData?.cashCollected || 0;
       const finesCollected = fullData?.finesCollected || 0;
       return `Cash: ${formatAmount(cashCollected)} | Fines: ${formatAmount(finesCollected)}`;
+    } else if (type === 'newmember') {
+      // For new members, show phone and group
+      return `${fullData?.phone || 'No phone'} | Group ${fullData?.group || 'N/A'}`;
     } else {
       if (record.amount) {
         return formatAmount(record.amount);

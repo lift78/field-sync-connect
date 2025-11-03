@@ -1,5 +1,5 @@
 // Import the interfaces from your database file
-import { CashCollection, LoanApplication, LoanDisbursement, AdvanceLoan, GroupCollection, Allocation } from './database';
+import { CashCollection, LoanApplication, LoanDisbursement, AdvanceLoan, GroupCollection, Allocation, NewMember } from './database';
 import { dbOperations } from './database';
 import { memberDataService } from './memberDataService';
 
@@ -65,6 +65,23 @@ export class SyncService {
       allocations: `${baseUrl}/api/members/{memberId}/allocate_funds/`,
       login: `${baseUrl}/api/auth/login/`
     };
+  }
+
+  // Helper function to format member identifier for API calls
+  // For new members, we use their id_number with "id:" prefix
+  // Regular member IDs are small integers (< 10000), id_numbers are typically longer
+  private formatMemberIdentifier(memberId: string | number): string | number {
+    const memberIdStr = String(memberId);
+    
+    // Check if this looks like an id_number (longer than typical member IDs)
+    // Member IDs are usually small integers (1-9999), id_numbers are longer strings
+    if (memberIdStr.length > 5 && !memberIdStr.startsWith('id:')) {
+      // This is likely an id_number, prefix it
+      return `id:${memberIdStr}`;
+    }
+    
+    // If already prefixed or is a regular member ID, return as is
+    return memberIdStr.startsWith('id:') ? memberIdStr : memberId;
   }
 
   private async authenticate(): Promise<boolean> {
@@ -215,8 +232,9 @@ export class SyncService {
     const syncSingleRecord = async (record: CashCollection) => {
       try {
         // NEW: Prepare payload with both cash and mpesa portions
+        // Format member_id - use "id:" prefix for new members
         const cashPayload = {
-          member_id: record.memberId,
+          member_id: this.formatMemberIdentifier(record.memberId),
           officer_name: 'Offline Officer',
           cash_amount: record.cashAmount,        // Cash portion
           mpesa_amount: record.mpesaAmount,      // M-Pesa portion (NEW)
@@ -280,7 +298,9 @@ export class SyncService {
   
             console.log("📋 Syncing allocations:", allocationPayload);
   
-            const allocationEndpoint = this.endpoints.allocations.replace('{memberId}', record.memberId);
+            // Format member_id for the endpoint - use "id:" prefix for new members
+            const formattedMemberId = this.formatMemberIdentifier(record.memberId);
+            const allocationEndpoint = this.endpoints.allocations.replace('{memberId}', String(formattedMemberId));
   
             const allocRes = await this.authenticatedFetch(allocationEndpoint, {
               method: 'POST',
@@ -376,8 +396,10 @@ export class SyncService {
   
     for (const record of records) {
       try {
+        // Format member identifier - use "id:" prefix for new members
+        const formattedMemberId = this.formatMemberIdentifier(record.memberId);
         const payload = {
-          member: String(record.memberId).padStart(4, '0'), 
+          member: formattedMemberId,
           amount: record.loanAmount,
           installments: record.installments,
           guarantors: record.guarantors.map(id => parseInt(id, 10)), 
@@ -500,8 +522,10 @@ export class SyncService {
     for (const record of records) {
       try {
         // Map Dexie AdvanceLoan fields to backend expected format
+        // Format member identifier - use "id:" prefix for new members
+        const formattedMemberId = this.formatMemberIdentifier(record.memberId);
         const payload = {
-          member: parseInt(record.memberId, 10), // Convert to integer as expected by backend
+          member: formattedMemberId,
           principal_amount: record.amount, // Map amount to principal_amount
           officer_name: 'Offline Officer',
           notes: record.reason || 'Advance short-term loans', // Use reason or default message
@@ -718,6 +742,93 @@ export class SyncService {
     return { success, failed, errors };
   }
 
+  private async syncNewMembers(records: NewMember[]): Promise<{
+    success: number;
+    failed: number;
+    errors: string[];
+  }> {
+    if (records.length === 0) {
+      return { success: 0, failed: 0, errors: [] };
+    }
+  
+    let success = 0;
+    let failed = 0;
+    const errors: string[] = [];
+    
+    for (const record of records) {
+      try {
+        const payload = {
+          name: record.name,
+          group: record.group,
+          phone: record.phone,
+          location: record.location,
+          id_number: record.id_number,
+          email: record.email || '',
+          occupation: record.occupation || '',
+          notes: record.notes || ''
+        };
+  
+        console.log("📤 Syncing new member:", payload);
+  
+        const response = await this.authenticatedFetch(`${this.baseUrl}/api/members/`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+  
+        if (response.ok) {
+          const result = await response.json();
+          
+          if (result.success !== false) {
+            console.log(`✅ New member ${record.id} (${record.name}) synced successfully`);
+            if (record.id) {
+              await dbOperations.markNewMemberSynced(record.id);
+            }
+            success++;
+          } else {
+            console.error(`❌ New member sync failed for ${record.id}:`, result.error);
+            failed++;
+            const errorMsg = result.error || 'Unknown error from server';
+            errors.push(`NewMember ${record.id} (${record.name}): ${errorMsg}`);
+            if (record.id) {
+              await dbOperations.markNewMemberFailed(record.id, errorMsg);
+            }
+          }
+        } else {
+          let result;
+          try {
+            result = await response.json();
+          } catch (jsonError) {
+            console.error(`❌ New member sync failed for ${record.id}: HTTP ${response.status}`);
+            failed++;
+            const errorMsg = `HTTP ${response.status} ${response.statusText}`;
+            errors.push(`NewMember ${record.id} (${record.name}): ${errorMsg}`);
+            if (record.id) {
+              await dbOperations.markNewMemberFailed(record.id, errorMsg);
+            }
+            continue;
+          }
+          
+          console.error(`❌ New member sync failed for ${record.id}:`, result.error);
+          failed++;
+          const errorMsg = result.error || `HTTP ${response.status}`;
+          errors.push(`NewMember ${record.id} (${record.name}): ${errorMsg}`);
+          if (record.id) {
+            await dbOperations.markNewMemberFailed(record.id, errorMsg);
+          }
+        }
+      } catch (error: any) {
+        failed++;
+        errors.push(`NewMember ${record.id} (${record.name}): ${error.message}`);
+        console.error(`💥 Exception during new member sync for ${record.id}:`, error);
+        if (record.id) {
+          await dbOperations.markNewMemberFailed(record.id, error.message);
+        }
+      }
+    }
+  
+    return { success, failed, errors };
+  }
+  
   private async syncLoanDisbursements(records: LoanDisbursement[]): Promise<{
     success: number;
     failed: number;
@@ -936,6 +1047,7 @@ export class SyncService {
   async syncAllData(): Promise<{
     success: boolean;
     summary: {
+      newMembers: { success: number; failed: number };
       cashCollections: { success: number; failed: number };
       loanApplications: { success: number; failed: number };
       loanDisbursements: { success: number; failed: number };
@@ -989,6 +1101,7 @@ export class SyncService {
     }
   
     const unsynced = await dbOperations.getAllUnsyncedRecords();
+    console.log("🧾 Unsynced newMembers count:", unsynced.newMembers?.length);
     console.log("🧾 Unsynced cashCollections count:", unsynced.cashCollections?.length);
     console.log("🧾 Unsynced loanApplications count:", unsynced.loanApplications?.length);
     console.log("🧾 Unsynced advanceLoans count:", unsynced.advanceLoans?.length);
@@ -998,6 +1111,7 @@ export class SyncService {
     
     // Initialize summary
     const summary = {
+      newMembers: { success: 0, failed: 0 },
       cashCollections: { success: 0, failed: 0 },
       loanApplications: { success: 0, failed: 0 },
       loanDisbursements: { success: 0, failed: 0 },
@@ -1010,10 +1124,15 @@ export class SyncService {
       return { success: memberDataResult.success, summary, errors: memberDataResult.error ? [memberDataResult.error] : [] };
     }
   
-    // Continue with existing sync operations - LOAN DISBURSEMENTS FIRST
+    // Sync NEW MEMBERS FIRST (before cash collections, since they may have initial allocations)
+    const newMembersResult = await this.syncNewMembers(unsynced.newMembers || []);
+    summary.newMembers = { success: newMembersResult.success, failed: newMembersResult.failed };
+
+    // Continue with existing sync operations - LOAN DISBURSEMENTS next
     const disbursementsResult = await this.syncLoanDisbursements(unsynced.loanDisbursements || []);
     summary.loanDisbursements = { success: disbursementsResult.success, failed: disbursementsResult.failed };
 
+    // Then cash collections (which may include initial allocations from new members)
     const cashCollectionsResult = await this.syncCashCollections(unsynced.cashCollections || []);
     summary.cashCollections = { success: cashCollectionsResult.success, failed: cashCollectionsResult.failed };
   
@@ -1027,6 +1146,7 @@ export class SyncService {
     summary.groupCollections = { success: groupCollectionsResult.success, failed: groupCollectionsResult.failed };
 
     const errors = [
+      ...newMembersResult.errors,
       ...disbursementsResult.errors,
       ...cashCollectionsResult.errors,
       ...loanApplicationsResult.errors,
@@ -1040,11 +1160,11 @@ export class SyncService {
     }
   
     const totalFailed = 
+      newMembersResult.failed +
       disbursementsResult.failed +
       cashCollectionsResult.failed + 
       loanApplicationsResult.failed +
       advanceLoansResult.failed + 
-      disbursementsResult.failed +
       groupCollectionsResult.failed;
   
     return {
@@ -1151,8 +1271,10 @@ export class SyncService {
 
     try {
       // Map Dexie AdvanceLoan fields to backend expected format
+      // Format member identifier - use "id:" prefix for new members
+      const formattedMemberId = this.formatMemberIdentifier(record.memberId);
       const payload = {
-        member: parseInt(record.memberId, 10), // Convert to integer as expected by backend
+        member: formattedMemberId,
         principal_amount: record.amount, // Map amount to principal_amount
         officer_name: 'Offline Officer',
         notes: record.reason || 'Advance short-term loans', // Use reason or default message

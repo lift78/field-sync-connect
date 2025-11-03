@@ -826,14 +826,16 @@ export const dbOperations = {
     loanDisbursements: LoanDisbursement[];
     advanceLoans: AdvanceLoan[];
     groupCollections: GroupCollection[];
+    newMembers: NewMember[];
     total: number;
   }> {
-    const [cashCollections, loanApplications, loanDisbursements, advanceLoans, groupCollections] = await Promise.all([
+    const [cashCollections, loanApplications, loanDisbursements, advanceLoans, groupCollections, newMembers] = await Promise.all([
       this.getUnsyncedCashCollections(),
       this.getUnsyncedLoanApplications(),
       this.getUnsyncedLoanDisbursements(),
       this.getUnsyncedAdvanceLoans(),
-      this.getUnsyncedGroupCollections()
+      this.getUnsyncedGroupCollections(),
+      this.getUnsyncedNewMembers()
     ]);
 
     return {
@@ -842,7 +844,8 @@ export const dbOperations = {
       loanDisbursements,
       advanceLoans,
       groupCollections,
-      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length + groupCollections.length
+      newMembers,
+      total: cashCollections.length + loanApplications.length + loanDisbursements.length + advanceLoans.length + groupCollections.length + newMembers.length
     };
   },
 

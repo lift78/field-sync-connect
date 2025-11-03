@@ -460,22 +460,6 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 space-y-3">
-            {/* MPESA Amount */}
-            <div>
-              <Label htmlFor="mpesaAmount" className="text-xs font-semibold flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5 text-green-600" />
-                💵 MPESA Amount (KES)
-              </Label>
-              <Input
-                id="mpesaAmount"
-                type="number"
-                value={mpesaAmount}
-                onChange={(e) => setMpesaAmount(e.target.value)}
-                placeholder="0"
-                className="mt-1.5 h-9 text-sm"
-              />
-            </div>
-
             {/* Cash Amount */}
             <div>
               <Label htmlFor="cashAmount" className="text-xs font-semibold flex items-center gap-1.5">
@@ -487,6 +471,22 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
                 type="number"
                 value={cashAmount}
                 onChange={(e) => setCashAmount(e.target.value)}
+                placeholder="0"
+                className="mt-1.5 h-9 text-sm"
+              />
+            </div>
+
+            {/* MPESA Amount */}
+            <div>
+              <Label htmlFor="mpesaAmount" className="text-xs font-semibold flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5 text-green-600" />
+                💵 MPESA Amount (KES)
+              </Label>
+              <Input
+                id="mpesaAmount"
+                type="number"
+                value={mpesaAmount}
+                onChange={(e) => setMpesaAmount(e.target.value)}
                 placeholder="0"
                 className="mt-1.5 h-9 text-sm"
               />
@@ -528,25 +528,46 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 space-y-2">
-                          <Input
-                            placeholder="Item description"
-                            value={item.description}
-                            onChange={(e) => updateCustomItem(index, 'description', e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                          <Input
-                            type="number"
-                            placeholder="Amount"
-                            value={item.amount || ''}
-                            onChange={(e) => updateCustomItem(index, 'amount', parseFloat(e.target.value) || 0)}
-                            className="h-8 text-sm"
-                          />
+                          <div>
+                            <Label className="text-xs">Description</Label>
+                            <Select
+                              value={item.description}
+                              onValueChange={(value) => updateCustomItem(index, 'description', value)}
+                            >
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue placeholder="Select reason..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Lateness Fine">Lateness Fine</SelectItem>
+                                <SelectItem value="Advance fine(kes 10)">Advance fine(kes 10)</SelectItem>
+                                <SelectItem value="Loan Processing Fees">Loan Processing Fees</SelectItem>
+                                <SelectItem value="Advocate Fees">Advocate Fees</SelectItem>
+                                <SelectItem value="Insurance Risk Fund">Insurance Risk Fund</SelectItem>
+                                <SelectItem value="Contribution for Deceased">Contribution for Deceased</SelectItem>
+                                <SelectItem value="Registration Fee">Registration Fee</SelectItem>
+                                <SelectItem value="Meeting Absence Fine">Meeting Absence Fine</SelectItem>
+                                <SelectItem value="Administrative Fees">Administrative Fees</SelectItem>
+                                <SelectItem value="Fines and Penalties">Fines and Penalties</SelectItem>
+                                <SelectItem value="Custom (Other)">Custom (Other)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Amount (KES)</Label>
+                            <Input
+                              type="number"
+                              placeholder="0"
+                              value={item.amount || ''}
+                              onChange={(e) => updateCustomItem(index, 'amount', parseFloat(e.target.value) || 0)}
+                              className="h-8 text-sm"
+                            />
+                          </div>
                         </div>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => removeCustomItem(index)}
-                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 mt-5"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
