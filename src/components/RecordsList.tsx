@@ -19,7 +19,7 @@ import {
   Filter,
   X
 } from "lucide-react";
-import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement, GroupCollection } from "@/lib/database";
+import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement, GroupCollection, NewMember } from "@/lib/database";
 import { EditableDisbursementPreview } from "@/components/EditableDisbursementPreview";
 
 interface Record {
