@@ -67,6 +67,23 @@ export class SyncService {
     };
   }
 
+  // Helper function to format member identifier for API calls
+  // For new members, we use their id_number with "id:" prefix
+  // Regular member IDs are small integers (< 10000), id_numbers are typically longer
+  private formatMemberIdentifier(memberId: string | number): string | number {
+    const memberIdStr = String(memberId);
+    
+    // Check if this looks like an id_number (longer than typical member IDs)
+    // Member IDs are usually small integers (1-9999), id_numbers are longer strings
+    if (memberIdStr.length > 5 && !memberIdStr.startsWith('id:')) {
+      // This is likely an id_number, prefix it
+      return `id:${memberIdStr}`;
+    }
+    
+    // If already prefixed or is a regular member ID, return as is
+    return memberIdStr.startsWith('id:') ? memberIdStr : memberId;
+  }
+
   private async authenticate(): Promise<boolean> {
     try {
       // Get stored credentials
@@ -215,8 +232,9 @@ export class SyncService {
     const syncSingleRecord = async (record: CashCollection) => {
       try {
         // NEW: Prepare payload with both cash and mpesa portions
+        // Format member_id - use "id:" prefix for new members
         const cashPayload = {
-          member_id: record.memberId,
+          member_id: this.formatMemberIdentifier(record.memberId),
           officer_name: 'Offline Officer',
           cash_amount: record.cashAmount,        // Cash portion
           mpesa_amount: record.mpesaAmount,      // M-Pesa portion (NEW)
@@ -280,7 +298,9 @@ export class SyncService {
   
             console.log("📋 Syncing allocations:", allocationPayload);
   
-            const allocationEndpoint = this.endpoints.allocations.replace('{memberId}', record.memberId);
+            // Format member_id for the endpoint - use "id:" prefix for new members
+            const formattedMemberId = this.formatMemberIdentifier(record.memberId);
+            const allocationEndpoint = this.endpoints.allocations.replace('{memberId}', String(formattedMemberId));
   
             const allocRes = await this.authenticatedFetch(allocationEndpoint, {
               method: 'POST',
@@ -376,8 +396,10 @@ export class SyncService {
   
     for (const record of records) {
       try {
+        // Format member identifier - use "id:" prefix for new members
+        const formattedMemberId = this.formatMemberIdentifier(record.memberId);
         const payload = {
-          member: String(record.memberId).padStart(4, '0'), 
+          member: formattedMemberId,
           amount: record.loanAmount,
           installments: record.installments,
           guarantors: record.guarantors.map(id => parseInt(id, 10)), 
@@ -500,8 +522,10 @@ export class SyncService {
     for (const record of records) {
       try {
         // Map Dexie AdvanceLoan fields to backend expected format
+        // Format member identifier - use "id:" prefix for new members
+        const formattedMemberId = this.formatMemberIdentifier(record.memberId);
         const payload = {
-          member: parseInt(record.memberId, 10), // Convert to integer as expected by backend
+          member: formattedMemberId,
           principal_amount: record.amount, // Map amount to principal_amount
           officer_name: 'Offline Officer',
           notes: record.reason || 'Advance short-term loans', // Use reason or default message
@@ -1247,8 +1271,10 @@ export class SyncService {
 
     try {
       // Map Dexie AdvanceLoan fields to backend expected format
+      // Format member identifier - use "id:" prefix for new members
+      const formattedMemberId = this.formatMemberIdentifier(record.memberId);
       const payload = {
-        member: parseInt(record.memberId, 10), // Convert to integer as expected by backend
+        member: formattedMemberId,
         principal_amount: record.amount, // Map amount to principal_amount
         officer_name: 'Offline Officer',
         notes: record.reason || 'Advance short-term loans', // Use reason or default message
