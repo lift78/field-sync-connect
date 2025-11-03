@@ -1,5 +1,5 @@
 // Import the interfaces from your database file
-import { CashCollection, LoanApplication, LoanDisbursement, AdvanceLoan, GroupCollection, Allocation } from './database';
+import { CashCollection, LoanApplication, LoanDisbursement, AdvanceLoan, GroupCollection, Allocation, NewMember } from './database';
 import { dbOperations } from './database';
 import { memberDataService } from './memberDataService';
 
@@ -718,6 +718,93 @@ export class SyncService {
     return { success, failed, errors };
   }
 
+  private async syncNewMembers(records: NewMember[]): Promise<{
+    success: number;
+    failed: number;
+    errors: string[];
+  }> {
+    if (records.length === 0) {
+      return { success: 0, failed: 0, errors: [] };
+    }
+  
+    let success = 0;
+    let failed = 0;
+    const errors: string[] = [];
+    
+    for (const record of records) {
+      try {
+        const payload = {
+          name: record.name,
+          group: record.group,
+          phone: record.phone,
+          location: record.location,
+          id_number: record.id_number,
+          email: record.email || '',
+          occupation: record.occupation || '',
+          notes: record.notes || ''
+        };
+  
+        console.log("📤 Syncing new member:", payload);
+  
+        const response = await this.authenticatedFetch(`${this.baseUrl}/api/members/`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+  
+        if (response.ok) {
+          const result = await response.json();
+          
+          if (result.success !== false) {
+            console.log(`✅ New member ${record.id} (${record.name}) synced successfully`);
+            if (record.id) {
+              await dbOperations.markNewMemberSynced(record.id);
+            }
+            success++;
+          } else {
+            console.error(`❌ New member sync failed for ${record.id}:`, result.error);
+            failed++;
+            const errorMsg = result.error || 'Unknown error from server';
+            errors.push(`NewMember ${record.id} (${record.name}): ${errorMsg}`);
+            if (record.id) {
+              await dbOperations.markNewMemberFailed(record.id, errorMsg);
+            }
+          }
+        } else {
+          let result;
+          try {
+            result = await response.json();
+          } catch (jsonError) {
+            console.error(`❌ New member sync failed for ${record.id}: HTTP ${response.status}`);
+            failed++;
+            const errorMsg = `HTTP ${response.status} ${response.statusText}`;
+            errors.push(`NewMember ${record.id} (${record.name}): ${errorMsg}`);
+            if (record.id) {
+              await dbOperations.markNewMemberFailed(record.id, errorMsg);
+            }
+            continue;
+          }
+          
+          console.error(`❌ New member sync failed for ${record.id}:`, result.error);
+          failed++;
+          const errorMsg = result.error || `HTTP ${response.status}`;
+          errors.push(`NewMember ${record.id} (${record.name}): ${errorMsg}`);
+          if (record.id) {
+            await dbOperations.markNewMemberFailed(record.id, errorMsg);
+          }
+        }
+      } catch (error: any) {
+        failed++;
+        errors.push(`NewMember ${record.id} (${record.name}): ${error.message}`);
+        console.error(`💥 Exception during new member sync for ${record.id}:`, error);
+        if (record.id) {
+          await dbOperations.markNewMemberFailed(record.id, error.message);
+        }
+      }
+    }
+  
+    return { success, failed, errors };
+  }
+  
   private async syncLoanDisbursements(records: LoanDisbursement[]): Promise<{
     success: number;
     failed: number;
@@ -936,6 +1023,7 @@ export class SyncService {
   async syncAllData(): Promise<{
     success: boolean;
     summary: {
+      newMembers: { success: number; failed: number };
       cashCollections: { success: number; failed: number };
       loanApplications: { success: number; failed: number };
       loanDisbursements: { success: number; failed: number };
@@ -989,6 +1077,7 @@ export class SyncService {
     }
   
     const unsynced = await dbOperations.getAllUnsyncedRecords();
+    console.log("🧾 Unsynced newMembers count:", unsynced.newMembers?.length);
     console.log("🧾 Unsynced cashCollections count:", unsynced.cashCollections?.length);
     console.log("🧾 Unsynced loanApplications count:", unsynced.loanApplications?.length);
     console.log("🧾 Unsynced advanceLoans count:", unsynced.advanceLoans?.length);
@@ -998,6 +1087,7 @@ export class SyncService {
     
     // Initialize summary
     const summary = {
+      newMembers: { success: 0, failed: 0 },
       cashCollections: { success: 0, failed: 0 },
       loanApplications: { success: 0, failed: 0 },
       loanDisbursements: { success: 0, failed: 0 },
@@ -1010,10 +1100,15 @@ export class SyncService {
       return { success: memberDataResult.success, summary, errors: memberDataResult.error ? [memberDataResult.error] : [] };
     }
   
-    // Continue with existing sync operations - LOAN DISBURSEMENTS FIRST
+    // Sync NEW MEMBERS FIRST (before cash collections, since they may have initial allocations)
+    const newMembersResult = await this.syncNewMembers(unsynced.newMembers || []);
+    summary.newMembers = { success: newMembersResult.success, failed: newMembersResult.failed };
+
+    // Continue with existing sync operations - LOAN DISBURSEMENTS next
     const disbursementsResult = await this.syncLoanDisbursements(unsynced.loanDisbursements || []);
     summary.loanDisbursements = { success: disbursementsResult.success, failed: disbursementsResult.failed };
 
+    // Then cash collections (which may include initial allocations from new members)
     const cashCollectionsResult = await this.syncCashCollections(unsynced.cashCollections || []);
     summary.cashCollections = { success: cashCollectionsResult.success, failed: cashCollectionsResult.failed };
   
@@ -1027,6 +1122,7 @@ export class SyncService {
     summary.groupCollections = { success: groupCollectionsResult.success, failed: groupCollectionsResult.failed };
 
     const errors = [
+      ...newMembersResult.errors,
       ...disbursementsResult.errors,
       ...cashCollectionsResult.errors,
       ...loanApplicationsResult.errors,
@@ -1040,11 +1136,11 @@ export class SyncService {
     }
   
     const totalFailed = 
+      newMembersResult.failed +
       disbursementsResult.failed +
       cashCollectionsResult.failed + 
       loanApplicationsResult.failed +
       advanceLoansResult.failed + 
-      disbursementsResult.failed +
       groupCollectionsResult.failed;
   
     return {
