@@ -288,7 +288,7 @@ export function FieldOfficerApp() {
   const [quickDrawerOpen, setQuickDrawerOpen] = useState(false);
   const [showQuickCollections, setShowQuickCollections] = useState(false);
   const [recordView, setRecordView] = useState<RecordView | null>(null);
-  const [syncViewingRecords, setSyncViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null>(null);
+  const [syncViewingRecords, setSyncViewingRecords] = useState<'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | 'newmember' | null>(null);
   const [morePage, setMorePage] = useState<string | null>(null);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showLogin, setShowLogin] = useState(true);

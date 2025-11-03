@@ -18,7 +18,7 @@ export interface RecordView {
   }
   
   // Sync viewing record types
-  export type SyncViewingRecordType = 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | null;
+  export type SyncViewingRecordType = 'cash' | 'loan' | 'advance' | 'disbursement' | 'group' | 'newmember' | null;
   
   // Active section types
   export type AppSection = 'cash' | 'loan' | 'advance' | 'sync' | 'more';

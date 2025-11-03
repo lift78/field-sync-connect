@@ -16,13 +16,13 @@ import {
   CreditCard, 
   Mail, 
   Briefcase,
-  Calendar,
   FileText,
   DollarSign,
   Plus,
   Trash2,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Wallet
 } from "lucide-react";
 
 interface CustomItem {
@@ -49,14 +49,12 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
   const [idNumber, setIdNumber] = useState("");
   const [email, setEmail] = useState("");
   const [occupation, setOccupation] = useState("");
-  const [registrationDate, setRegistrationDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
   const [notes, setNotes] = useState("");
 
-  // Allocations
-  const [registrationFee, setRegistrationFee] = useState("500");
-  const [savings, setSavings] = useState("1000");
+  // Allocations - Changed to match cash collection format
+  const [mpesaAmount, setMpesaAmount] = useState("");
+  const [cashAmount, setCashAmount] = useState("");
+  const [savings, setSavings] = useState("");
   const [customItems, setCustomItems] = useState<CustomItem[]>([]);
 
   // Load groups
@@ -99,10 +97,20 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
   };
 
   const calculateTotal = () => {
-    const regFee = parseFloat(registrationFee) || 0;
+    const mpesa = parseFloat(mpesaAmount) || 0;
+    const cash = parseFloat(cashAmount) || 0;
     const savingsAmount = parseFloat(savings) || 0;
     const customTotal = customItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-    return regFee + savingsAmount + customTotal;
+    return mpesa + cash + savingsAmount + customTotal;
+  };
+
+  const formatAmount = (amount: number) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
   };
 
   const validateForm = () => {
@@ -142,10 +150,11 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
       return false;
     }
 
+    // id_number is required as it's used as the identifier
     if (!idNumber.trim()) {
       toast({
         title: "Validation Error",
-        description: "ID number is required",
+        description: "ID number is required (used as member identifier)",
         variant: "destructive"
       });
       return false;
@@ -160,34 +169,91 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
     setIsSubmitting(true);
 
     try {
+      const totalAmount = calculateTotal();
+      const mpesaNum = parseFloat(mpesaAmount) || 0;
+      const cashNum = parseFloat(cashAmount) || 0;
+      const savingsNum = parseFloat(savings) || 0;
+
+      // Step 1: Create new member record
       const memberData = {
-        member: {
-          name: name.trim(),
-          phone: phone.trim(),
-          group: parseInt(selectedGroup),
-          location: location.trim(),
-          id_number: idNumber.trim(),
-          email: email.trim() || undefined,
-          occupation: occupation.trim() || undefined,
-          registration_date: registrationDate,
-          notes: notes.trim() || undefined
-        },
-        allocations: {
-          registration_fee: parseFloat(registrationFee) || 0,
-          savings: parseFloat(savings) || 0,
-          other_items: customItems.filter(item => item.description && item.amount > 0)
-        },
-        officer_name: "Current Officer",
-        timestamp: new Date().toISOString(),
-        force_create: false
+        name: name.trim(),
+        phone: phone.trim(),
+        group: parseInt(selectedGroup),
+        location: location.trim(),
+        id_number: idNumber.trim(),
+        email: email.trim() || undefined,
+        occupation: occupation.trim() || undefined,
+        notes: notes.trim() || undefined,
+        timestamp: new Date()
       };
 
-      // TODO: Replace with actual API call
-      console.log('Member registration data:', memberData);
+      const memberId = await dbOperations.addNewMember(memberData);
+      console.log('New member saved to Dexie with ID:', memberId);
+
+      // Step 2: Create cash collection record for initial allocations if any amounts are provided
+      if (totalAmount > 0) {
+        const allocations: any[] = [];
+        
+        if (savingsNum > 0) {
+          allocations.push({
+            memberId: idNumber, // Use id_number as member identifier for new members
+            type: 'savings',
+            amount: savingsNum
+          });
+        }
+
+        // Add custom items to allocations
+        customItems.forEach(item => {
+          if (item.description && item.amount > 0) {
+            allocations.push({
+              memberId: idNumber, // Use id_number as member identifier
+              type: 'other',
+              amount: item.amount,
+              reason: item.description
+            });
+          }
+        });
+
+        const cashCollectionData = {
+          memberId: idNumber, // Use id_number as member identifier
+          memberName: name.trim(),
+          totalAmount,
+          cashAmount: cashNum,
+          mpesaAmount: mpesaNum,
+          allocations,
+          timestamp: new Date()
+        };
+
+        const cashCollectionId = await dbOperations.addCashCollection(cashCollectionData);
+        
+        // Link cash collection to new member
+        await dbOperations.updateNewMemberStatus(memberId.toString(), 'pending');
+        
+        console.log('Initial allocations saved as cash collection:', cashCollectionId);
+      }
+
+      // Step 3: Add the new member to memberBalances so they appear in selections
+      const selectedGroupData = groups.find(g => g.id === parseInt(selectedGroup));
+      await dbOperations.storeMemberBalances([{
+        member_id: idNumber, // Use id_number as member_id for consistency
+        name: name.trim(),
+        phone: phone.trim(),
+        group_id: parseInt(selectedGroup),
+        group_name: selectedGroupData?.name || 'Unknown Group',
+        meeting_date: new Date().toISOString().split('T')[0],
+        balances: {
+          savings_balance: savingsNum,
+          loan_balance: 0,
+          advance_loan_balance: 0,
+          unallocated_funds: 0,
+          total_outstanding: 0
+        },
+        last_updated: new Date().toISOString()
+      }]);
 
       toast({
-        title: "Success",
-        description: `Member ${name} registered successfully!`,
+        title: "✅ Member Registered",
+        description: `${name} has been registered successfully${totalAmount > 0 ? ` with ${formatAmount(totalAmount)} initial allocation` : ''}!`,
       });
 
       // Reset form
@@ -199,8 +265,9 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
       setEmail("");
       setOccupation("");
       setNotes("");
-      setRegistrationFee("500");
-      setSavings("1000");
+      setMpesaAmount("");
+      setCashAmount("");
+      setSavings("");
       setCustomItems([]);
 
     } catch (error: any) {
@@ -366,21 +433,6 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
               />
             </div>
 
-            {/* Registration Date */}
-            <div>
-              <Label htmlFor="registrationDate" className="text-xs font-semibold flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                Registration Date
-              </Label>
-              <Input
-                id="registrationDate"
-                type="date"
-                value={registrationDate}
-                onChange={(e) => setRegistrationDate(e.target.value)}
-                className="mt-1.5 h-9 text-sm"
-              />
-            </div>
-
             {/* Notes (Optional) */}
             <div>
               <Label htmlFor="notes" className="text-xs font-semibold flex items-center gap-1.5">
@@ -408,17 +460,34 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 space-y-3">
-            {/* Registration Fee */}
+            {/* MPESA Amount */}
             <div>
-              <Label htmlFor="registrationFee" className="text-xs font-semibold">
-                Registration Fee (KES)
+              <Label htmlFor="mpesaAmount" className="text-xs font-semibold flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5 text-green-600" />
+                💵 MPESA Amount (KES)
               </Label>
               <Input
-                id="registrationFee"
+                id="mpesaAmount"
                 type="number"
-                value={registrationFee}
-                onChange={(e) => setRegistrationFee(e.target.value)}
-                placeholder="500"
+                value={mpesaAmount}
+                onChange={(e) => setMpesaAmount(e.target.value)}
+                placeholder="0"
+                className="mt-1.5 h-9 text-sm"
+              />
+            </div>
+
+            {/* Cash Amount */}
+            <div>
+              <Label htmlFor="cashAmount" className="text-xs font-semibold flex items-center gap-1.5">
+                <Wallet className="h-3.5 w-3.5 text-orange-600" />
+                💵 Cash Amount (KES)
+              </Label>
+              <Input
+                id="cashAmount"
+                type="number"
+                value={cashAmount}
+                onChange={(e) => setCashAmount(e.target.value)}
+                placeholder="0"
                 className="mt-1.5 h-9 text-sm"
               />
             </div>
@@ -426,19 +495,19 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
             {/* Savings */}
             <div>
               <Label htmlFor="savings" className="text-xs font-semibold">
-                Initial Savings (KES)
+                💰 Savings (KES)
               </Label>
               <Input
                 id="savings"
                 type="number"
                 value={savings}
                 onChange={(e) => setSavings(e.target.value)}
-                placeholder="1000"
+                placeholder="0"
                 className="mt-1.5 h-9 text-sm"
               />
             </div>
 
-            {/* Custom Items */}
+            {/* Custom Items (Other) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold">Other Items</Label>
