@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisbursement, GroupCollection, NewMember } from "@/lib/database";
 import { EditableDisbursementPreview } from "@/components/EditableDisbursementPreview";
+import { NewMemberDetailView } from "@/components/NewMemberDetailView";
 
 interface Record {
   id: string;
@@ -47,86 +48,96 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
   const [resolvingRecords, setResolvingRecords] = useState<Set<string>>(new Set());
   const [deletingRecords, setDeletingRecords] = useState<Set<string>>(new Set());
   const [editingDisbursement, setEditingDisbursement] = useState<LoanDisbursement | null>(null);
+  const [editingNewMember, setEditingNewMember] = useState<{
+    id: string;
+    memberId: string;
+    status: 'synced' | 'pending' | 'failed';
+    syncError?: string;
+    lastUpdated: string;
+    data: NewMember;
+  } | null>(null);
   
   // Filter and search states
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'synced' | 'pending' | 'failed'>('all');
 
   useEffect(() => {
-    const loadRecords = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection | NewMember)[] = [];
-        
-        switch (type) {
-          case 'cash':
-            data = await dbOperations.getCashCollections();
-            break;
-          case 'loan':
-            data = await dbOperations.getLoanApplications();
-            break;
-          case 'advance':
-            data = await dbOperations.getAdvanceLoans();
-            break;
-          case 'disbursement':
-            data = await dbOperations.getLoanDisbursements();
-            break;
-          case 'group':
-            data = await dbOperations.getGroupCollections();
-            break;
-          case 'newmember':
-            data = await dbOperations.getNewMembers();
-            break;
-        }
-
-        const formattedRecords: Record[] = data.map((item) => {
-          let status: 'synced' | 'pending' | 'failed' = 'pending';
-          if (item.syncStatus) {
-            status = item.syncStatus as 'synced' | 'pending' | 'failed';
-          } else if (item.synced) {
-            status = 'synced';
-          }
-
-          let amount: number = 0;
-          if ('amount' in item && typeof item.amount === 'number') {
-            amount = item.amount;
-          } else if ('loanAmount' in item && typeof item.loanAmount === 'number') {
-            amount = item.loanAmount;
-          } else if ('principalAmount' in item && typeof item.principalAmount === 'number') {
-            amount = item.principalAmount;
-          } else if ('totalAmount' in item && typeof item.totalAmount === 'number') {
-            amount = item.totalAmount;
-          } else if ('cashCollected' in item && typeof item.cashCollected === 'number') {
-            const finesCollected = ('finesCollected' in item && typeof item.finesCollected === 'number') ? item.finesCollected : 0;
-            amount = item.cashCollected + finesCollected;
-          }
-
-          return {
-            id: item.id?.toString() || '',
-            memberId: 'memberId' in item ? (item.memberId as string) : 'groupId' in item ? (item.groupId as string) : undefined,
-            loanId: 'loan_id' in item ? (item.loan_id as string) : undefined,
-            amount,
-            status,
-            syncError: item.syncError || '',
-            lastUpdated: item.timestamp.toISOString(),
-            data: item
-          };
-        });
-
-        setRecords(formattedRecords);
-        setFilteredRecords(formattedRecords);
-      } catch (err) {
-        console.error('Failed to load records:', err);
-        setError('Failed to load records from database');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadRecords();
   }, [type]);
+
+  const loadRecords = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection | NewMember)[] = [];
+      
+      switch (type) {
+        case 'cash':
+          data = await dbOperations.getCashCollections();
+          break;
+        case 'loan':
+          data = await dbOperations.getLoanApplications();
+          break;
+        case 'advance':
+          data = await dbOperations.getAdvanceLoans();
+          break;
+        case 'disbursement':
+          data = await dbOperations.getLoanDisbursements();
+          break;
+        case 'group':
+          data = await dbOperations.getGroupCollections();
+          break;
+        case 'newmember':
+          data = await dbOperations.getNewMembers();
+          break;
+      }
+
+      const formattedRecords: Record[] = data.map((item) => {
+        let status: 'synced' | 'pending' | 'failed' = 'pending';
+        if (item.syncStatus) {
+          status = item.syncStatus as 'synced' | 'pending' | 'failed';
+        } else if (item.synced) {
+          status = 'synced';
+        }
+
+        let amount: number = 0;
+        if ('amount' in item && typeof item.amount === 'number') {
+          amount = item.amount;
+        } else if ('loanAmount' in item && typeof item.loanAmount === 'number') {
+          amount = item.loanAmount;
+        } else if ('principalAmount' in item && typeof item.principalAmount === 'number') {
+          amount = item.principalAmount;
+        } else if ('totalAmount' in item && typeof item.totalAmount === 'number') {
+          amount = item.totalAmount;
+        } else if ('cashCollected' in item && typeof item.cashCollected === 'number') {
+          const finesCollected = ('finesCollected' in item && typeof item.finesCollected === 'number') ? item.finesCollected : 0;
+          amount = item.cashCollected + finesCollected;
+        }
+
+        return {
+          id: item.id?.toString() || '',
+          memberId: 'memberId' in item ? (item.memberId as string) : 
+                    'groupId' in item ? (item.groupId as string) : 
+                    'id_number' in item ? (item.id_number as string) : undefined,
+          loanId: 'loan_id' in item ? (item.loan_id as string) : undefined,
+          amount,
+          status,
+          syncError: item.syncError || '',
+          lastUpdated: item.timestamp.toISOString(),
+          data: item
+        };
+      });
+
+      setRecords(formattedRecords);
+      setFilteredRecords(formattedRecords);
+    } catch (err) {
+      console.error('Failed to load records:', err);
+      setError('Failed to load records from database');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Apply filters and search
   useEffect(() => {
@@ -157,6 +168,16 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
   const handleRecordClick = (record: Record, readOnly: boolean = false) => {
     if (type === 'disbursement' && !record.data.synced) {
       setEditingDisbursement(record.data as LoanDisbursement);
+    } else if (type === 'newmember') {
+      // Open new member detail view
+      setEditingNewMember({
+        id: record.id,
+        memberId: record.memberId || '',
+        status: record.status,
+        syncError: record.syncError,
+        lastUpdated: record.lastUpdated,
+        data: record.data as NewMember
+      });
     } else {
       // Pass the full database record data, the type, and read-only flag
       onEditRecord(record.data, type as 'cash' | 'loan' | 'advance' | 'group', readOnly);
@@ -165,75 +186,11 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
 
   const handleDisbursementSaved = () => {
     setEditingDisbursement(null);
-    // Reload records
-    const loadRecords = async () => {
-      try {
-        setLoading(true);
-        let data: (CashCollection | LoanApplication | AdvanceLoan | LoanDisbursement | GroupCollection | NewMember)[] = [];
-        
-        switch (type) {
-          case 'cash':
-            data = await dbOperations.getCashCollections();
-            break;
-          case 'loan':
-            data = await dbOperations.getLoanApplications();
-            break;
-          case 'advance':
-            data = await dbOperations.getAdvanceLoans();
-            break;
-          case 'disbursement':
-            data = await dbOperations.getLoanDisbursements();
-            break;
-          case 'group':
-            data = await dbOperations.getGroupCollections();
-            break;
-          case 'newmember':
-            data = await dbOperations.getNewMembers();
-            break;
-        }
+    loadRecords();
+  };
 
-        const formattedRecords: Record[] = data.map((item) => {
-          let status: 'synced' | 'pending' | 'failed' = 'pending';
-          if (item.syncStatus) {
-            status = item.syncStatus as 'synced' | 'pending' | 'failed';
-          } else if (item.synced) {
-            status = 'synced';
-          }
-
-          let amount: number = 0;
-          if ('amount' in item && typeof item.amount === 'number') {
-            amount = item.amount;
-          } else if ('loanAmount' in item && typeof item.loanAmount === 'number') {
-            amount = item.loanAmount;
-          } else if ('principalAmount' in item && typeof item.principalAmount === 'number') {
-            amount = item.principalAmount;
-          } else if ('totalAmount' in item && typeof item.totalAmount === 'number') {
-            amount = item.totalAmount;
-          } else if ('cashCollected' in item && typeof item.cashCollected === 'number') {
-            const finesCollected = ('finesCollected' in item && typeof item.finesCollected === 'number') ? item.finesCollected : 0;
-            amount = item.cashCollected + finesCollected;
-          }
-
-          return {
-            id: item.id?.toString() || '',
-            memberId: 'memberId' in item ? (item.memberId as string) : 'groupId' in item ? (item.groupId as string) : undefined,
-            loanId: 'loan_id' in item ? (item.loan_id as string) : undefined,
-            amount,
-            status,
-            syncError: item.syncError || '',
-            lastUpdated: item.timestamp.toISOString(),
-            data: item
-          };
-        });
-
-        setRecords(formattedRecords);
-      } catch (err) {
-        console.error('Failed to reload records:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
+  const handleNewMemberSaved = () => {
+    setEditingNewMember(null);
     loadRecords();
   };
 
@@ -474,6 +431,18 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
           </Card>
         </div>
       </div>
+    );
+  }
+
+  // If editing new member, show the detail view
+  if (editingNewMember) {
+    return (
+      <NewMemberDetailView
+        record={editingNewMember}
+        onBack={() => setEditingNewMember(null)}
+        onSaved={handleNewMemberSaved}
+        readOnly={editingNewMember.status === 'synced'}
+      />
     );
   }
 

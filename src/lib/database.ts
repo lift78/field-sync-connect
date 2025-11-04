@@ -1163,6 +1163,16 @@ export const dbOperations = {
     return await db.newMembers.delete(Number(id));
   },
 
+  async updateNewMember(id: string, data: Partial<Omit<NewMember, 'id'>>) {
+    const numericId = Number(id);
+    return await db.newMembers.update(numericId, { 
+      ...data,
+      synced: false,
+      syncStatus: 'pending',
+      syncError: undefined
+    });
+  },
+
   async updateNewMemberStatus(id: string, status: 'pending' | 'failed' | 'synced'): Promise<boolean> {
     try {
       const numericId = parseInt(id);
