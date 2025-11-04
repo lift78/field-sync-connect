@@ -554,12 +554,17 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
 
         {/* Records List */}
         <div className="space-y-2.5">
-          {filteredRecords.map((record) => (
+          {filteredRecords.map((record, index) => (
             <Card 
               key={record.id} 
-              className={`shadow-sm transition-all ${
-                record.status === 'failed' ? 'border-l-4 border-l-red-500' : ''
+              className={`shadow-sm transition-all cursor-pointer hover:shadow-md border-l-4 ${
+                index % 2 === 0 
+                  ? 'border-l-blue-500' 
+                  : 'border-l-purple-500'
+              } ${
+                record.status === 'failed' ? 'border-r-4 border-r-red-500' : ''
               }`}
+              onClick={() => handleRecordClick(record, record.status === 'synced')}
             >
               <CardContent className="p-3">
                 <div className="space-y-2.5">

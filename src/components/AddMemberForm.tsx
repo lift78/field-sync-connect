@@ -96,12 +96,24 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
     setCustomItems(updated);
   };
 
-  const calculateTotal = () => {
+  const calculateTotalInput = () => {
     const mpesa = parseFloat(mpesaAmount) || 0;
     const cash = parseFloat(cashAmount) || 0;
+    return mpesa + cash;
+  };
+
+  const calculateTotalAllocated = () => {
     const savingsAmount = parseFloat(savings) || 0;
     const customTotal = customItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-    return mpesa + cash + savingsAmount + customTotal;
+    return savingsAmount + customTotal;
+  };
+
+  const isBalanced = () => {
+    const totalInput = calculateTotalInput();
+    const totalAllocated = calculateTotalAllocated();
+    // Allow submission if no amounts, or if they balance
+    if (totalInput === 0 && totalAllocated === 0) return true;
+    return totalInput === totalAllocated;
   };
 
   const formatAmount = (amount: number) => {
@@ -160,6 +172,18 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
       return false;
     }
 
+    // Validate allocation balance
+    if (!isBalanced()) {
+      const totalInput = calculateTotalInput();
+      const totalAllocated = calculateTotalAllocated();
+      toast({
+        title: "Allocation Mismatch",
+        description: `Total input (${formatAmount(totalInput)}) must equal total allocated (${formatAmount(totalAllocated)})`,
+        variant: "destructive"
+      });
+      return false;
+    }
+
     return true;
   };
 
@@ -169,7 +193,7 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
     setIsSubmitting(true);
 
     try {
-      const totalAmount = calculateTotal();
+      const totalAmount = calculateTotalInput(); // Use input total, not allocated
       const mpesaNum = parseFloat(mpesaAmount) || 0;
       const cashNum = parseFloat(cashAmount) || 0;
       const savingsNum = parseFloat(savings) || 0;
@@ -585,13 +609,27 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
             </div>
 
             {/* Total */}
-            <div className="pt-3 border-t">
-              <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-                <span className="text-sm font-semibold">Total Amount</span>
-                <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                  KES {calculateTotal().toLocaleString()}
+            <div className="pt-3 border-t space-y-2">
+              <div className="flex items-center justify-between p-2.5 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
+                <span className="text-xs font-semibold text-green-700 dark:text-green-300">Total Input (Cash + M-Pesa)</span>
+                <span className="text-base font-bold text-green-600 dark:text-green-400">
+                  KES {calculateTotalInput().toLocaleString()}
                 </span>
               </div>
+              <div className="flex items-center justify-between p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900">
+                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Total Allocated (Savings + Other)</span>
+                <span className="text-base font-bold text-blue-600 dark:text-blue-400">
+                  KES {calculateTotalAllocated().toLocaleString()}
+                </span>
+              </div>
+              {!isBalanced() && (calculateTotalInput() > 0 || calculateTotalAllocated() > 0) && (
+                <div className="flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-900">
+                  <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                  <span className="text-xs font-semibold text-red-700 dark:text-red-300">
+                    Amounts must match! Difference: KES {Math.abs(calculateTotalInput() - calculateTotalAllocated()).toLocaleString()}
+                  </span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
