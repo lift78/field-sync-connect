@@ -23,6 +23,12 @@ import { dbOperations, CashCollection, LoanApplication, AdvanceLoan, LoanDisburs
 import { EditableDisbursementPreview } from "@/components/EditableDisbursementPreview";
 import { NewMemberDetailView } from "@/components/NewMemberDetailView";
 
+// Helper function to get first two names
+const getShortName = (fullName: string): string => {
+  const names = fullName.trim().split(/\s+/);
+  return names.slice(0, 2).join(' ');
+};
+
 interface Record {
   id: string;
   memberId?: string;
@@ -261,11 +267,11 @@ export function RecordsList({ type, onBack, onEditRecord }: RecordsListProps) {
     } else if (type === 'group') {
       return `${fullData?.groupName || 'Unknown Group'} (${record.memberId})`;
     } else if (type === 'newmember') {
-      // For new members, show name directly from the NewMember data
-      return fullData?.name || 'New Member';
+      // For new members, show first two names
+      return getShortName(fullData?.name || 'New Member');
     } else {
       if (fullData?.memberName) {
-        return `${fullData.memberName} (${record.memberId})`;
+        return `${getShortName(fullData.memberName)} (${record.memberId})`;
       }
       return `Member ${record.memberId}`;
     }

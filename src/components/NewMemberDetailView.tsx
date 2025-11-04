@@ -239,6 +239,30 @@ export function NewMemberDetailView({ record, onBack, onSaved, readOnly = false 
           });
         }
 
+        // Update loan applications
+        const loanApplications = await dbOperations.getLoanApplications();
+        const relatedLoanApps = loanApplications.filter(la => la.memberId === oldIdNumber);
+        
+        for (const la of relatedLoanApps) {
+          await dbOperations.updateLoanApplication(la.id!.toString(), {
+            ...la,
+            memberId: newIdNumber,
+            memberName: name.trim()
+          });
+        }
+
+        // Update advance loans
+        const advanceLoans = await dbOperations.getAdvanceLoans();
+        const relatedAdvanceLoans = advanceLoans.filter(al => al.memberId === oldIdNumber);
+        
+        for (const al of relatedAdvanceLoans) {
+          await dbOperations.updateAdvanceLoan(al.id!.toString(), {
+            ...al,
+            memberId: newIdNumber,
+            memberName: name.trim()
+          });
+        }
+
         // Update member balance record
         const memberBalance = await dbOperations.getMemberById(oldIdNumber);
         if (memberBalance) {
@@ -258,6 +282,28 @@ export function NewMemberDetailView({ record, onBack, onSaved, readOnly = false 
         for (const cc of relatedCashCollections) {
           await dbOperations.updateCashCollection(cc.id!.toString(), {
             ...cc,
+            memberName: name.trim()
+          });
+        }
+
+        // Update loan applications
+        const loanApplications = await dbOperations.getLoanApplications();
+        const relatedLoanApps = loanApplications.filter(la => la.memberId === newIdNumber);
+        
+        for (const la of relatedLoanApps) {
+          await dbOperations.updateLoanApplication(la.id!.toString(), {
+            ...la,
+            memberName: name.trim()
+          });
+        }
+
+        // Update advance loans
+        const advanceLoans = await dbOperations.getAdvanceLoans();
+        const relatedAdvanceLoans = advanceLoans.filter(al => al.memberId === newIdNumber);
+        
+        for (const al of relatedAdvanceLoans) {
+          await dbOperations.updateAdvanceLoan(al.id!.toString(), {
+            ...al,
             memberName: name.trim()
           });
         }
