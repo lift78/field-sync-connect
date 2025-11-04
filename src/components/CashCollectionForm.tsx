@@ -535,13 +535,15 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Enhanced Cash Field */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2 p-2 bg-success/10 rounded-lg border border-success/20">
-                <Banknote className="h-5 w-5 text-success" />
+              <div className="flex items-center gap-2 p-2 bg-green-900/20 rounded-lg border border-green-500/30">
+                <div className="p-2 bg-green-500/20 rounded-lg">
+                  <Banknote className="h-5 w-5 text-green-400" />
+                </div>
                 <div>
-                  <Label htmlFor="cash-amount" className="text-base font-semibold text-success">
-                    ðŸ’µ CASH Amount (KES)
+                  <Label htmlFor="cash-amount" className="text-base font-semibold text-green-300">
+                    💵 CASH Amount (KES)
                   </Label>
-                  <p className="text-xs text-success/80">Physical money received</p>
+                  <p className="text-xs text-green-400/80">Physical money received</p>
                 </div>
               </div>
               <Input
@@ -555,7 +557,7 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
               />
               {cashAmountNum > 0 && (
                 <div className="flex items-center gap-2 text-sm text-success bg-success/10 p-2 rounded">
-                  <span>ðŸ“„ Cash reference will be generated automatically</span>
+                  <span>📄 Cash reference will be generated automatically</span>
                 </div>
               )}
             </div>
@@ -566,7 +568,7 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
                 <Smartphone className="h-5 w-5 text-primary" />
                 <div>
                   <Label htmlFor="mpesa-amount" className="text-base font-semibold text-primary">
-                    ðŸ“± M-PESA Amount (KES)
+                  📱 M-PESA Amount (KES)
                   </Label>
                   <p className="text-xs text-primary/80">Mobile money received</p>
                 </div>
@@ -582,7 +584,7 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
               />
               {mpesaAmountNum > 0 && (
                 <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 p-2 rounded">
-                  <span>ðŸ“± M-Pesa transaction recorded</span>
+                  <span>📱 M-Pesa transaction recorded</span>
                 </div>
               )}
             </div>

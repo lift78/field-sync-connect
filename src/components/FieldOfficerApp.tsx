@@ -151,17 +151,22 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
 
           <div className="flex flex-wrap justify-center gap-2 mt-8">
             <Badge variant="outline" className="bg-background">
-              ðŸ”’ Secure Login
+            🔒 Secure Login
             </Badge>
             <Badge variant="outline" className="bg-background">
-              ðŸ“± Mobile Ready
+            📱 Mobile Ready
             </Badge>
           </div>
         </div>
 
-        <div className="mt-8 text-center text-muted-foreground text-sm">
-          <p>Powered by LIFT Financial Solutions</p>
+        <div className="mt-8 text-center">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-red-500/20 border border-amber-500/30">
+          <div className="h-2 w-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 animate-pulse"></div>
+          <p className="text-sm font-medium bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 bg-clip-text text-transparent">
+            Powered by Spekta
+          </p>
         </div>
+      </div>
       </div>
     </div>
   );

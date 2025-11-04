@@ -99,14 +99,7 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
         <Card className="shadow-sm bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-primary/20">
           <CardContent className="p-3">
             <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={onBack}
-                className="h-9 w-9 rounded-full border-2 hover:bg-accent flex-shrink-0"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
+          
               <div className="flex-1 min-w-0">
                 <h2 className="text-base font-bold tracking-tight">More Options</h2>
                 <p className="text-xs text-muted-foreground">Additional features and settings</p>

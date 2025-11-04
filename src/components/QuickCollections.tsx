@@ -71,6 +71,18 @@ function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Grou
   const [members, setMembers] = useState<MemberBalance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Define color options for group cards
+  const groupColors = [
+    'from-blue-500 to-blue-600',
+    'from-purple-500 to-purple-600',
+    'from-green-500 to-green-600',
+    'from-orange-500 to-orange-600',
+    'from-pink-500 to-pink-600',
+    'from-cyan-500 to-cyan-600',
+    'from-red-500 to-red-600',
+    'from-indigo-500 to-indigo-600',
+  ];
+
   useEffect(() => {
     loadGroupsAndMembers();
   }, []);
@@ -133,50 +145,64 @@ function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Grou
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={onBack} className="flex items-center gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Button>
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Quick Collections</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Select a group to start collecting from members</p>
+    <div className="space-y-4">
+      {/* Compact Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-4 sm:px-6 py-3 sm:py-4 rounded-lg shadow-lg">
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={onBack} 
+            className="hover:bg-white/20 text-white flex-shrink-0"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl font-bold text-white">Quick Collections</h1>
+            <p className="text-xs sm:text-sm text-white/90">Select a group to start collecting from members</p>
+          </div>
         </div>
       </div>
 
-      {/* Groups Grid - Optimized for mobile */}
-      <div className="space-y-3 h-[65vh] overflow-y-auto px-1">
-        {groups.map((group) => (
-          <Card 
-            key={group.id} 
-            className="cursor-pointer hover:shadow-lg transition-shadow mx-1 sm:mx-0" 
-            onClick={() => handleGroupSelect(group)}
-          >
-            <CardHeader className="pb-2 sm:pb-3">
-              <CardTitle className="flex items-center justify-between text-base sm:text-lg">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
-                  <span className="truncate">{group.name}</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {group.memberCount} members
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Groups List */}
+      <div className="space-y-3">
+        {groups.map((group, index) => {
+          const colorClass = groupColors[index % groupColors.length];
+          return (
+            <Card 
+              key={group.id} 
+              className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-[1.01] border-2 hover:border-blue-400 dark:hover:border-blue-500" 
+              onClick={() => handleGroupSelect(group)}
+            >
+              {/* Colorful Top Line */}
+              <div className={`h-1.5 bg-gradient-to-r ${colorClass}`}></div>
+              
+              <CardHeader className="pb-2 sm:pb-3">
+                <CardTitle className="flex items-center justify-between text-base sm:text-lg">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                    <div className={`p-1.5 sm:p-2 rounded-lg bg-gradient-to-r ${colorClass} flex-shrink-0`}>
+                      <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                    </div>
+                    <span className="font-bold truncate">{group.name}</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0 ml-2" />
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 pb-3">
+                <Badge variant="secondary" className="text-xs sm:text-sm">
+                  {group.memberCount} members
+                </Badge>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {groups.length === 0 && (
-        <Card className="mx-1 sm:mx-0">
-          <CardContent className="p-6 sm:p-8 text-center">
-            <Users className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-base sm:text-lg font-semibold mb-2">No Groups Found</h3>
+        <Card>
+          <CardContent className="p-8 sm:p-12 text-center">
+            <Users className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg sm:text-xl font-semibold mb-2">No Groups Found</h3>
             <p className="text-sm sm:text-base text-muted-foreground">
               No member groups are available for quick collections.
             </p>

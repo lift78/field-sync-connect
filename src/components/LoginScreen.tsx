@@ -125,7 +125,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
         {/* Bottom branding */}
         <div className="mt-8 text-center text-muted-foreground text-sm">
-          <p>Powered by LIFT Financial Solutions</p>
+          <p>Powered by Spekta</p>
         </div>
       </div>
     </div>
