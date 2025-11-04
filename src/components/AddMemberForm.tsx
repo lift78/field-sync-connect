@@ -55,7 +55,9 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
   const [mpesaAmount, setMpesaAmount] = useState("");
   const [cashAmount, setCashAmount] = useState("");
   const [savings, setSavings] = useState("");
-  const [customItems, setCustomItems] = useState<CustomItem[]>([]);
+  const [customItems, setCustomItems] = useState<CustomItem[]>([
+    { description: "Registration Fee", amount: 0, isCustom: true }
+  ]);
 
   // Load groups
   useEffect(() => {
@@ -292,7 +294,7 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
       setMpesaAmount("");
       setCashAmount("");
       setSavings("");
-      setCustomItems([]);
+      setCustomItems([{ description: "Registration Fee", amount: 0, isCustom: true }]);
 
     } catch (error: any) {
       console.error('Error registering member:', error);
