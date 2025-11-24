@@ -4,792 +4,761 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Save, User, Users, Search } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { 
+  Plus, 
+  Trash2, 
+  Save, 
+  User, 
+  Users, 
+  Search, 
+  X, 
+  CheckCircle2,
+  ArrowLeft,
+  Phone,
+  CreditCard,
+  Shield,
+  TrendingUp,
+  Sparkles
+} from "lucide-react";
 import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
-// import { Keyboard } from "@capacitor/keyboard";
 
-
-// Mock member data - fallback when no real data exists
-const mockMembers = Array.from({ length: 9999 }, (_, i) => ({
-  id: String(i + 1).padStart(4, '0'),
-  name: `Member ${i + 1}`,
-}));
-
-// Helper function to extract member ID from member_id field (e.g., "MEM/2025/0007" -> "0007")
+// Helper functions
 const extractMemberId = (memberIdField: string): string => {
   const parts = memberIdField.split('/');
   return parts[parts.length - 1] || memberIdField;
 };
 
-// Helper function to generate member data on demand (for mock data)
 const getMember = (id: string) => ({
   id: id.padStart(4, '0'),
   name: `Member ${parseInt(id)}`,
 });
 
-
-// Helper function to check if member ID exists (1-9999)
 const isValidMemberId = (id: string): boolean => {
   const num = parseInt(id);
   return num >= 1 && num <= 9999;
 };
 
-interface LoanApplication {
+const formatAmount = (amount: number): string => {
+  return new Intl.NumberFormat('en-KE', {
+    style: 'currency',
+    currency: 'KES',
+    minimumFractionDigits: 0,
+  }).format(amount);
+};
+
+// Calculate loan qualification based on shares/savings (mock calculation)
+const calculateQualifiedAmount = (memberId: string, realMembers: MemberBalance[]): number => {
+  const member = realMembers.find(m => extractMemberId(m.member_id) === memberId);
+  if (member && member.shares_balance) {
+    return member.shares_balance * 3; // 3x shares balance
+  }
+  return 50000; // Default qualification for mock members
+};
+
+interface SecurityItem {
   id: string;
-  memberId: string;
-  memberName: string;
-  loanAmount: number;
-  installments: number;
-  guarantors: string[];
+  description: string;
 }
 
-// Guarantor Search Component
-function GuarantorSearch({ 
-  applicationId, 
-  currentMemberId, 
-  currentGuarantors, 
-  onAddGuarantor, 
-  realMembers
-}: {
-  applicationId: string;
+interface GuarantorSelectionProps {
   currentMemberId: string;
   currentGuarantors: string[];
-  onAddGuarantor: (applicationId: string, guarantorId: string) => void;
   realMembers: MemberBalance[];
-}) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showResults, setShowResults] = useState(false);
+  onAdd: (guarantorId: string) => void;
+  onRemove: (guarantorId: string) => void;
+}
 
-  // Get available guarantors based on search
-  const availableGuarantors = useMemo(() => {
+function GuarantorSelection({ 
+  currentMemberId, 
+  currentGuarantors, 
+  realMembers,
+  onAdd,
+  onRemove 
+}: GuarantorSelectionProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'group' | 'search' | 'quick'>('group');
+  const [quickId, setQuickId] = useState('');
+
+  // Get same group members
+  const groupMembers = useMemo(() => {
+    const applicant = realMembers.find(m => extractMemberId(m.member_id) === currentMemberId);
+    if (!applicant) return [];
+    
+    return realMembers
+      .filter(m => {
+        const mId = extractMemberId(m.member_id);
+        return m.group_name === applicant.group_name && 
+               mId !== currentMemberId &&
+               !currentGuarantors.includes(mId);
+      })
+      .map(m => ({
+        id: extractMemberId(m.member_id),
+        name: m.name,
+        phone: m.phone,
+        isReal: true
+      }));
+  }, [currentMemberId, currentGuarantors, realMembers]);
+
+  // Search results
+  const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     
-    const results: Array<{
-      id: string;
-      name: string;
-      isReal: boolean;
-    }> = [];
-    
-    const excludedIds = new Set([
-      currentMemberId,
-      ...currentGuarantors
-    ]);
-    
     const query = searchQuery.trim().toLowerCase();
-
-    // First, search in real member data
-    if (realMembers.length > 0) {
-      const realMatches = realMembers.filter(member => {
-        const memberId = extractMemberId(member.member_id);
-        return !excludedIds.has(memberId) && (
-          memberId.toLowerCase().includes(query) ||
-          member.name.toLowerCase().includes(query) ||
-          member.phone.includes(searchQuery.trim()) ||
-          member.member_id.toLowerCase().includes(query)
-        );
-      }).slice(0, 10);
-
-      realMatches.forEach(member => {
-        const memberId = extractMemberId(member.member_id);
-        results.push({
-          id: memberId,
-          name: member.name,
-          isReal: true
-        });
-      });
-    }
-
-    // Also search mock data if numeric query
-    if (/^\d+$/.test(searchQuery.trim())) {
-      const mockQuery = searchQuery.trim();
-      const paddedId = mockQuery.padStart(4, '0');
-      
-      if (isValidMemberId(paddedId) && !excludedIds.has(paddedId) && 
+    const results: Array<{ id: string; name: string; phone?: string; isReal: boolean }> = [];
+    
+    // Search real members
+    const realMatches = realMembers
+      .filter(m => {
+        const mId = extractMemberId(m.member_id);
+        return mId !== currentMemberId &&
+               !currentGuarantors.includes(mId) &&
+               (mId.includes(query) || m.name.toLowerCase().includes(query) || m.phone.includes(query));
+      })
+      .slice(0, 8)
+      .map(m => ({
+        id: extractMemberId(m.member_id),
+        name: m.name,
+        phone: m.phone,
+        isReal: true
+      }));
+    
+    results.push(...realMatches);
+    
+    // Add mock results for numeric queries
+    if (/^\d+$/.test(query)) {
+      const paddedId = query.padStart(4, '0');
+      if (isValidMemberId(paddedId) && 
+          paddedId !== currentMemberId &&
+          !currentGuarantors.includes(paddedId) &&
           !results.some(r => r.id === paddedId)) {
-        const mockMember = getMember(paddedId);
-        results.push({
-          id: mockMember.id,
-          name: mockMember.name,
-          isReal: false
-        });
-      }
-      
-      // For shorter queries, generate matching options
-      if (mockQuery.length < 4) {
-        const baseNum = parseInt(mockQuery);
-        const multiplier = Math.pow(10, 4 - mockQuery.length);
-        
-        for (let i = 0; i < Math.min(5, multiplier); i++) {
-          const candidateNum = baseNum * multiplier + i;
-          if (candidateNum >= 1 && candidateNum <= 9999) {
-            const candidateId = candidateNum.toString().padStart(4, '0');
-            if (!excludedIds.has(candidateId) && 
-                candidateId.startsWith(mockQuery.padStart(mockQuery.length, '0')) &&
-                !results.some(r => r.id === candidateId)) {
-              const mockMember = getMember(candidateNum.toString());
-              results.push({
-                id: mockMember.id,
-                name: mockMember.name,
-                isReal: false
-              });
-            }
-          }
-        }
+        const mock = getMember(paddedId);
+        results.push({ ...mock, isReal: false });
       }
     }
     
-    return results.slice(0, 15);
+    return results.slice(0, 10);
   }, [searchQuery, currentMemberId, currentGuarantors, realMembers]);
 
-  const handleAddGuarantor = (guarantorId: string) => {
-    if (!currentGuarantors.includes(guarantorId) && guarantorId !== currentMemberId) {
-      onAddGuarantor(applicationId, guarantorId);
-      setSearchQuery('');
-      setShowResults(false);
+  const handleQuickAdd = () => {
+    const paddedId = quickId.trim().padStart(4, '0');
+    if (isValidMemberId(paddedId) && 
+        paddedId !== currentMemberId &&
+        !currentGuarantors.includes(paddedId)) {
+      onAdd(paddedId);
+      setQuickId('');
     }
   };
 
-  // Mobile keyboard handling will be added later when Capacitor is properly configured
-  
+  const getGuarantorName = (id: string) => {
+    const member = realMembers.find(m => extractMemberId(m.member_id) === id);
+    return member ? member.name : `Member ${parseInt(id)}`;
+  };
 
   return (
-    <div className="space-y-2 relative">
-      <Label className="flex items-center gap-2">
-        <Search className="h-4 w-4" />
-        Search & Add Guarantor
-      </Label>
-      <Input
-        placeholder="Type member ID or name to search..."
-        value={searchQuery}
-        onChange={(e) => {
-          setSearchQuery(e.target.value);
-          setShowResults(e.target.value.length > 0);
-        }}
-        onFocus={() => searchQuery && setShowResults(true)}
-        onBlur={() => {
-          setTimeout(() => setShowResults(false), 200);
-        }}
-      />
-      
-      {showResults && availableGuarantors.length > 0 && (
-        <div className="absolute z-10 w-full bg-background border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-          {availableGuarantors.map((guarantor) => (
-            <Button
-              key={`${guarantor.id}-${guarantor.isReal ? 'real' : 'mock'}`}
-              variant="ghost"
-              onClick={() => handleAddGuarantor(guarantor.id)}
-              className="w-full justify-start p-3 h-auto text-left hover:bg-accent"
-            >
-              <div className="flex flex-col items-start w-full">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{guarantor.id} - {guarantor.name}</span>
-                  {guarantor.isReal && (
-                    <Badge variant="secondary" className="text-xs">
-                      REAL DATA
-                    </Badge>
-                  )}
-                </div>
+    <div className="space-y-4">
+      {/* Current Guarantors */}
+      {currentGuarantors.length > 0 && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Selected Guarantors ({currentGuarantors.length})
+          </Label>
+          <div className="flex flex-wrap gap-2">
+            {currentGuarantors.map(gId => (
+              <Badge key={gId} variant="secondary" className="pl-3 pr-2 py-1.5">
+                <span className="mr-2">{gId} - {getGuarantorName(gId)}</span>
+                <button
+                  onClick={() => onRemove(gId)}
+                  className="hover:text-destructive ml-1"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b">
+        <button
+          onClick={() => setActiveTab('group')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'group'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Users className="h-4 w-4 inline mr-1" />
+          Same Group {groupMembers.length > 0 && `(${groupMembers.length})`}
+        </button>
+        <button
+          onClick={() => setActiveTab('search')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'search'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Search className="h-4 w-4 inline mr-1" />
+          Search
+        </button>
+        <button
+          onClick={() => setActiveTab('quick')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'quick'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Sparkles className="h-4 w-4 inline mr-1" />
+          Quick Add
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="min-h-[200px] max-h-[300px] overflow-y-auto">
+        {activeTab === 'group' && (
+          <div className="space-y-2">
+            {groupMembers.length > 0 ? (
+              groupMembers.map(member => (
+                <button
+                  key={member.id}
+                  onClick={() => onAdd(member.id)}
+                  className="w-full p-3 text-left border rounded-lg bg-accent/30 hover:bg-accent/50 hover:border-primary transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{member.name}</p>
+                      <p className="text-xs text-muted-foreground">ID: {member.id} • {member.phone}</p>
+                    </div>
+                    <Plus className="h-5 w-5 text-primary" />
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">No group members available</p>
               </div>
-            </Button>
-          ))}
-        </div>
-      )}
-      
-      {searchQuery && showResults && availableGuarantors.length === 0 && (
-        <div className="absolute z-10 w-full bg-background border rounded-lg shadow-lg p-3">
-          <p className="text-sm text-muted-foreground">No members found matching "{searchQuery}"</p>
-        </div>
-      )}
+            )}
+          </div>
+        )}
+
+        {activeTab === 'search' && (
+          <div className="space-y-3">
+            <Input
+              placeholder="Search by ID, name, or phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full"
+            />
+            <div className="space-y-2">
+              {searchResults.length > 0 ? (
+                searchResults.map(member => (
+                  <button
+                    key={member.id}
+                    onClick={() => {
+                      onAdd(member.id);
+                      setSearchQuery('');
+                    }}
+                    className="w-full p-3 text-left border rounded-lg bg-accent/30 hover:bg-accent/50 hover:border-primary transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{member.name}</p>
+                          {member.isReal && (
+                            <Badge variant="outline" className="text-xs">Real Data</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          ID: {member.id}
+                          {member.phone && ` • ${member.phone}`}
+                        </p>
+                      </div>
+                      <Plus className="h-5 w-5 text-primary" />
+                    </div>
+                  </button>
+                ))
+              ) : searchQuery ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Search className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                  <p className="text-sm">No results found</p>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Search className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                  <p className="text-sm">Type to search members</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'quick' && (
+          <div className="space-y-3 pt-2">
+            <Label>Enter Member ID (1-9999)</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="e.g., 1234"
+                value={quickId}
+                onChange={(e) => setQuickId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
+              />
+              <Button onClick={handleQuickAdd} disabled={!quickId.trim()}>
+                Add
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Type the member ID and press Enter or click Add
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 export function LoanApplicationForm() {
-  const [applications, setApplications] = useState<LoanApplication[]>([]);
+  const [step, setStep] = useState<'select' | 'form'>('select');
   const [memberQuery, setMemberQuery] = useState('');
-  const [selectedMemberId, setSelectedMemberId] = useState('');
-  const [selectedMemberName, setSelectedMemberName] = useState('');
+  const [selectedMember, setSelectedMember] = useState<{
+    id: string;
+    name: string;
+    phone?: string;
+    isReal: boolean;
+  } | null>(null);
   const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
+  
+  // Form fields
+  const [loanAmount, setLoanAmount] = useState<number>(0);
+  const [installments, setInstallments] = useState<number>(0);
+  const [guarantors, setGuarantors] = useState<string[]>([]);
+  const [securityItems, setSecurityItems] = useState<SecurityItem[]>([]);
+  const [newSecurityItem, setNewSecurityItem] = useState('');
+  
   const { toast } = useToast();
 
-  // Load real member data on component mount
+  // Load real members
   useEffect(() => {
     const loadRealMembers = async () => {
       try {
         const members = await dbOperations.getAllMembers();
         setRealMembers(members);
-        console.log(`Loaded ${members.length} real members for loan applications`);
       } catch (error) {
-        console.error('Error loading real members:', error);
+        console.error('Error loading members:', error);
         setRealMembers([]);
       }
     };
-
     loadRealMembers();
   }, []);
 
-  // Search and filter members based on query (hybrid approach)
+  // Search members
   const filteredMembers = useMemo(() => {
     if (!memberQuery) return [];
     
     const query = memberQuery.trim().toLowerCase();
-    const results: Array<{
-      id: string;
-      name: string;
-      isReal: boolean;
-    }> = [];
+    const results: Array<{ id: string; name: string; phone?: string; isReal: boolean }> = [];
 
-    // First, search in real member data
-    if (realMembers.length > 0) {
-      const realMatches = realMembers.filter(member => {
-        const memberId = extractMemberId(member.member_id);
-        return (
-          memberId.toLowerCase().includes(query) ||
-          member.name.toLowerCase().includes(query) ||
-          member.phone.includes(memberQuery.trim()) ||
-          member.member_id.toLowerCase().includes(query)
-        );
-      }).slice(0, 10);
+    // Real members
+    const realMatches = realMembers
+      .filter(m => {
+        const mId = extractMemberId(m.member_id);
+        return mId.includes(query) || 
+               m.name.toLowerCase().includes(query) || 
+               m.phone.includes(query);
+      })
+      .slice(0, 8)
+      .map(m => ({
+        id: extractMemberId(m.member_id),
+        name: m.name,
+        phone: m.phone,
+        isReal: true
+      }));
+    
+    results.push(...realMatches);
 
-      realMatches.forEach(member => {
-        const memberId = extractMemberId(member.member_id);
-        results.push({
-          id: memberId,
-          name: member.name,
-          isReal: true
-        });
-      });
-    }
-
-    // If no real members found or query looks like numeric ID, also search mock data
-    if (results.length === 0 || /^\d+$/.test(query)) {
-      const mockQuery = memberQuery.trim();
-      
-      if (/^\d+$/.test(mockQuery)) {
-        const paddedId = mockQuery.padStart(4, '0');
-        
-        const alreadyHasThisId = results.some(r => r.id === paddedId);
-        
-        if (!alreadyHasThisId) {
-          const exactMatch = mockMembers.find(member => member.id === paddedId);
-          if (exactMatch) {
-            results.push({
-              id: exactMatch.id,
-              name: exactMatch.name,
-              isReal: false
-            });
-          }
-          
-          if (!exactMatch && mockQuery.length < 4) {
-            const startMatches = mockMembers.filter(member => 
-              member.id.startsWith(mockQuery.padStart(mockQuery.length, '0')) &&
-              !results.some(r => r.id === member.id)
-            ).slice(0, 5);
-            startMatches.forEach(member => {
-              results.push({
-                id: member.id,
-                name: member.name,
-                isReal: false
-              });
-            });
-          }
-          
-          if (!exactMatch && mockQuery.length >= 4) {
-            const partialMatches = mockMembers.filter(member => 
-              (member.id.includes(mockQuery) || member.id === mockQuery) &&
-              !results.some(r => r.id === member.id)
-            ).slice(0, 5);
-            partialMatches.forEach(member => {
-              results.push({
-                id: member.id,
-                name: member.name,
-                isReal: false
-              });
-            });
-          }
-        }
+    // Mock members for numeric queries
+    if (/^\d+$/.test(query)) {
+      const paddedId = query.padStart(4, '0');
+      if (isValidMemberId(paddedId) && !results.some(r => r.id === paddedId)) {
+        const mock = getMember(paddedId);
+        results.push({ ...mock, isReal: false });
       }
     }
-
+    
     return results.slice(0, 10);
   }, [memberQuery, realMembers]);
 
-  // Get members from the same group as the loan applicant
-  const getMembersFromSameGroup = (memberId: string) => {
-    const applicantMember = realMembers.find(member => 
-      extractMemberId(member.member_id) === memberId
-    );
-    
-    if (!applicantMember) return [];
-    
-    const excludedIds = new Set([
-      memberId,
-      ...applications.map(app => app.memberId)
-    ]);
-    
-    const groupMembers = realMembers.filter(member => {
-      const memberIdExtracted = extractMemberId(member.member_id);
-      return member.group_name === applicantMember.group_name && 
-             !excludedIds.has(memberIdExtracted);
-    });
-    
-    return groupMembers.map(member => ({
-      id: extractMemberId(member.member_id),
-      name: member.name,
-      isReal: true
-    }));
-  };
-
-  const formatAmount = (amount: number): string => {
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const addMember = () => {
-    if (!selectedMemberId || !selectedMemberName) return;
-
-    const newApplication: LoanApplication = {
-      id: Date.now().toString(),
-      memberId: selectedMemberId,
-      memberName: selectedMemberName,
-      loanAmount: 0,
-      installments: 0,
-      guarantors: [],
-    };
-
-    setApplications([...applications, newApplication]);
-    setSelectedMemberId('');
-    setSelectedMemberName('');
+  const handleMemberSelect = (member: { id: string; name: string; phone?: string; isReal: boolean }) => {
+    setSelectedMember(member);
+    setStep('form');
     setMemberQuery('');
   };
 
-  const updateApplication = (id: string, updates: Partial<LoanApplication>) => {
-    setApplications(applications.map(app => 
-      app.id === id ? { ...app, ...updates } : app
-    ));
-  };
-
-  const removeApplication = (id: string) => {
-    setApplications(applications.filter(app => app.id !== id));
-  };
-
-  const handleMemberSelect = (member: { id: string; name: string; isReal: boolean }) => {
-    setSelectedMemberId(member.id);
-    setSelectedMemberName(member.name);
-    setMemberQuery('');
-  };
-
-  const addGuarantor = (applicationId: string, guarantorId: string) => {
-    const application = applications.find(app => app.id === applicationId);
-    if (application && !application.guarantors.includes(guarantorId)) {
-      updateApplication(applicationId, {
-        guarantors: [...application.guarantors, guarantorId]
-      });
+  const addSecurityItem = () => {
+    if (newSecurityItem.trim() && securityItems.length < 3) {
+      setSecurityItems([...securityItems, {
+        id: Date.now().toString(),
+        description: newSecurityItem.trim()
+      }]);
+      setNewSecurityItem('');
     }
   };
 
-  const removeGuarantor = (applicationId: string, guarantorId: string) => {
-    const application = applications.find(app => app.id === applicationId);
-    if (application) {
-      updateApplication(applicationId, {
-        guarantors: application.guarantors.filter(id => id !== guarantorId)
-      });
-    }
+  const removeSecurityItem = (id: string) => {
+    setSecurityItems(securityItems.filter(item => item.id !== id));
   };
 
   const handleSave = async () => {
+    if (!selectedMember) return;
+
     try {
-      // Check for existing pending records
+      // Check for duplicates
       const existingRecords = await dbOperations.getPendingRecords();
-      const duplicates: string[] = [];
+      const hasPending = existingRecords.some(
+        record => record.type === 'loan' && record.memberId === selectedMember.id
+      );
 
-      for (const application of applications) {
-        const hasPendingRecord = existingRecords.some(
-          record => record.type === 'loan' && record.memberId === application.memberId
-        );
-        if (hasPendingRecord) {
-          duplicates.push(`${application.memberName} (${application.memberId})`);
-        }
-      }
-
-      if (duplicates.length > 0) {
+      if (hasPending) {
         toast({
-          title: "❌ Duplicate Records Found",
-          description: `The following members already have pending loan applications: ${duplicates.join(', ')}. Please edit or delete existing records first.`,
+          title: "⚠ Duplicate Record",
+          description: `${selectedMember.name} already has a pending loan application.`,
           variant: "destructive"
         });
         return;
       }
 
-      for (const application of applications) {
-        await dbOperations.addLoanApplication({
-          memberId: application.memberId,
-          memberName: application.memberName,
-          loanAmount: application.loanAmount,
-          installments: application.installments,
-          guarantors: application.guarantors,
-          timestamp: new Date()
-        });
-      }
-      
-      toast({
-        title: "✅ Loan Applications Saved",
-        description: `${applications.length} application(s) saved successfully`,
+      await dbOperations.addLoanApplication({
+        memberId: selectedMember.id,
+        memberName: selectedMember.name,
+        loanAmount: loanAmount,
+        installments: installments,
+        guarantors: guarantors,
+        securityItems: securityItems.map(item => item.description),
+        timestamp: new Date()
       });
-      
-      // Reset form
-      setApplications([]);
-      setMemberQuery('');
-      setSelectedMemberId('');
-      setSelectedMemberName('');
+
+      toast({
+        title: "✅ Application Saved",
+        description: `Loan application for ${selectedMember.name} saved successfully`,
+      });
+
+      // Reset for next application
+      resetForm();
     } catch (error) {
       toast({
         title: "❌ Save Failed",
-        description: "Failed to save loan applications",
+        description: "Failed to save loan application",
         variant: "destructive"
       });
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Add Member Section */}
-      <Card className="shadow-card bg-gradient-card">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center">
-            <User className="h-5 w-5 mr-2" />
-            Add Loan Applicant
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="member-search">Search Member ID or Name</Label>
-            <Input
-              id="member-search"
-              placeholder="Type member ID or name..."
-              value={memberQuery}
-              onChange={(e) => setMemberQuery(e.target.value)}
-            />
-          </div>
-          
-          {memberQuery && (
+  const resetForm = () => {
+    setSelectedMember(null);
+    setLoanAmount(0);
+    setInstallments(0);
+    setGuarantors([]);
+    setSecurityItems([]);
+    setNewSecurityItem('');
+    setStep('select');
+  };
+
+  const qualifiedAmount = selectedMember 
+    ? calculateQualifiedAmount(selectedMember.id, realMembers)
+    : 0;
+
+  const monthlyPayment = loanAmount > 0 && installments > 0
+    ? (loanAmount * (1 + 0.015 * installments)) / installments
+    : 0;
+
+  // Member Selection Step
+  if (step === 'select') {
+    return (
+      <div className="space-y-4 max-w-2xl mx-auto">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Select Member for Loan Application
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Select Member</Label>
-              <div className="grid gap-2 max-h-48 overflow-y-auto">
-                {filteredMembers
-                  .filter(member => !applications.some(app => app.memberId === member.id))
-                  .map((member, index) => (
-                  <Button
-                    key={`${member.id}-${index}`}
-                    variant={selectedMemberId === member.id ? "default" : "outline"}
+              <Label>Search Member</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by ID, name, or phone..."
+                  value={memberQuery}
+                  onChange={(e) => setMemberQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {memberQuery && (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {filteredMembers.map(member => (
+                  <button
+                    key={member.id}
                     onClick={() => handleMemberSelect(member)}
-                    className="justify-start p-3 h-auto text-left"
+                    className="w-full p-4 text-left border rounded-lg hover:bg-accent hover:border-primary transition-all"
                   >
-                    <div className="flex flex-col items-start w-full">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium">{member.id} - {member.name}</span>
-                        {member.isReal && (
-                          <Badge variant="secondary" className="text-xs">
-                            REAL DATA
-                          </Badge>
-                        )}
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold">{member.name}</p>
+                          {member.isReal && (
+                            <Badge variant="secondary" className="text-xs">Verified</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          ID: {member.id}
+                          {member.phone && ` • ${member.phone}`}
+                        </p>
+                      </div>
+                      <div className="text-primary">
+                        <User className="h-5 w-5" />
                       </div>
                     </div>
-                  </Button>
+                  </button>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {selectedMemberId && (
-            <div className="p-3 bg-success/10 rounded-lg border border-success/20 mb-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium text-success">Selected Member:</p>
-                  <p className="text-sm">{selectedMemberId} - {selectedMemberName}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedMemberId('');
-                    setSelectedMemberName('');
-                    setMemberQuery('');
-                  }}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  ×
-                </Button>
-              </div>
-            </div>
-          )}
-
-          <Button 
-            onClick={addMember}
-            disabled={!selectedMemberId}
-            className="w-full"
-            variant="mobile"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Member
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Loan Applications List */}
-      <div className="space-y-4">
-        {applications.map((application) => (
-          <Card key={application.id} className="shadow-card bg-gradient-card">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">
-                    {application.memberName}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    ID: {application.memberId}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeApplication(application.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            
-            <CardContent className="space-y-4">
-              {/* Loan Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Loan Amount (KES)</Label>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={application.loanAmount || ''}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      updateApplication(application.id, {
-                        loanAmount: value === '' ? 0 : parseFloat(value)
-                      });
-                    }}
-                  />
-                  {application.loanAmount > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {formatAmount(application.loanAmount)}
-                    </p>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Number of Installments</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="60"
-                    value={application.installments}
-                    onChange={(e) => updateApplication(application.id, {
-                      installments: parseInt(e.target.value) || 0
-                    })}
-                    placeholder="Enter number of installments"
-                  />
-                </div>
-              </div>
-
-              {/* Monthly Payment Display */}
-              {application.loanAmount > 0 && application.installments > 0 && (
-                <div className="p-3 bg-primary/10 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Monthly Payment:</span>
-                    <span className="font-bold text-primary">
-                      {formatAmount(
-                        (application.loanAmount * (1 + 0.015 * application.installments)) / application.installments
-                      )}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Guarantors Section */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Guarantors ({application.guarantors.length})
-                </Label>
-                
-                {/* Current Guarantors */}
-                {application.guarantors.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {application.guarantors.map((guarantorId) => {
-                      let guarantorName = `Member ${parseInt(guarantorId)}`;
-                      const realGuarantor = realMembers.find(member => 
-                        extractMemberId(member.member_id) === guarantorId
-                      );
-                      if (realGuarantor) {
-                        guarantorName = realGuarantor.name;
-                      }
-                      
-                      return (
-                        <Badge key={guarantorId} variant="secondary" className="flex items-center gap-1">
-                          <span className="text-xs">{guarantorId}</span>
-                          <span>{guarantorName}</span>
-                          <button
-                            onClick={() => removeGuarantor(application.id, guarantorId)}
-                            className="ml-1 hover:text-destructive"
-                          >
-                            ×
-                          </button>
-                        </Badge>
-                      );
-                    })}
+                {filteredMembers.length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Search className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                    <p>No members found</p>
                   </div>
                 )}
-
-                {/* Same Group Members Quick Add */}
-                {(() => {
-                  const groupMembers = getMembersFromSameGroup(application.memberId);
-                  return groupMembers.length > 0 && (
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2 text-sm">
-                        <Users className="h-3 w-3" />
-                        Quick Add from Same Group
-                      </Label>
-                      <div className="grid gap-2 max-h-32 overflow-y-auto border rounded-lg p-2 bg-accent/5">
-                        {groupMembers
-                          .filter(member => !application.guarantors.includes(member.id))
-                          .slice(0, 8) // Limit to prevent overwhelming UI
-                          .map((member) => (
-                          <Button
-                            key={member.id}
-                            variant="outline"
-                            size="sm"
-                            onClick={() => addGuarantor(application.id, member.id)}
-                            className="justify-start text-left h-auto p-2 text-xs"
-                          >
-                            <div className="flex items-center justify-between w-full">
-                              <span>{member.id} - {member.name}</span>
-                              <Badge variant="secondary" className="text-xs ml-2">
-                                SAME GROUP
-                              </Badge>
-                            </div>
-                          </Button>
-                        ))}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Members from the same group as {application.memberName}
-                      </p>
-                    </div>
-                  );
-                })()}
-
-                {/* Search and Add Guarantor */}
-                <GuarantorSearch 
-                  applicationId={application.id}
-                  currentMemberId={application.memberId}
-                  currentGuarantors={application.guarantors}
-                  onAddGuarantor={addGuarantor}
-                  realMembers={realMembers}
-                />
-
-                {/* Manual ID Entry (Backup method) */}
-                <div className="space-y-2">
-                  <Label className="text-sm">Quick Add by ID</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Member ID (1-9999)"
-                      className="text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const input = e.currentTarget;
-                          const value = input.value.trim();
-                          if (value) {
-                            const paddedId = value.padStart(4, '0');
-                            if (isValidMemberId(paddedId) && 
-                                !application.guarantors.includes(paddedId) &&
-                                paddedId !== application.memberId) {
-                              addGuarantor(application.id, paddedId);
-                              input.value = '';
-                            }
-                          }
-                        }
-                      }}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                        const value = input.value.trim();
-                        if (value) {
-                          const paddedId = value.padStart(4, '0');
-                          if (isValidMemberId(paddedId) && 
-                              !application.guarantors.includes(paddedId) &&
-                              paddedId !== application.memberId) {
-                            addGuarantor(application.id, paddedId);
-                            input.value = '';
-                          }
-                        }
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Press Enter or click Add
-                  </p>
-                </div>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            )}
+
+            {!memberQuery && (
+              <div className="text-center py-12 text-muted-foreground">
+                <User className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                <p className="text-lg font-medium mb-2">Start a New Application</p>
+                <p className="text-sm">Search for a member to begin</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Loan Application Form
+  return (
+    <div className="space-y-4 max-w-2xl mx-auto pb-6">
+      {/* Header with Back Button */}
+      <div className="flex items-center gap-3 p-4 bg-card rounded-lg border">
+        <Button variant="ghost" size="icon" onClick={resetForm}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <h2 className="text-lg font-bold">Loan Application Form</h2>
       </div>
 
-      {/* Save Button */}
-      {applications.length > 0 && (
-        <Card className="shadow-card">
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">
-                  {applications.length} loan application{applications.length !== 1 ? 's' : ''} ready to save
-                </p>
-                <div className="text-lg font-bold">
-                  Total Loan Amount: {formatAmount(
-                    applications.reduce((sum, app) => sum + app.loanAmount, 0)
-                  )}
+      {/* Member Info Card */}
+      <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
+        <CardContent className="pt-6 space-y-3">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2 flex-1">
+              <div className="flex items-center gap-2">
+                <User className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Member Name</p>
+                  <p className="font-bold text-lg">{selectedMember?.name}</p>
                 </div>
               </div>
               
-              <Button 
-                variant="success" 
-                size="mobile" 
-                onClick={handleSave}
-                className="w-full"
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Member ID</p>
+                  <p className="font-semibold">{selectedMember?.id}</p>
+                </div>
+              </div>
+
+              {selectedMember?.phone && (
+                <div className="flex items-center gap-2">
+                  <Phone className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Phone Number</p>
+                    <p className="font-semibold">{selectedMember.phone}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-background rounded-lg p-4 border-2 border-primary text-center">
+              <TrendingUp className="h-6 w-6 text-primary mx-auto mb-1" />
+              <p className="text-xs text-muted-foreground mb-1">Qualified Amount</p>
+              <p className="text-xl font-bold text-primary">{formatAmount(qualifiedAmount)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Loan Details */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Loan Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Loan Amount (KES)</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={loanAmount || ''}
+                onChange={(e) => setLoanAmount(parseFloat(e.target.value) || 0)}
+              />
+              {loanAmount > 0 && (
+                <p className="text-xs text-muted-foreground">{formatAmount(loanAmount)}</p>
+              )}
+              {loanAmount > qualifiedAmount && (
+                <p className="text-xs text-destructive">⚠️ Exceeds qualified amount</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Number of Installments</Label>
+              <Input
+                type="number"
+                min="1"
+                max="60"
+                placeholder="0"
+                value={installments || ''}
+                onChange={(e) => setInstallments(parseInt(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+
+          {monthlyPayment > 0 && (
+            <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
+              <div className="flex justify-between items-center">
+                <span className="font-medium">Monthly Payment:</span>
+                <span className="text-xl font-bold text-primary">
+                  {formatAmount(monthlyPayment)}
+                </span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Security Items */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Security Items
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {securityItems.map((item, index) => (
+            <div key={item.id} className="flex items-start gap-2 p-3 bg-accent/50 rounded-lg border">
+              <div className="flex-1">
+                <p className="text-sm font-medium">Item {index + 1}</p>
+                <p className="text-sm text-muted-foreground">{item.description}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeSecurityItem(item.id)}
               >
-                <Save className="h-5 w-5 mr-2" />
-                Save All Applications
+                <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ))}
 
-      {applications.length === 0 && (
-        <Card className="shadow-card">
-          <CardContent className="text-center py-12">
-            <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">
-              No loan applications yet. Add members to get started.
+          <div className="space-y-2">
+            <Label>Add Security Item</Label>
+            <div className="flex gap-2">
+              <Textarea
+                placeholder="Describe the security item"
+                value={newSecurityItem}
+                onChange={(e) => setNewSecurityItem(e.target.value)}
+                rows={2}
+                className="flex-1"
+              />
+              <Button
+                onClick={addSecurityItem}
+                disabled={!newSecurityItem.trim()}
+                size="sm"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {securityItems.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No security items added yet
             </p>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Guarantors */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Guarantors
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <GuarantorSelection
+            currentMemberId={selectedMember?.id || ''}
+            currentGuarantors={guarantors}
+            realMembers={realMembers}
+            onAdd={(id) => setGuarantors([...guarantors, id])}
+            onRemove={(id) => setGuarantors(guarantors.filter(g => g !== id))}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Save Button */}
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Loan Amount:</span>
+              <span className="font-bold text-lg">{formatAmount(loanAmount)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Total Repayment:</span>
+              <span className="font-bold text-lg text-primary">
+                {formatAmount(loanAmount * (1 + 0.015 * installments))}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Monthly Payment:</span>
+              <span className="font-bold text-lg">
+                {formatAmount(monthlyPayment)} × {installments} months
+              </span>
+            </div>
+          </div>
+
+          <Button
+            onClick={handleSave}
+            className="w-full"
+            size="lg"
+            disabled={loanAmount === 0 || installments === 0}
+          >
+            <Save className="h-5 w-5 mr-2" />
+            Save Application
+          </Button>
+
+          <p className="text-xs text-center text-muted-foreground">
+            Application will be saved and you can proceed with another one
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
