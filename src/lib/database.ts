@@ -86,6 +86,7 @@ export interface LoanApplication {
   interestRate?: number;
   installments: number;
   guarantors: string[];
+  securityItems: string[];
   timestamp: Date;
   synced: boolean;
   syncStatus?: 'pending' | 'failed' | 'synced';

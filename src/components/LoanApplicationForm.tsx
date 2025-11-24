@@ -5,6 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   Plus, 
   Trash2, 
@@ -19,10 +29,12 @@ import {
   CreditCard,
   Shield,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  AlertTriangle
 } from "lucide-react";
 import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
+import { getMemberLoanQualifications } from "@/lib/qualificationCalculator";
 
 // Helper functions
 const extractMemberId = (memberIdField: string): string => {
@@ -48,11 +60,11 @@ const formatAmount = (amount: number): string => {
   }).format(amount);
 };
 
-// Calculate loan qualification based on shares/savings (mock calculation)
+// This will be replaced by qualificationCalculator
 const calculateQualifiedAmount = (memberId: string, realMembers: MemberBalance[]): number => {
   const member = realMembers.find(m => extractMemberId(m.member_id) === memberId);
-  if (member && member.shares_balance) {
-    return member.shares_balance * 3; // 3x shares balance
+  if (member) {
+    return member.balances.savings_balance * 3; // 3x savings balance
   }
   return 50000; // Default qualification for mock members
 };
@@ -331,6 +343,12 @@ export function LoanApplicationForm() {
     isReal: boolean;
   } | null>(null);
   const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
+  const [qualificationWarning, setQualificationWarning] = useState<{
+    show: boolean;
+    reason: string;
+    maxAmount: number;
+  }>({ show: false, reason: '', maxAmount: 0 });
+  const [maxQualifiedAmount, setMaxQualifiedAmount] = useState<number>(0);
   
   // Form fields
   const [loanAmount, setLoanAmount] = useState<number>(0);
@@ -392,7 +410,30 @@ export function LoanApplicationForm() {
     return results.slice(0, 10);
   }, [memberQuery, realMembers]);
 
-  const handleMemberSelect = (member: { id: string; name: string; phone?: string; isReal: boolean }) => {
+  const handleMemberSelect = async (member: { id: string; name: string; phone?: string; isReal: boolean }) => {
+    // Check qualification for real members
+    if (member.isReal) {
+      const memberData = realMembers.find(m => extractMemberId(m.member_id) === member.id);
+      if (memberData) {
+        const qualifications = await getMemberLoanQualifications(memberData, true);
+        setMaxQualifiedAmount(qualifications.longterm_loan.max_amount);
+        
+        if (!qualifications.longterm_loan.qualifies) {
+          setQualificationWarning({
+            show: true,
+            reason: qualifications.longterm_loan.reason,
+            maxAmount: qualifications.longterm_loan.max_amount
+          });
+          setSelectedMember(member);
+          setMemberQuery('');
+          return;
+        }
+      }
+    } else {
+      // Mock member - use default calculation
+      setMaxQualifiedAmount(50000);
+    }
+    
     setSelectedMember(member);
     setStep('form');
     setMemberQuery('');
@@ -467,9 +508,7 @@ export function LoanApplicationForm() {
     setStep('select');
   };
 
-  const qualifiedAmount = selectedMember 
-    ? calculateQualifiedAmount(selectedMember.id, realMembers)
-    : 0;
+  const qualifiedAmount = maxQualifiedAmount;
 
   const monthlyPayment = loanAmount > 0 && installments > 0
     ? (loanAmount * (1 + 0.015 * installments)) / installments
@@ -478,8 +517,46 @@ export function LoanApplicationForm() {
   // Member Selection Step
   if (step === 'select') {
     return (
-      <div className="space-y-4 max-w-2xl mx-auto">
-        <Card>
+      <>
+        {/* Qualification Warning Dialog */}
+        <AlertDialog open={qualificationWarning.show} onOpenChange={(open) => {
+          if (!open) {
+            setQualificationWarning({ show: false, reason: '', maxAmount: 0 });
+            setSelectedMember(null);
+          }
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Member Does Not Qualify
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-3">
+                <p className="text-base">{qualificationWarning.reason}</p>
+                {qualificationWarning.maxAmount > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Maximum qualified amount: {formatAmount(qualificationWarning.maxAmount)}
+                  </p>
+                )}
+                <p className="text-sm font-medium text-foreground">
+                  Do you want to proceed with the application anyway?
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => {
+                setQualificationWarning({ show: false, reason: '', maxAmount: 0 });
+                setStep('form');
+              }}>
+                Proceed Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <div className="space-y-4 max-w-2xl mx-auto">
+          <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
@@ -545,7 +622,8 @@ export function LoanApplicationForm() {
             )}
           </CardContent>
         </Card>
-      </div>
+        </div>
+      </>
     );
   }
 
