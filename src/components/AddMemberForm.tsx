@@ -51,9 +51,11 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
   const [occupation, setOccupation] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Allocations - Changed to match cash collection format
+  // Collections
   const [mpesaAmount, setMpesaAmount] = useState("");
   const [cashAmount, setCashAmount] = useState("");
+  
+  // Allocations
   const [savings, setSavings] = useState("");
   const [customItems, setCustomItems] = useState<CustomItem[]>([
     { description: "Registration Fee", amount: 0, isCustom: true }
@@ -195,7 +197,7 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
     setIsSubmitting(true);
 
     try {
-      const totalAmount = calculateTotalInput(); // Use input total, not allocated
+      const totalAmount = calculateTotalInput();
       const mpesaNum = parseFloat(mpesaAmount) || 0;
       const cashNum = parseFloat(cashAmount) || 0;
       const savingsNum = parseFloat(savings) || 0;
@@ -222,7 +224,7 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
         
         if (savingsNum > 0) {
           allocations.push({
-            memberId: idNumber, // Use id_number as member identifier for new members
+            memberId: idNumber,
             type: 'savings',
             amount: savingsNum
           });
@@ -232,7 +234,7 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
         customItems.forEach(item => {
           if (item.description && item.amount > 0) {
             allocations.push({
-              memberId: idNumber, // Use id_number as member identifier
+              memberId: idNumber,
               type: 'other',
               amount: item.amount,
               reason: item.description
@@ -241,7 +243,7 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
         });
 
         const cashCollectionData = {
-          memberId: idNumber, // Use id_number as member identifier
+          memberId: idNumber,
           memberName: name.trim(),
           totalAmount,
           cashAmount: cashNum,
@@ -261,7 +263,7 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
       // Step 3: Add the new member to memberBalances so they appear in selections
       const selectedGroupData = groups.find(g => g.id === parseInt(selectedGroup));
       await dbOperations.storeMemberBalances([{
-        member_id: idNumber, // Use id_number as member_id for consistency
+        member_id: idNumber,
         name: name.trim(),
         phone: phone.trim(),
         group_id: parseInt(selectedGroup),
@@ -477,13 +479,14 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
           </CardContent>
         </Card>
 
-        {/* Allocations */}
-        <Card className="shadow-sm">
-          <CardHeader className="p-3 border-b bg-muted/30">
+        {/* Cash Collection */}
+        <Card className="shadow-sm border-green-200 dark:border-green-900">
+          <CardHeader className="p-3 border-b bg-green-50 dark:bg-green-950/30">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-blue-600" />
-              Initial Allocations
+              <Wallet className="h-4 w-4 text-green-600" />
+              Cash Collection
             </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">Money received from member</p>
           </CardHeader>
           <CardContent className="p-3 space-y-3">
             {/* Cash Amount */}
@@ -506,7 +509,7 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
             <div>
               <Label htmlFor="mpesaAmount" className="text-xs font-semibold flex items-center gap-1.5">
                 <Phone className="h-3.5 w-3.5 text-green-600" />
-                💵 MPESA Amount (KES)
+                📱 MPESA Amount (KES)
               </Label>
               <Input
                 id="mpesaAmount"
@@ -518,9 +521,32 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
               />
             </div>
 
+            {/* Collection Total */}
+            <div className="pt-2 border-t">
+              <div className="flex items-center justify-between p-2.5 bg-green-100 dark:bg-green-950/50 rounded-lg border border-green-300 dark:border-green-800">
+                <span className="text-xs font-semibold text-green-700 dark:text-green-300">Total Collected</span>
+                <span className="text-base font-bold text-green-600 dark:text-green-400">
+                  KES {calculateTotalInput().toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Allocations */}
+        <Card className="shadow-sm border-blue-200 dark:border-blue-900">
+          <CardHeader className="p-3 border-b bg-blue-50 dark:bg-blue-950/30">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-blue-600" />
+              Allocations
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">How the collected money is allocated</p>
+          </CardHeader>
+          <CardContent className="p-3 space-y-3">
             {/* Savings */}
             <div>
-              <Label htmlFor="savings" className="text-xs font-semibold">
+              <Label htmlFor="savings" className="text-xs font-semibold flex items-center gap-1.5">
+                <DollarSign className="h-3.5 w-3.5 text-blue-600" />
                 💰 Savings (KES)
               </Label>
               <Input
@@ -610,25 +636,41 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
               )}
             </div>
 
-            {/* Total */}
-            <div className="pt-3 border-t space-y-2">
-              <div className="flex items-center justify-between p-2.5 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
-                <span className="text-xs font-semibold text-green-700 dark:text-green-300">Total Input (Cash + M-Pesa)</span>
-                <span className="text-base font-bold text-green-600 dark:text-green-400">
-                  KES {calculateTotalInput().toLocaleString()}
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900">
-                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Total Allocated (Savings + Other)</span>
+            {/* Allocation Total */}
+            <div className="pt-2 border-t">
+              <div className="flex items-center justify-between p-2.5 bg-blue-100 dark:bg-blue-950/50 rounded-lg border border-blue-300 dark:border-blue-800">
+                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Total Allocated</span>
                 <span className="text-base font-bold text-blue-600 dark:text-blue-400">
                   KES {calculateTotalAllocated().toLocaleString()}
                 </span>
               </div>
-              {!isBalanced() && (calculateTotalInput() > 0 || calculateTotalAllocated() > 0) && (
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Balance Summary */}
+        <Card className={`shadow-sm ${!isBalanced() && (calculateTotalInput() > 0 || calculateTotalAllocated() > 0) ? 'border-red-200 dark:border-red-900' : 'border-green-200 dark:border-green-900'}`}>
+          <CardContent className="p-3">
+            <div className="space-y-2">
+              {!isBalanced() && (calculateTotalInput() > 0 || calculateTotalAllocated() > 0) ? (
                 <div className="flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-900">
                   <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
-                  <span className="text-xs font-semibold text-red-700 dark:text-red-300">
-                    Amounts must match! Difference: KES {Math.abs(calculateTotalInput() - calculateTotalAllocated()).toLocaleString()}
+                  <div className="flex-1">
+                    <span className="text-xs font-semibold text-red-700 dark:text-red-300 block">
+                      Amounts must match!
+                    </span>
+                    <span className="text-xs text-red-600 dark:text-red-400">
+                      Difference: KES {Math.abs(calculateTotalInput() - calculateTotalAllocated()).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-2.5 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
+                  <div className="h-4 w-4 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
+                    <span className="text-white text-xs">✓</span>
+                  </div>
+                  <span className="text-xs font-semibold text-green-700 dark:text-green-300">
+                    {calculateTotalInput() === 0 ? 'Ready to register (no initial payments)' : 'Collection and allocations balanced'}
                   </span>
                 </div>
               )}

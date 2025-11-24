@@ -1,17 +1,12 @@
-interface MemberBalance {
-  member_id: string;
-  name: string;
-  phone: string;
-  group_id: number;
-  group_name: string;
-  meeting_date: string;
-  balances: {
-    savings_balance: number;
-    loan_balance: number;
-    advance_loan_balance: number;
-    unallocated_funds: number;
-    total_outstanding: number;
-  };
+// memberDataService.ts - UPDATED with qualification integration
+
+import { dbOperations } from './database';
+import { getMemberLoanQualifications, getBulkMemberQualifications } from './qualificationCalculator';
+import type { MemberBalance } from './database';
+
+interface MemberBalanceWithQualifications extends MemberBalance {
+  loan_qualifications?: any;
+  qualification_inputs?: any;
 }
 
 interface MemberDataResponse {
@@ -19,11 +14,12 @@ interface MemberDataResponse {
   message: string;
   data: {
     meetings: any[];
-    members: MemberBalance[];
+    members: MemberBalanceWithQualifications[];
     summary: {
       total_meetings: number;
       total_members: number;
       financial_totals: any;
+      qualification_summary?: any;
     };
   };
 }
@@ -74,13 +70,11 @@ class MemberDataService {
     this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api.liftipoa.com';
   }
 
-  // Set auth token from sync service
   setAuthToken(token: string, expiry: number) {
     this.authToken = token;
     this.tokenExpiry = expiry;
   }
 
-  // Clear auth token
   clearAuth() {
     this.authToken = null;
     this.tokenExpiry = null;
@@ -92,11 +86,9 @@ class MemberDataService {
       'Accept': 'application/json'
     };
 
-    // Try to get token from sync service first, then fallback to stored credentials
     if (this.authToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
       (headers as any)['Authorization'] = `Bearer ${this.authToken}`;
     } else {
-      // Fallback to getting credentials from database
       const credentials = await dbOperations.getUserCredentials();
       if (credentials?.token) {
         (headers as any)['Authorization'] = `Bearer ${credentials.token}`;
@@ -170,7 +162,6 @@ class MemberDataService {
     return await response.json();
   }
 
-  // NEW: Fetch loans for today's meetings (replaces the old fetchLoansByGroup)
   async fetchTodaysLoans(): Promise<TodaysLoansResponse> {
     const response = await this.authenticatedFetch(`${this.baseUrl}/api/loans/list_loans_for_today_meetings/`, {
       method: 'GET'
@@ -184,11 +175,8 @@ class MemberDataService {
     return await response.json();
   }
 
-  // DEPRECATED: Keep for backward compatibility but log warning
   async fetchLoansByGroup(groupId: number): Promise<any> {
     console.warn('⚠️ fetchLoansByGroup is deprecated. Use fetchTodaysLoans() instead.');
-    
-    // For now, return empty response to prevent breaking
     return {
       success: false,
       error: 'This endpoint has been replaced with fetchTodaysLoans()',
@@ -196,17 +184,15 @@ class MemberDataService {
     };
   }
 
-  // UPDATED: Fetch loans for today's meetings instead of specific groups
   async fetchAllLoansForToday(): Promise<{success: boolean; loans: any[]; groupsWithMeetings: any[]; error?: string}> {
     try {
-      console.log('📄 Fetching loans for today\'s meetings...');
+      console.log('🔄 Fetching loans for today\'s meetings...');
       
       const response = await this.fetchTodaysLoans();
       
       if (response.success) {
         console.log(`📊 Retrieved ${response.loans.length} loans for ${response.summary.total_groups_with_meetings} groups with meetings today`);
         
-        // Store in local database
         if (response.loans.length > 0) {
           await dbOperations.storeLoans(response.loans);
           console.log('✅ Today\'s loans stored successfully');
@@ -231,11 +217,8 @@ class MemberDataService {
     }
   }
 
-  // DEPRECATED: Keep for backward compatibility
   async fetchAllLoansForGroups(groupIds: number[]): Promise<{success: boolean; loans: any[]; error?: string}> {
     console.warn('⚠️ fetchAllLoansForGroups is deprecated. Use fetchAllLoansForToday() instead.');
-    
-    // Redirect to new method
     const result = await this.fetchAllLoansForToday();
     return {
       success: result.success,
@@ -244,19 +227,27 @@ class MemberDataService {
     };
   }
 
-  // UPDATED: Sync member data AND today's loans
+  /**
+   * NEW: Sync member data with client-side qualification recalculation
+   * This includes pending/unsynced contributions in qualification calculations
+   */
   async syncMemberData(): Promise<{
     success: boolean;
     totalMembers: number;
     totalMeetings: number;
     totalLoans?: number;
     groupsWithMeetings?: number;
+    qualificationsSummary?: {
+      longterm_qualified: number;
+      advance_qualified: number;
+      members_with_pending_contributions: number;
+    };
     error?: string;
   }> {
     try {
-      console.log('📄 Starting member data sync...');
+      console.log('🔄 Starting member data sync...');
       
-      // Fetch latest member data using POST to refresh data
+      // Fetch latest member data from backend
       const memberResponse = await this.refreshMemberBalances();
       
       if (!memberResponse.success || !memberResponse.data.members) {
@@ -265,17 +256,46 @@ class MemberDataService {
 
       console.log(`📊 Retrieved ${memberResponse.data.members.length} members across ${memberResponse.data.summary.total_meetings} meetings`);
       
-      // Store member data in local database
+      // Store base member data in local database (WITHOUT qualifications yet)
       const membersToStore = memberResponse.data.members.map((member) => ({
-        ...member,
+        member_id: member.member_id,
+        name: member.name,
+        phone: member.phone,
+        group_id: member.group_id,
+        group_name: member.group_name,
+        meeting_date: member.meeting_date,
+        balances: member.balances,
+        inst: member.inst,
         last_updated: new Date().toISOString()
       }));
       
       await dbOperations.storeMemberBalances(membersToStore);
       console.log('✅ Member balances stored successfully');
 
-      // Fetch and store today's loans for disbursement
-      console.log('📄 Fetching loans for disbursement...');
+      // NEW: Recalculate qualifications CLIENT-SIDE including pending records
+      console.log('🔄 Recalculating qualifications with pending contributions...');
+      
+      const storedMembers = await dbOperations.getAllMembers();
+      const qualificationsMap = await getBulkMemberQualifications(storedMembers, true);
+      
+      // Count qualifications
+      let longtermQualified = 0;
+      let advanceQualified = 0;
+      let membersWithPending = 0;
+      
+      qualificationsMap.forEach(qual => {
+        if (qual.longterm_loan.qualifies) longtermQualified++;
+        if (qual.advance_loan.qualifies) advanceQualified++;
+        if (qual.includes_pending_records) membersWithPending++;
+      });
+      
+      console.log(`✅ Qualifications recalculated:`);
+      console.log(`   - Long-term qualified: ${longtermQualified}/${storedMembers.length}`);
+      console.log(`   - Advance qualified: ${advanceQualified}/${storedMembers.length}`);
+      console.log(`   - Members with pending contributions: ${membersWithPending}`);
+
+      // Fetch and store today's loans
+      console.log('🔄 Fetching loans for disbursement...');
       const loansResult = await this.fetchAllLoansForToday();
       
       let totalLoans = 0;
@@ -287,16 +307,14 @@ class MemberDataService {
         console.log(`✅ Retrieved ${totalLoans} loans for disbursement from ${groupsWithMeetings} groups`);
       } else {
         console.warn('⚠️ Failed to fetch loans but member sync succeeded:', loansResult.error);
-        // Don't fail the whole sync if loans fetch fails
       }
 
-      // Cleanup old data periodically
+      // Cleanup old data
       try {
         await this.cleanupOldData();
         console.log('🧹 Old data cleanup completed');
       } catch (cleanupError) {
         console.warn('⚠️ Cleanup failed but member sync succeeded:', cleanupError);
-        // Don't fail the whole sync if cleanup fails
       }
 
       return {
@@ -304,7 +322,12 @@ class MemberDataService {
         totalMembers: memberResponse.data.members.length,
         totalMeetings: memberResponse.data.summary.total_meetings,
         totalLoans,
-        groupsWithMeetings
+        groupsWithMeetings,
+        qualificationsSummary: {
+          longterm_qualified: longtermQualified,
+          advance_qualified: advanceQualified,
+          members_with_pending_contributions: membersWithPending
+        }
       };
 
     } catch (error: any) {
@@ -318,30 +341,63 @@ class MemberDataService {
     }
   }
 
-  // Method to sync with authentication token from sync service
   async syncWithAuth(authToken: string, tokenExpiry: number): Promise<{
     success: boolean;
     totalMembers: number;
     totalMeetings: number;
     totalLoans?: number;
     groupsWithMeetings?: number;
+    qualificationsSummary?: {
+      longterm_qualified: number;
+      advance_qualified: number;
+      members_with_pending_contributions: number;
+    };
     error?: string;
   }> {
-    // Set auth token first
     this.setAuthToken(authToken, tokenExpiry);
-    
-    // Then sync
     return await this.syncMemberData();
   }
 
-  // Check if service is ready (has auth)
   isAuthenticated(): boolean {
     return (this.authToken !== null && this.tokenExpiry !== null && Date.now() < this.tokenExpiry);
   }
-}
 
-// Import dbOperations for auth credentials
-import { dbOperations } from './database';
+  /**
+   * NEW: Get member with real-time qualifications (includes pending contributions)
+   */
+  async getMemberWithQualifications(memberId: string): Promise<{
+    member: MemberBalance | undefined;
+    qualifications: any;
+    error?: string;
+  }> {
+    try {
+      const member = await dbOperations.getMemberById(memberId);
+      
+      if (!member) {
+        return {
+          member: undefined,
+          qualifications: null,
+          error: 'Member not found'
+        };
+      }
+      
+      // Calculate qualifications including pending records
+      const qualifications = await getMemberLoanQualifications(member, true);
+      
+      return {
+        member,
+        qualifications,
+      };
+    } catch (error: any) {
+      console.error('Error getting member with qualifications:', error);
+      return {
+        member: undefined,
+        qualifications: null,
+        error: error.message
+      };
+    }
+  }
+}
 
 export const memberDataService = new MemberDataService();
 export type { MemberBalance, MemberDataResponse, TodaysLoansResponse };

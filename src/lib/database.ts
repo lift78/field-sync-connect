@@ -31,8 +31,33 @@ export interface MemberBalance {
     unallocated_funds: number;
     total_outstanding: number;
   };
-  inst?: number; // Monthly installment amount member should pay
+  inst?: number;
   last_updated: string;
+  
+  // NEW: Qualification data from backend (base values)
+  loan_qualifications?: {
+    longterm_loan: {
+      qualifies: boolean;
+      max_amount: number;
+      reason: string;
+      details: any;
+    };
+    advance_loan: {
+      qualifies: boolean;
+      max_amount: number;
+      reason: string;
+      details: any;
+    };
+  };
+  
+  // NEW: Raw inputs for recalculation
+  qualification_inputs?: {
+    savings_balance: number;
+    loan_balance: number;
+    advance_balance: number;
+    has_pending_loan: boolean;
+    original_loan_repayment?: number;
+  };
 }
 
 export interface CashCollection {
@@ -539,6 +564,9 @@ export const dbOperations = {
   async deleteGroupCollection(id: string | number) {
     return await db.groupCollections.delete(Number(id));
   },
+
+
+  
 
   // =============================================================================
   // USER CREDENTIALS
@@ -1185,5 +1213,105 @@ export const dbOperations = {
       console.error('Failed to update new member status:', error);
       return false;
     }
+  }
+}; // <-- dbOperations ends here
+
+// =============================================================================
+// QUALIFICATION HELPERS (NEW)
+// =============================================================================
+
+export const qualificationHelpers = {
+  /**
+   * Get member with fresh qualifications (includes pending records)
+   */
+  async getMemberWithLiveQualifications(memberId: string) {
+    const member = await dbOperations.getMemberById(memberId);
+    if (!member) return null;
+    
+    // Import here to avoid circular dependency
+    const { getMemberLoanQualifications } = await import('./qualificationCalculator');
+    const qualifications = await getMemberLoanQualifications(member, true);
+    
+    return {
+      ...member,
+      live_qualifications: qualifications
+    };
+  },
+  
+  /**
+   * Get all members with live qualifications
+   */
+  async getAllMembersWithLiveQualifications() {
+    const members = await dbOperations.getAllMembers();
+    const { getBulkMemberQualifications } = await import('./qualificationCalculator');
+    const qualificationsMap = await getBulkMemberQualifications(members, true);
+    
+    return members.map(member => ({
+      ...member,
+      live_qualifications: qualificationsMap.get(member.member_id)
+    }));
+  },
+  
+  /**
+   * Search members with live qualifications
+   */
+  async searchMembersWithLiveQualifications(query: string) {
+    const members = await dbOperations.searchMembers(query);
+    const { getBulkMemberQualifications } = await import('./qualificationCalculator');
+    const qualificationsMap = await getBulkMemberQualifications(members, true);
+    
+    return members.map(member => ({
+      ...member,
+      live_qualifications: qualificationsMap.get(member.member_id)
+    }));
+  },
+  
+  /**
+   * Get qualification summary for a group
+   */
+  async getGroupQualificationSummary(groupId: number) {
+    const allMembers = await dbOperations.getAllMembers();
+    const groupMembers = allMembers.filter(m => m.group_id === groupId);
+    
+    if (groupMembers.length === 0) {
+      return {
+        group_id: groupId,
+        total_members: 0,
+        longterm_qualified: 0,
+        advance_qualified: 0,
+        total_longterm_capacity: 0,
+        total_advance_capacity: 0
+      };
+    }
+    
+    const { getBulkMemberQualifications } = await import('./qualificationCalculator');
+    const qualificationsMap = await getBulkMemberQualifications(groupMembers, true);
+    
+    let longtermQualified = 0;
+    let advanceQualified = 0;
+    let totalLongtermCapacity = 0;
+    let totalAdvanceCapacity = 0;
+    
+    qualificationsMap.forEach(qual => {
+      if (qual.longterm_loan.qualifies) {
+        longtermQualified++;
+        totalLongtermCapacity += qual.longterm_loan.max_amount;
+      }
+      if (qual.advance_loan.qualifies) {
+        advanceQualified++;
+        totalAdvanceCapacity += qual.advance_loan.max_amount;
+      }
+    });
+    
+    return {
+      group_id: groupId,
+      total_members: groupMembers.length,
+      longterm_qualified: longtermQualified,
+      advance_qualified: advanceQualified,
+      total_longterm_capacity: totalLongtermCapacity,
+      total_advance_capacity: totalAdvanceCapacity,
+      percentage_longterm_qualified: (longtermQualified / groupMembers.length) * 100,
+      percentage_advance_qualified: (advanceQualified / groupMembers.length) * 100
+    };
   }
 };
