@@ -74,8 +74,13 @@ async function getPendingContributions(memberId: string): Promise<{
     // Get all unsynced cash collections for this member
     const unsyncedCollections = await dbOperations.getUnsyncedCashCollections();
     
+    // Extract the numeric ID from memberId (e.g., "MEM/2025/0007" -> "0007")
+    const extractedId = memberId.includes('/') 
+      ? memberId.split('/').pop() || memberId 
+      : memberId;
+    
     const memberCollections = unsyncedCollections.filter(
-      collection => collection.memberId === memberId
+      collection => collection.memberId === extractedId
     );
     
     let totalSavings = 0;
@@ -111,7 +116,11 @@ async function getPendingContributions(memberId: string): Promise<{
 async function hasUnsyncedLoanApplication(memberId: string): Promise<boolean> {
   try {
     const unsyncedLoans = await dbOperations.getUnsyncedLoanApplications();
-    return unsyncedLoans.some(loan => loan.memberId === memberId);
+    // Extract the numeric ID from memberId for comparison
+    const extractedId = memberId.includes('/') 
+      ? memberId.split('/').pop() || memberId 
+      : memberId;
+    return unsyncedLoans.some(loan => loan.memberId === extractedId);
   } catch (error) {
     console.error('Error checking unsynced loans:', error);
     return false;
@@ -124,7 +133,11 @@ async function hasUnsyncedLoanApplication(memberId: string): Promise<boolean> {
 async function hasUnsyncedAdvanceLoan(memberId: string): Promise<boolean> {
   try {
     const unsyncedAdvances = await dbOperations.getUnsyncedAdvanceLoans();
-    return unsyncedAdvances.some(advance => advance.memberId === memberId);
+    // Extract the numeric ID from memberId for comparison
+    const extractedId = memberId.includes('/') 
+      ? memberId.split('/').pop() || memberId 
+      : memberId;
+    return unsyncedAdvances.some(advance => advance.memberId === extractedId);
   } catch (error) {
     console.error('Error checking unsynced advance loans:', error);
     return false;
