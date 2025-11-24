@@ -4,9 +4,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Save, Zap, Banknote, Smartphone } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Trash2, Save, Zap, Banknote, Smartphone, AlertTriangle } from "lucide-react";
 import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
+import { getMemberLoanQualifications } from "@/lib/qualificationCalculator";
 // import { Keyboard } from "@capacitor/keyboard";
 
 
@@ -35,6 +46,11 @@ export function AdvanceLoanForm() {
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [selectedMemberName, setSelectedMemberName] = useState('');
   const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
+  const [qualificationWarning, setQualificationWarning] = useState<{
+    show: boolean;
+    reason: string;
+    maxAmount: number;
+  }>({ show: false, reason: '', maxAmount: 0 });
   const { toast } = useToast();
 
   // Load real member data on component mount
@@ -184,7 +200,24 @@ export function AdvanceLoanForm() {
     setApplications(applications.filter(app => app.id !== id));
   };
 
-  const handleMemberSelect = (member: { id: string; name: string; isReal: boolean; groupName?: string }) => {
+  const handleMemberSelect = async (member: { id: string; name: string; isReal: boolean; groupName?: string }) => {
+    // Check qualification for real members
+    if (member.isReal) {
+      const memberData = realMembers.find(m => extractMemberId(m.member_id) === member.id);
+      if (memberData) {
+        const qualifications = await getMemberLoanQualifications(memberData, true);
+        
+        if (!qualifications.advance_loan.qualifies) {
+          setQualificationWarning({
+            show: true,
+            reason: qualifications.advance_loan.reason,
+            maxAmount: qualifications.advance_loan.max_amount
+          });
+          return;
+        }
+      }
+    }
+    
     setSelectedMemberId(member.id);
     setSelectedMemberName(member.name);
     setMemberQuery('');
@@ -246,9 +279,50 @@ export function AdvanceLoanForm() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Add Member Section */}
-      <Card className="shadow-card bg-gradient-card">
+    <>
+      {/* Qualification Warning Dialog */}
+      <AlertDialog open={qualificationWarning.show} onOpenChange={(open) => {
+        if (!open) {
+          setQualificationWarning({ show: false, reason: '', maxAmount: 0 });
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Member Does Not Qualify
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p className="text-base">{qualificationWarning.reason}</p>
+              {qualificationWarning.maxAmount > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Maximum qualified amount: {formatAmount(qualificationWarning.maxAmount)}
+                </p>
+              )}
+              <p className="text-sm font-medium text-foreground">
+                Do you want to proceed anyway?
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setQualificationWarning({ show: false, reason: '', maxAmount: 0 });
+              // Proceed with adding the member
+              if (selectedMemberId) {
+                setSelectedMemberId(selectedMemberId);
+                setSelectedMemberName(selectedMemberName);
+              }
+            }}>
+              Proceed Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="space-y-6">
+        {/* Add Member Section */}
+        <Card className="shadow-card bg-gradient-card">
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <Zap className="h-5 w-5 mr-2" />
@@ -463,6 +537,7 @@ export function AdvanceLoanForm() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </>
   );
 }

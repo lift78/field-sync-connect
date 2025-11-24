@@ -19,6 +19,7 @@ interface LoanQualification {
     multiplier?: number;
     max_before_rounding?: number;
     max_after_rounding?: number;
+    max_advance_amount?: number;
     formula?: string;
     requirement?: string;
     note?: string;
