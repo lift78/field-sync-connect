@@ -48,9 +48,10 @@ export function AdvanceLoanForm() {
   const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
   const [qualificationWarning, setQualificationWarning] = useState<{
     show: boolean;
+    memberName: string;
     reason: string;
     maxAmount: number;
-  }>({ show: false, reason: '', maxAmount: 0 });
+  }>({ show: false, memberName: '', reason: '', maxAmount: 0 });
   const { toast } = useToast();
 
   // Load real member data on component mount
@@ -210,9 +211,14 @@ export function AdvanceLoanForm() {
         if (!qualifications.advance_loan.qualifies) {
           setQualificationWarning({
             show: true,
+            memberName: member.name,
             reason: qualifications.advance_loan.reason,
             maxAmount: qualifications.advance_loan.max_amount
           });
+          // Still set the member so they can proceed if they want
+          setSelectedMemberId(member.id);
+          setSelectedMemberName(member.name);
+          setMemberQuery('');
           return;
         }
       }
@@ -283,14 +289,14 @@ export function AdvanceLoanForm() {
       {/* Qualification Warning Dialog */}
       <AlertDialog open={qualificationWarning.show} onOpenChange={(open) => {
         if (!open) {
-          setQualificationWarning({ show: false, reason: '', maxAmount: 0 });
+          setQualificationWarning({ show: false, memberName: '', reason: '', maxAmount: 0 });
         }
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              Member Does Not Qualify
+              {qualificationWarning.memberName} - Does Not Qualify
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
               <p className="text-base">{qualificationWarning.reason}</p>
@@ -307,12 +313,8 @@ export function AdvanceLoanForm() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => {
-              setQualificationWarning({ show: false, reason: '', maxAmount: 0 });
-              // Proceed with adding the member
-              if (selectedMemberId) {
-                setSelectedMemberId(selectedMemberId);
-                setSelectedMemberName(selectedMemberName);
-              }
+              setQualificationWarning({ show: false, memberName: '', reason: '', maxAmount: 0 });
+              // Member is already selected, just close the dialog
             }}>
               Proceed Anyway
             </AlertDialogAction>

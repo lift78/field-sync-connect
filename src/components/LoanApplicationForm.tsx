@@ -345,9 +345,10 @@ export function LoanApplicationForm() {
   const [realMembers, setRealMembers] = useState<MemberBalance[]>([]);
   const [qualificationWarning, setQualificationWarning] = useState<{
     show: boolean;
+    memberName: string;
     reason: string;
     maxAmount: number;
-  }>({ show: false, reason: '', maxAmount: 0 });
+  }>({ show: false, memberName: '', reason: '', maxAmount: 0 });
   const [maxQualifiedAmount, setMaxQualifiedAmount] = useState<number>(0);
   
   // Form fields
@@ -421,6 +422,7 @@ export function LoanApplicationForm() {
         if (!qualifications.longterm_loan.qualifies) {
           setQualificationWarning({
             show: true,
+            memberName: member.name,
             reason: qualifications.longterm_loan.reason,
             maxAmount: qualifications.longterm_loan.max_amount
           });
@@ -521,7 +523,7 @@ export function LoanApplicationForm() {
         {/* Qualification Warning Dialog */}
         <AlertDialog open={qualificationWarning.show} onOpenChange={(open) => {
           if (!open) {
-            setQualificationWarning({ show: false, reason: '', maxAmount: 0 });
+            setQualificationWarning({ show: false, memberName: '', reason: '', maxAmount: 0 });
             setSelectedMember(null);
           }
         }}>
@@ -529,7 +531,7 @@ export function LoanApplicationForm() {
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
-                Member Does Not Qualify
+                {qualificationWarning.memberName} - Does Not Qualify
               </AlertDialogTitle>
               <AlertDialogDescription className="space-y-3">
                 <p className="text-base">{qualificationWarning.reason}</p>
@@ -546,7 +548,7 @@ export function LoanApplicationForm() {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={() => {
-                setQualificationWarning({ show: false, reason: '', maxAmount: 0 });
+                setQualificationWarning({ show: false, memberName: '', reason: '', maxAmount: 0 });
                 setStep('form');
               }}>
                 Proceed Anyway
