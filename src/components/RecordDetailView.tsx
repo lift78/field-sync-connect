@@ -43,6 +43,9 @@ interface RecordDetailViewProps {
 }
 
 export function RecordDetailView({ record, type, onBack, onSaved, readOnly = false }: RecordDetailViewProps) {
+  // Synced records should always be read-only
+  const isViewOnly = readOnly || record.status === 'synced';
+  
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -329,8 +332,8 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
     const currentValue = editValues[fieldName] !== undefined ? editValues[fieldName] : value;
     const isEditing = editingField === fieldName;
 
-    // If read-only, render as read-only field
-    if (readOnly) {
+    // If view-only (including synced records), render as read-only field
+    if (isViewOnly) {
       return renderReadOnlyField(label, fieldType === 'number' ? formatAmount(value) : value, icon);
     }
 
@@ -528,7 +531,7 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
                               </p>
                             )}
                           </div>
-                          {!readOnly && (
+                          {!isViewOnly && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -543,7 +546,7 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <Label className="text-sm font-semibold mb-2 block">Type</Label>
-                            {readOnly ? (
+                          {isViewOnly ? (
                               <div className="p-3 bg-muted/50 rounded-lg border border-border h-11 flex items-center">
                                 <span className="font-medium text-base">{getDisplayName(allocation.type)}</span>
                               </div>
@@ -575,7 +578,7 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
                           
                           <div>
                             <Label className="text-sm font-semibold mb-2 block">Amount</Label>
-                            {readOnly ? (
+                            {isViewOnly ? (
                               <div className="p-3 bg-muted/50 rounded-lg border border-border h-11 flex items-center justify-between">
                                 <span className="font-medium text-base">{formatAmount(allocation.amount)}</span>
                                 <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -598,7 +601,7 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
                         {allocation.type === 'other' && (
                           <div className="mt-4">
                             <Label className="text-sm font-semibold mb-2 block">Reason</Label>
-                            {readOnly ? (
+                            {isViewOnly ? (
                               <div className="p-3 bg-muted/50 rounded-lg border border-border h-11 flex items-center">
                                 <span className="font-medium text-base">{allocation.reason || 'N/A'}</span>
                               </div>
@@ -632,7 +635,7 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
                     </Card>
                   ))}
                   
-                  {!readOnly && (
+                  {!isViewOnly && (
                     <Button
                       variant="outline"
                       size="lg"
@@ -650,7 +653,7 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
                   <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                   <p className="text-foreground font-medium text-base mb-2">No allocations</p>
                   <p className="text-sm text-muted-foreground mb-4">Add your first allocation</p>
-                  {!readOnly && (
+                  {!isViewOnly && (
                     <Button
                       variant="outline"
                       size="lg"
@@ -785,7 +788,7 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
               </div>
               <div className="flex flex-col gap-2 items-end flex-shrink-0">
                 {getStatusBadge(record.status)}
-                {!readOnly && (
+                {!isViewOnly && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -819,7 +822,7 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
 
         {type === 'cash' && renderDetailsByType()}
 
-        {!readOnly && hasChanges && (
+        {!isViewOnly && hasChanges && (
           <div className="fixed bottom-3 left-1 right-1 z-50">
             <Card className="shadow-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 dark:from-emerald-600 dark:to-emerald-700 border-0">
               <CardContent className="p-2.5">

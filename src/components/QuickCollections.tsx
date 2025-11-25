@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
@@ -22,7 +23,8 @@ import {
   ArrowLeft,
   Calculator,
   ChevronLeft,
-  SkipForward
+  SkipForward,
+  AlertCircle
 } from "lucide-react";
 
 interface Group {
@@ -227,6 +229,7 @@ function CollectionForm({
   const [mpesaAmount, setMpesaAmount] = useState('');
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showMismatchWarning, setShowMismatchWarning] = useState(false);
   const { toast } = useToast();
   
   // Ref for member card to scroll to
@@ -354,6 +357,12 @@ function CollectionForm({
         description: "Please enter collection amounts or allocations",
         variant: "destructive"
       });
+      return;
+    }
+
+    // Check if total collected matches total allocated
+    if (Math.abs(totalCollected - totalAllocated) > 0.01) {
+      setShowMismatchWarning(true);
       return;
     }
 
@@ -893,6 +902,36 @@ function CollectionForm({
           {isLoading ? 'Saving...' : 'Save & Next'}
         </Button>
       </div>
+
+      {/* Mismatch Warning Dialog */}
+      <AlertDialog open={showMismatchWarning} onOpenChange={setShowMismatchWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Collection Mismatch
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                The total amount collected does not match the total amount allocated.
+              </p>
+              <div className="space-y-1 text-sm font-medium">
+                <p>Total Collected: <span className="text-blue-600">{formatAmount(totalCollected)}</span></p>
+                <p>Total Allocated: <span className="text-emerald-600">{formatAmount(totalAllocated)}</span></p>
+                <p>Difference: <span className="text-amber-600">{formatAmount(Math.abs(totalCollected - totalAllocated))}</span></p>
+              </div>
+              <p className="text-destructive">
+                Please adjust your amounts so that collected equals allocated before saving.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowMismatchWarning(false)}>
+              OK, I'll Fix It
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
