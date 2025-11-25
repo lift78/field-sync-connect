@@ -566,7 +566,7 @@ export function FieldOfficerApp() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background safe-area-inset">
       {fullScreenMenuOpen && (
         <FullScreenMenu 
           onClose={navigationControl.handleBack}
@@ -574,6 +574,15 @@ export function FieldOfficerApp() {
           activeSection={activeSection}
         />
       )}
+      
+      <style>{`
+        .safe-area-inset {
+          padding-top: env(safe-area-inset-top);
+          padding-bottom: env(safe-area-inset-bottom);
+          min-height: 100vh;
+          min-height: -webkit-fill-available;
+        }
+      `}</style>
 
       <header className="bg-background text-foreground p-3 sticky top-0 z-50 border-b border-border">
         <div className="flex items-center justify-between">
@@ -630,25 +639,30 @@ export function FieldOfficerApp() {
       </main>
 
       {shouldShowNavbar && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40">
+        <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border/50 z-40 pb-[env(safe-area-inset-bottom)]">
           <div className="grid grid-cols-5 gap-0">
             {sections.map((section) => {
               const isActive = activeSection === section.id;
               return (
-                <Button
+                <button
                   key={section.id}
-                  variant="ghost"
-                  size="sm"
                   onClick={() => handleMenuNavigate(section.id)}
-                  className={`flex-col h-16 p-1.5 rounded-none ${
-                    isActive 
-                      ? 'text-primary bg-primary/10 border-t-2 border-t-primary' 
-                      : 'text-muted-foreground hover:text-primary hover:bg-primary/5'
+                  className={`flex flex-col items-center justify-center h-16 py-2 px-1 transition-all duration-200 relative group ${
+                    isActive ? 'text-primary' : 'text-muted-foreground'
                   }`}
                 >
-                  <section.icon className="h-5 w-5 mb-1" />
-                  <span className="text-[10px] font-medium">{section.title}</span>
-                </Button>
+                  {isActive && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-primary rounded-full" />
+                  )}
+                  <section.icon className={`h-6 w-6 mb-1 transition-all duration-200 ${
+                    isActive ? 'scale-110' : 'group-hover:scale-105 group-hover:text-primary'
+                  }`} />
+                  <span className={`text-[11px] font-medium transition-all duration-200 ${
+                    isActive ? '' : 'group-hover:text-primary'
+                  }`}>
+                    {section.title}
+                  </span>
+                </button>
               );
             })}
           </div>

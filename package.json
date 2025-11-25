@@ -17,6 +17,7 @@
     "@capacitor/core": "^5.7.0",
     "@capacitor/ios": "^5.7.0",
     "@capacitor/keyboard": "^5.0.9",
+    "@capacitor/status-bar": "^5.0.7",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
