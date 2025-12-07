@@ -172,30 +172,28 @@ function GroupSelection({ onGroupSelect, onBack }: { onGroupSelect: (group: Grou
           const colorClass = groupColors[index % groupColors.length];
           return (
             <Card 
-              key={group.id} 
-              className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-[1.01] border-2 hover:border-blue-400 dark:hover:border-blue-500" 
-              onClick={() => handleGroupSelect(group)}
-            >
-              {/* Colorful Top Line */}
-              <div className={`h-1.5 bg-gradient-to-r ${colorClass}`}></div>
-              
-              <CardHeader className="pb-2 sm:pb-3">
-                <CardTitle className="flex items-center justify-between text-base sm:text-lg">
-                  <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                    <div className={`p-1.5 sm:p-2 rounded-lg bg-gradient-to-r ${colorClass} flex-shrink-0`}>
-                      <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                    </div>
-                    <span className="font-bold truncate">{group.name}</span>
-                  </div>
-                  <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0 ml-2" />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 pb-3">
-                <Badge variant="secondary" className="text-xs sm:text-sm">
-                  {group.memberCount} members
-                </Badge>
-              </CardContent>
-            </Card>
+  key={group.id} 
+  className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-[1.01] border-l-4 hover:border-blue-400 dark:hover:border-blue-500" 
+  style={{ borderLeftColor: `hsl(var(--primary))` }}
+  onClick={() => handleGroupSelect(group)}
+>
+  <CardHeader className="pb-2 sm:pb-3">
+    <CardTitle className="flex items-center justify-between text-base sm:text-lg">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+        <div className={`p-1.5 sm:p-2 rounded-lg bg-gradient-to-r ${colorClass} flex-shrink-0`}>
+          <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        </div>
+        <span className="font-bold truncate">{group.name}</span>
+      </div>
+      <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0 ml-2" />
+    </CardTitle>
+  </CardHeader>
+  <CardContent className="pt-0 pb-3">
+    <Badge variant="secondary" className="text-xs sm:text-sm">
+      {group.memberCount} members
+    </Badge>
+  </CardContent>
+</Card>
           );
         })}
       </div>
@@ -618,8 +616,11 @@ function CollectionForm({
         <CardContent className="space-y-4">
           {/* Core Allocation Fields - Always Visible */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="savings-amount" className="text-sm">Allocate to Savings (KES)</Label>
+            {/* Savings Allocation - Green Border */}
+            <div className="space-y-2 border-2 border-dashed border-green-500/50 rounded-lg p-3 bg-green-500/5">
+              <Label htmlFor="savings-amount" className="text-sm font-semibold text-green-600 dark:text-green-400">
+                💰 Allocate to Savings (KES)
+              </Label>
               <Input
                 id="savings-amount"
                 type="number"
@@ -656,9 +657,12 @@ function CollectionForm({
               )}
             </div>
             
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 mb-1">
-                <Label htmlFor="loan-amount" className="text-sm">Pay Loan (KES)</Label>
+            {/* Loan Payment - Red/Orange Border */}
+              <div className="space-y-2 border-2 border-dashed border-red-500/50 rounded-lg p-3 bg-red-500/5">
+                <div className="flex items-center gap-2 mb-1">
+                  <Label htmlFor="loan-amount" className="font-semibold text-red-600 dark:text-red-400">
+                    🏦 Pay Loan (KES)
+                  </Label>
                 <Badge variant="destructive" className="text-xs font-bold animate-pulse shadow-lg border-2 border-red-600">
                   Min: {formatAmount(currentMember?.inst || 0)}
                 </Badge>
@@ -699,8 +703,11 @@ function CollectionForm({
               )}
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="advance-payment-amount" className="text-sm">Advance Payments (KES)</Label>
+            {/* Advance Payment - Blue Border */}
+            <div className="space-y-2 border-2 border-dashed border-blue-500/50 rounded-lg p-3 bg-blue-500/5">
+              <Label htmlFor="advance-payment-amount" className="font-semibold text-blue-600 dark:text-blue-400">
+                ⚡ Advance Payments (KES)
+              </Label>
               <div className="relative">
                 <Input
                   id="advance-payment-amount"

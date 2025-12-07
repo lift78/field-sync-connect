@@ -584,46 +584,42 @@ export function FieldOfficerApp() {
         }
       `}</style>
 
-      <header className="bg-background text-foreground p-3 sticky top-0 z-50 border-b border-border">
+      <header className="bg-background/95 backdrop-blur-md text-foreground px-4 py-3 sticky top-0 z-50 border-b border-border/50 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
             <img 
               src={theme === 'dark' ? "/lovable-uploads/logo2.png" : "/lovable-uploads/logo1.png"}
               alt="Company Logo" 
-              className="h-6 w-6 flex-shrink-0"
+              className="h-8 w-8 flex-shrink-0"
             />
-            <Badge variant="outline" className="text-xs flex-shrink-0">
-              Offline
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5">
+               Offline
             </Badge>
-            <p className="text-xs opacity-90 truncate hidden sm:block">{activeTitle}</p>
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
               onClick={() => setQuickDrawerOpen(true)}
-              className="hover:bg-accent h-9 w-9"
+              className="p-2 transition-all duration-200 hover:scale-110 active:scale-95 group"
               title="Quick Collections"
             >
-              <Users className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
+              <Users className="h-5 w-5 transition-colors duration-200 group-hover:text-blue-500" />
+            </button>
+            <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="hover:bg-accent h-9 w-9"
+              className="p-2 transition-all duration-200 hover:scale-110 active:scale-95 group"
             >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
+              {theme === 'dark' ? 
+                <Sun className="h-5 w-5 transition-colors duration-200 group-hover:text-blue-500" /> : 
+                <Moon className="h-5 w-5 transition-colors duration-200 group-hover:text-blue-500" />
+              }
+            </button>
+            <button
               onClick={() => setFullScreenMenuOpen(true)}
-              className="hover:bg-accent h-9 w-9"
+              className="p-2 transition-all duration-200 hover:scale-110 active:scale-95 group"
               title="Menu"
             >
-              <Menu className="h-5 w-5" /> 
-            </Button>
+              <Menu className="h-5 w-5 transition-colors duration-200 group-hover:text-blue-500" /> 
+            </button>
           </div>
         </div>
       </header>

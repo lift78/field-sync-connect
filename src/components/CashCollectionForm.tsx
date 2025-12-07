@@ -636,10 +636,13 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Core Allocation Fields - Always Visible */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="savings-amount">Allocate to Savings (KES)</Label>
-              <Input
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Savings Allocation - Green Border */}
+              <div className="space-y-2 border-2 border-dashed border-green-500/50 rounded-lg p-3 bg-green-500/5">
+                <Label htmlFor="savings-amount" className="font-semibold text-green-600 dark:text-green-400">
+                  💰 Allocate to Savings (KES)
+                </Label>
+                <Input
                 id="savings-amount"
                 type="number"
                 step="0.01"
@@ -674,9 +677,12 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
               )}
             </div>
             
-            <div className="space-y-2">
+            {/* Loan Payment - Red/Orange Border */}
+          <div className="space-y-2 border-2 border-dashed border-red-500/50 rounded-lg p-3 bg-red-500/5">
             <div className="flex items-center gap-2 mb-1">
-              <Label htmlFor="loan-amount">Pay Loan (KES)</Label>
+              <Label htmlFor="loan-amount" className="font-semibold text-red-600 dark:text-red-400">
+                🏦 Pay Loan (KES)
+              </Label>
               <Badge variant="destructive" className="text-xs font-bold animate-pulse shadow-lg border-2 border-red-600">
                 Min: {formatAmount(selectedRealMember?.inst || 0)}
               </Badge>
@@ -716,8 +722,11 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
               )}
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="advance-payment-amount">Advance Payments (KES)</Label>
+            {/* Advance Payment - Blue Border */}
+            <div className="space-y-2 border-2 border-dashed border-blue-500/50 rounded-lg p-3 bg-blue-500/5">
+              <Label htmlFor="advance-payment-amount" className="font-semibold text-blue-600 dark:text-blue-400">
+                ⚡ Advance Payments (KES)
+              </Label>
               <div className="relative">
                 <Input
                   id="advance-payment-amount"
