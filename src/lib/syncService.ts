@@ -764,7 +764,7 @@ export class SyncService {
           phone: record.phone,
           location: record.location,
           id_number: record.id_number,
-          email: record.email || '',
+          email: record.email && record.email.trim() !== '' ? record.email : null,
           occupation: record.occupation || '',
           notes: record.notes || ''
         };
