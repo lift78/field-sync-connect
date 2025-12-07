@@ -406,6 +406,7 @@ export class SyncService {
           officer_name: 'Offline Officer',
           notes: record.purpose || '',
           loan_type: 'longterm',
+          security_items: record.securityItems || [],
         };
         console.log("📤 Syncing loan application:", payload);
   

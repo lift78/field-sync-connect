@@ -673,20 +673,101 @@ export function RecordDetailView({ record, type, onBack, onSaved, readOnly = fal
     );
   };
 
+  const addSecurityItem = () => {
+    const data = record.data as LoanApplication;
+    const currentSecurityItems = editValues.securityItems || data.securityItems || [];
+    setEditValues({
+      ...editValues,
+      securityItems: [...currentSecurityItems, '']
+    });
+  };
+
+  const removeSecurityItem = (index: number) => {
+    const data = record.data as LoanApplication;
+    const currentSecurityItems = editValues.securityItems || data.securityItems || [];
+    const updatedItems = currentSecurityItems.filter((_: any, i: number) => i !== index);
+    setEditValues({
+      ...editValues,
+      securityItems: updatedItems
+    });
+  };
+
+  const updateSecurityItem = (index: number, value: string) => {
+    const data = record.data as LoanApplication;
+    const currentSecurityItems = editValues.securityItems || data.securityItems || [];
+    const updatedItems = [...currentSecurityItems];
+    updatedItems[index] = value;
+    setEditValues({
+      ...editValues,
+      securityItems: updatedItems
+    });
+  };
+
   const renderLoanApplicationDetails = () => {
     const data = record.data as LoanApplication;
     if (!data) {
       return <p className="text-muted-foreground text-sm">No data available</p>;
     }
+
+    const currentSecurityItems = editValues.securityItems || data.securityItems || [];
     
     return (
       <div className="space-y-4">
         {renderEditableField('Loan Amount', 'loanAmount', data.loanAmount || 0, 'number', <DollarSign className="h-4 w-4 text-blue-600" />)}
-        {renderEditableField('Purpose', 'purpose', data.purpose || '', 'text', <FileText className="h-4 w-4 text-purple-600" />)}
         {renderEditableField('Tenure (Months)', 'tenure', data.tenure || 0, 'number', <Calendar className="h-4 w-4 text-emerald-600" />)}
-        {renderReadOnlyField('Interest Rate', `${data.interestRate || 0}%`)}
         {renderReadOnlyField('Monthly Installment', formatAmount(data.installments || 0))}
         {renderReadOnlyField('Guarantors', data.guarantors?.join(', ') || 'None', <Users className="h-4 w-4 text-blue-600" />)}
+        
+        {/* Security Items Section */}
+        <div className="space-y-3">
+          <Label className="text-sm font-semibold flex items-center gap-2">
+            <FileText className="h-4 w-4 text-blue-600" />
+            Security Items
+          </Label>
+          
+          {currentSecurityItems.length > 0 ? (
+            <div className="space-y-2">
+              {currentSecurityItems.map((item: string, index: number) => (
+                <div key={index} className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900">
+                  {isViewOnly ? (
+                    <span className="flex-1 text-sm">{item || 'N/A'}</span>
+                  ) : (
+                    <>
+                      <Input
+                        value={item}
+                        onChange={(e) => updateSecurityItem(index, e.target.value)}
+                        placeholder="Describe security item"
+                        className="flex-1 border-blue-300 dark:border-blue-700"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeSecurityItem(index)}
+                        className="text-blue-600 hover:text-destructive hover:bg-destructive/10 h-9 w-9 p-0"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No security items</p>
+          )}
+          
+          {!isViewOnly && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addSecurityItem}
+              className="w-full border-dashed border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Security Item
+            </Button>
+          )}
+        </div>
       </div>
     );
   };

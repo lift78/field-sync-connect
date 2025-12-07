@@ -235,11 +235,11 @@ function GuarantorSelection({
           <div className="space-y-2">
             {groupMembers.length > 0 ? (
               groupMembers.map(member => (
-                <button
-                  key={member.id}
-                  onClick={() => onAdd(member.id)}
-                  className="w-full p-3 text-left border rounded-lg bg-accent/30 hover:bg-accent/50 hover:border-primary transition-colors"
-                >
+                  <button
+                    key={member.id}
+                    onClick={() => onAdd(member.id)}
+                    className="w-full p-3 text-left border rounded-lg bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-primary border-blue-200 dark:border-blue-900 transition-colors"
+                  >
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">{member.name}</p>
@@ -275,7 +275,7 @@ function GuarantorSelection({
                       onAdd(member.id);
                       setSearchQuery('');
                     }}
-                    className="w-full p-3 text-left border rounded-lg bg-accent/30 hover:bg-accent/50 hover:border-primary transition-colors"
+                    className="w-full p-3 text-left border rounded-lg bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-primary border-blue-200 dark:border-blue-900 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -739,18 +739,19 @@ export function LoanApplicationForm() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {securityItems.map((item, index) => (
-            <div key={item.id} className="flex items-start gap-2 p-3 bg-accent/50 rounded-lg border">
+      {securityItems.map((item, index) => (
+            <div key={item.id} className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900">
               <div className="flex-1">
-                <p className="text-sm font-medium">Item {index + 1}</p>
-                <p className="text-sm text-muted-foreground">{item.description}</p>
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Item {index + 1}</p>
+                <p className="text-sm text-blue-600 dark:text-blue-400">{item.description}</p>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => removeSecurityItem(item.id)}
+                className="text-blue-600 hover:text-destructive hover:bg-destructive/10"
               >
-                <Trash2 className="h-4 w-4 text-destructive" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           ))}
