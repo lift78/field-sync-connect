@@ -175,6 +175,13 @@ export function GroupSummary({ onBack, onEditRecord }: { onBack?: () => void; on
 
   useEffect(() => {
     loadGroupsSummary();
+    
+    // Set up an interval to refresh data periodically for faster updates
+    const refreshInterval = setInterval(() => {
+      loadGroupsSummary();
+    }, 2000); // Refresh every 2 seconds
+    
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const handleAddFines = async () => {
