@@ -261,8 +261,9 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
       }
 
       // Step 3: Add the new member to memberBalances so they appear in selections
+      // IMPORTANT: Use addMemberBalance to ADD a single member without clearing all existing members
       const selectedGroupData = groups.find(g => g.id === parseInt(selectedGroup));
-      await dbOperations.storeMemberBalances([{
+      await dbOperations.addMemberBalance({
         member_id: idNumber,
         name: name.trim(),
         phone: phone.trim(),
@@ -277,7 +278,7 @@ export function AddMemberForm({ onBack }: AddMemberFormProps) {
           total_outstanding: 0
         },
         last_updated: new Date().toISOString()
-      }]);
+      });
 
       toast({
         title: "✅ Member Registered",
