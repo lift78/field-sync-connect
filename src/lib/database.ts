@@ -74,6 +74,7 @@ export interface CashCollection {
   synced: boolean;
   syncStatus?: 'pending' | 'failed' | 'synced';
   syncError?: string;
+  is_school_fees?: boolean;   // Flag for school fees mode records
 }
 
 export interface LoanApplication {
@@ -144,6 +145,7 @@ export interface AdvanceLoan {
   synced: boolean;
   syncStatus?: 'pending' | 'failed' | 'synced';
   syncError?: string;
+  is_school_fees?: boolean;   // Flag for school fees mode records
 }
 
 export interface GroupCollection {
@@ -156,6 +158,7 @@ export interface GroupCollection {
   synced: boolean;
   syncStatus?: 'pending' | 'failed' | 'synced';
   syncError?: string;
+  is_school_fees?: boolean;   // Flag for school fees mode records
 }
 
 export interface NewMember {
@@ -174,6 +177,7 @@ export interface NewMember {
   synced: boolean;
   syncStatus?: 'pending' | 'failed' | 'synced';
   syncError?: string;
+  is_school_fees?: boolean;   // Flag for school fees mode records
 }
 
 export interface OfficeCash {

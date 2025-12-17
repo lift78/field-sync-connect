@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { RecordsList } from "./RecordsList";
 import { dbOperations } from "@/lib/database";
 import { syncService } from "@/lib/syncService";
+import { useSchoolFees } from "@/contexts/SchoolFeesContext";
 import { 
   RefreshCw, 
   Wifi, 
@@ -42,6 +43,7 @@ interface SyncManagerProps {
 }
 
 export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecords, onViewingRecordsChange }: SyncManagerProps) {
+  const { isSchoolFeesMode } = useSchoolFees();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
@@ -466,7 +468,10 @@ export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecor
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-4 space-y-2">
-            {offlineData.map((data) => (
+            {offlineData
+              // In school fees mode, hide loan applications and disbursements
+              .filter(data => !isSchoolFeesMode || (data.type !== 'loan' && data.type !== 'disbursement'))
+              .map((data) => (
               <button
                 key={data.type}
                 onClick={() => setViewingRecords(data.type)}
