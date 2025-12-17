@@ -18,6 +18,7 @@ import { QuickCollections } from "./QuickCollections";
 import { GroupSummary } from "./GroupSummary";
 import { AddMemberForm } from "./AddMemberForm";
 import { MoreMenu } from "./MoreMenu";
+import { SchoolFeesProvider, useSchoolFees } from "@/contexts/SchoolFeesContext";
 import { 
   Wallet, 
   CreditCard, 
@@ -29,7 +30,9 @@ import {
   Sun,
   Users,
   MoreHorizontal,
-  ArrowLeft
+  ArrowLeft,
+  GraduationCap,
+  LogOut
 } from "lucide-react";
 import { CashCollection, LoanApplication, AdvanceLoan } from "@/lib/database";
 
@@ -172,25 +175,49 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
   );
 }
 
+// Transition Screen Component
+function TransitionScreen({ message }: { message: string }) {
+  return (
+    <div className="fixed inset-0 z-[100] bg-gradient-to-br from-blue-600 via-blue-700 to-purple-800 flex flex-col items-center justify-center">
+      <div className="animate-pulse">
+        <GraduationCap className="h-20 w-20 text-white mb-6" />
+      </div>
+      <h2 className="text-xl font-bold text-white mb-2">{message}</h2>
+      <div className="flex gap-1 mt-4">
+        <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+        <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+        <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+      </div>
+    </div>
+  );
+}
+
 // Full Screen Menu Component
 function FullScreenMenu({ 
   onClose, 
   onNavigate,
-  activeSection 
+  activeSection,
+  isSchoolFeesMode
 }: { 
   onClose: () => void; 
   onNavigate: (section: AppSection) => void;
   activeSection: AppSection;
+  isSchoolFeesMode: boolean;
 }) {
   const { theme } = useTheme();
   
-  const menuItems = [
+  const allMenuItems = [
     { id: 'cash' as const, title: 'Cash Collections', icon: Wallet, color: 'bg-emerald-500', description: 'Record member payments' },
     { id: 'loan' as const, title: 'Loan Applications', icon: CreditCard, color: 'bg-blue-500', description: 'Process loan requests' },
     { id: 'advance' as const, title: 'Advance Loans', icon: Zap, color: 'bg-amber-500', description: 'Quick loan advances' },
     { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-purple-500', description: 'Synchronize records' },
     { id: 'more' as const, title: 'More Options', icon: MoreHorizontal, color: 'bg-slate-500', description: 'Additional features' },
   ];
+
+  // Filter menu items in school fees mode (no loans, no more)
+  const menuItems = isSchoolFeesMode 
+    ? allMenuItems.filter(item => item.id !== 'loan' && item.id !== 'more')
+    : allMenuItems;
 
   const bgClass = theme === "dark" 
     ? "bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" 
@@ -212,7 +239,9 @@ function FullScreenMenu({
             className="h-8 w-8"
           />
           <div>
-            <h2 className="text-lg font-bold">Navigation Menu</h2>
+            <h2 className="text-lg font-bold">
+              {isSchoolFeesMode ? 'School Fees Menu' : 'Navigation Menu'}
+            </h2>
             <p className="text-xs text-muted-foreground">Select an option below</p>
           </div>
         </div>
@@ -265,7 +294,7 @@ function FullScreenMenu({
 
         <div className="mt-8 text-center">
           <p className="text-xs text-muted-foreground">
-            LIFT Financial Solutions Â© 2025
+            {isSchoolFeesMode ? 'School Fees Mode Active' : 'LIFT Financial Solutions © 2025'}
           </p>
         </div>
       </div>
@@ -286,7 +315,8 @@ function FullScreenMenu({
   );
 }
 
-export function FieldOfficerApp() {
+function FieldOfficerAppContent() {
+  const { isSchoolFeesMode, setSchoolFeesMode, isTransitioning, setIsTransitioning } = useSchoolFees();
   // All navigation state
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
   const [fullScreenMenuOpen, setFullScreenMenuOpen] = useState(false);
@@ -380,13 +410,18 @@ export function FieldOfficerApp() {
     };
   }, [navigationControl, activeSection, fullScreenMenuOpen, quickDrawerOpen, showQuickCollections, recordView, syncViewingRecords, morePage, showMoreMenu, showLogin]);
 
-  const sections = [
+  const allSections = [
     { id: 'cash' as const, title: 'Cash', icon: Wallet, color: 'bg-emerald-500' },
     { id: 'loan' as const, title: 'Loans', icon: CreditCard, color: 'bg-blue-500' },
     { id: 'advance' as const, title: 'Advance', icon: Zap, color: 'bg-amber-500' },
     { id: 'sync' as const, title: 'Sync', icon: RefreshCw, color: 'bg-purple-500' },
     { id: 'more' as const, title: 'More', icon: MoreHorizontal, color: 'bg-slate-500' },
   ];
+
+  // Filter sections in school fees mode (no loans, no more)
+  const sections = isSchoolFeesMode 
+    ? allSections.filter(s => s.id !== 'loan' && s.id !== 'more')
+    : allSections;
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
   const shouldShowNavbar = !showQuickCollections && !recordView && !morePage && !syncViewingRecords;
@@ -561,6 +596,10 @@ export function FieldOfficerApp() {
     return <LoginScreen onLogin={() => setShowLogin(false)} />;
   }
 
+  if (isTransitioning) {
+    return <TransitionScreen message="Entering School Fees Mode..." />;
+  }
+
   if (showQuickCollections) {
     return <QuickCollections onBack={navigationControl.handleBack} />;
   }
@@ -572,6 +611,7 @@ export function FieldOfficerApp() {
           onClose={navigationControl.handleBack}
           onNavigate={handleMenuNavigate}
           activeSection={activeSection}
+          isSchoolFeesMode={isSchoolFeesMode}
         />
       )}
       
@@ -592,11 +632,27 @@ export function FieldOfficerApp() {
               alt="Company Logo" 
               className="h-8 w-8 flex-shrink-0"
             />
-            <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5">
-               Offline
-            </Badge>
+            {isSchoolFeesMode ? (
+              <Badge variant="default" className="text-[10px] px-2 py-0.5 h-5 bg-blue-500">
+                <GraduationCap className="h-3 w-3 mr-1" />
+                School Fees
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5">
+                Offline
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {isSchoolFeesMode && (
+              <button
+                onClick={() => setSchoolFeesMode(false)}
+                className="p-2 transition-all duration-200 hover:scale-110 active:scale-95 group"
+                title="Exit School Fees Mode"
+              >
+                <LogOut className="h-5 w-5 transition-colors duration-200 text-blue-500 group-hover:text-red-500" />
+              </button>
+            )}
             <button
               onClick={() => setQuickDrawerOpen(true)}
               className="p-2 transition-all duration-200 hover:scale-110 active:scale-95 group"
@@ -636,7 +692,7 @@ export function FieldOfficerApp() {
 
       {shouldShowNavbar && (
         <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border/50 z-40 pb-[env(safe-area-inset-bottom)]">
-          <div className="grid grid-cols-5 gap-0">
+          <div className={`grid gap-0 ${isSchoolFeesMode ? 'grid-cols-3' : 'grid-cols-5'}`}>
             {sections.map((section) => {
               const isActive = activeSection === section.id;
               return (
@@ -665,5 +721,13 @@ export function FieldOfficerApp() {
         </nav>
       )}
     </div>
+  );
+}
+
+export function FieldOfficerApp() {
+  return (
+    <SchoolFeesProvider>
+      <FieldOfficerAppContent />
+    </SchoolFeesProvider>
   );
 }

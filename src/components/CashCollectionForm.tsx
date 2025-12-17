@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
 import { Calculator } from "lucide-react";
 import { Plus, Trash2, Save, User, Phone, Users, Banknote, Smartphone, AlertCircle, DollarSign } from "lucide-react";
+import { useSchoolFees } from "@/contexts/SchoolFeesContext";
 // import { Keyboard } from "@capacitor/keyboard";
 
 
@@ -64,6 +65,7 @@ interface CashCollectionFormProps {
 }
 
 export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormProps = {}) {
+  const { isSchoolFeesMode } = useSchoolFees();
   const [memberId, setMemberId] = useState('');
   const [cashAmount, setCashAmount] = useState('');
   const [mpesaAmount, setMpesaAmount] = useState('');
@@ -693,9 +695,10 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
                   </div>
                 </div>
               )}
-            </div>
+              </div>
             
-            {/* Loan Payment - Red/Orange Border */}
+            {/* Loan Payment - Red/Orange Border - Hidden in School Fees Mode */}
+            {!isSchoolFeesMode && (
             <div className="space-y-2 border-2 border-dashed border-red-500/50 rounded-lg p-4 bg-red-500/5">
             <div className="flex items-center gap-2 mb-1">
               <Label htmlFor="loan-amount" className="font-semibold text-red-600 dark:text-red-400">
@@ -739,6 +742,7 @@ export function CashCollectionForm({ onShowGroupSummary }: CashCollectionFormPro
                 </div>
               )}
             </div>
+            )}
             
             {/* Advance Payment - Blue Border */}
             <div className="space-y-2 border-2 border-dashed border-blue-500/50 rounded-lg p-4 bg-blue-500/5">

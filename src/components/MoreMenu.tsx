@@ -1,9 +1,6 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { 
-  ArrowLeft,
   GraduationCap,
   UserPlus,
   Users,
@@ -13,6 +10,7 @@ import {
   ArrowLeftRight,
   PiggyBank
 } from "lucide-react";
+import { useSchoolFees } from "@/contexts/SchoolFeesContext";
 
 interface MoreMenuProps {
   onBack: () => void;
@@ -20,20 +18,21 @@ interface MoreMenuProps {
 }
 
 export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
-  const [schoolFeesMode, setSchoolFeesMode] = useState(false);
+  const { isSchoolFeesMode, setSchoolFeesMode, setIsTransitioning } = useSchoolFees();
+
+  const handleSchoolFeesToggle = (checked: boolean) => {
+    if (checked) {
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setSchoolFeesMode(true);
+        setIsTransitioning(false);
+      }, 1500);
+    } else {
+      setSchoolFeesMode(false);
+    }
+  };
 
   const menuItems = [
-    {
-      id: 'school-fees',
-      title: 'School Fees Mode',
-      description: 'Switch to specialized school fees collection',
-      icon: GraduationCap,
-      color: 'from-blue-500 to-blue-600',
-      action: () => {
-        setSchoolFeesMode(!schoolFeesMode);
-        // TODO: Implement mode switching logic
-      }
-    },
     {
       id: 'add-member',
       title: 'Add New Member',
@@ -99,11 +98,30 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
         <Card className="shadow-sm bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-primary/20">
           <CardContent className="p-3">
             <div className="flex items-center gap-2">
-          
               <div className="flex-1 min-w-0">
                 <h2 className="text-base font-bold tracking-tight">More Options</h2>
                 <p className="text-xs text-muted-foreground">Additional features and settings</p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* School Fees Mode Toggle Card */}
+        <Card className="shadow-sm border-l-4" style={{ borderLeftColor: `hsl(var(--primary))` }}>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex-shrink-0">
+                <GraduationCap className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold">School Fees Mode</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Switch to specialized school fees collection</p>
+              </div>
+              <Switch
+                checked={isSchoolFeesMode}
+                onCheckedChange={handleSchoolFeesToggle}
+                className="data-[state=checked]:bg-blue-500"
+              />
             </div>
           </CardContent>
         </Card>
@@ -123,20 +141,8 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
                     <item.icon className="h-5 w-5 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-semibold truncate">{item.title}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
-                      </div>
-                      {item.id === 'school-fees' && (
-                        <Badge 
-                          variant={schoolFeesMode ? "default" : "outline"}
-                          className="text-xs flex-shrink-0"
-                        >
-                          {schoolFeesMode ? 'ON' : 'OFF'}
-                        </Badge>
-                      )}
-                    </div>
+                    <h3 className="text-sm font-semibold truncate">{item.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
                   </div>
                 </div>
               </CardContent>
