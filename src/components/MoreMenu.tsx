@@ -18,13 +18,13 @@ interface MoreMenuProps {
 }
 
 export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
-  const { isSchoolFeesMode, setSchoolFeesMode, setIsTransitioning } = useSchoolFees();
+  const { isSchoolFeesMode, setSchoolFeesMode, startTransition, endTransition } = useSchoolFees();
 
   const handleSchoolFeesToggle = (checked: boolean) => {
-    setIsTransitioning(true);
+    startTransition(checked); // true = entering, false = exiting
     setTimeout(() => {
       setSchoolFeesMode(checked);
-      setIsTransitioning(false);
+      endTransition();
     }, 1500);
   };
 

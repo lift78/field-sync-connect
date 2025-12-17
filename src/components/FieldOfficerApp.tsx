@@ -176,14 +176,14 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
 }
 
 // Transition Screen Component
-function TransitionScreen({ isEntering }: { isEntering: boolean }) {
+function TransitionScreen({ direction }: { direction: 'entering' | 'exiting' }) {
   return (
     <div className="fixed inset-0 z-[100] bg-gradient-to-br from-blue-600 via-blue-700 to-purple-800 flex flex-col items-center justify-center">
       <div className="animate-pulse">
         <GraduationCap className="h-20 w-20 text-white mb-6" />
       </div>
       <h2 className="text-xl font-bold text-white mb-2">
-        {isEntering ? 'Entering School Fees Mode...' : 'Exiting School Fees Mode...'}
+        {direction === 'entering' ? 'Entering School Fees Mode...' : 'Exiting School Fees Mode...'}
       </h2>
       <div className="flex gap-1 mt-4">
         <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -318,7 +318,7 @@ function FullScreenMenu({
 }
 
 function FieldOfficerAppContent() {
-  const { isSchoolFeesMode, setSchoolFeesMode, isTransitioning, setIsTransitioning, isEnteringSchoolFees } = useSchoolFees();
+  const { isSchoolFeesMode, setSchoolFeesMode, isTransitioning, transitionDirection } = useSchoolFees();
   // All navigation state
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
   const [fullScreenMenuOpen, setFullScreenMenuOpen] = useState(false);
@@ -598,8 +598,8 @@ function FieldOfficerAppContent() {
     return <LoginScreen onLogin={() => setShowLogin(false)} />;
   }
 
-  if (isTransitioning) {
-    return <TransitionScreen isEntering={isEnteringSchoolFees} />;
+  if (isTransitioning && transitionDirection) {
+    return <TransitionScreen direction={transitionDirection} />;
   }
 
   if (showQuickCollections) {
