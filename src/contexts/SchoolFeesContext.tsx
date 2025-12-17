@@ -5,20 +5,28 @@ interface SchoolFeesContextType {
   setSchoolFeesMode: (mode: boolean) => void;
   isTransitioning: boolean;
   setIsTransitioning: (transitioning: boolean) => void;
+  isEnteringSchoolFees: boolean;
 }
 
 const SchoolFeesContext = createContext<SchoolFeesContextType | undefined>(undefined);
 
 export function SchoolFeesProvider({ children }: { children: ReactNode }) {
-  const [isSchoolFeesMode, setSchoolFeesMode] = useState(false);
+  const [isSchoolFeesMode, setSchoolFeesModeState] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isEnteringSchoolFees, setIsEnteringSchoolFees] = useState(false);
+
+  const setSchoolFeesMode = (mode: boolean) => {
+    setIsEnteringSchoolFees(mode);
+    setSchoolFeesModeState(mode);
+  };
 
   return (
     <SchoolFeesContext.Provider value={{ 
       isSchoolFeesMode, 
       setSchoolFeesMode, 
       isTransitioning, 
-      setIsTransitioning 
+      setIsTransitioning,
+      isEnteringSchoolFees
     }}>
       {children}
     </SchoolFeesContext.Provider>

@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescript
 import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 import { AdvanceCalculatorDialog } from "./AdvanceCalculator";
+import { useSchoolFees } from "@/contexts/SchoolFeesContext";
 import { 
   Users, 
   User, 
@@ -222,6 +223,7 @@ function CollectionForm({
   groupMembers: MemberBalance[]; 
   onBack: () => void;
 }) {
+  const { isSchoolFeesMode } = useSchoolFees();
   const [currentMemberIndex, setCurrentMemberIndex] = useState(0);
   const [cashAmount, setCashAmount] = useState('');
   const [mpesaAmount, setMpesaAmount] = useState('');
@@ -675,7 +677,8 @@ function CollectionForm({
               )}
             </div>
             
-            {/* Loan Payment - Red/Orange Border */}
+            {/* Loan Payment - Red/Orange Border - Hidden in School Fees Mode */}
+            {!isSchoolFeesMode && (
             <div className="space-y-2 border-2 border-dashed border-red-500/50 rounded-lg p-4 bg-red-500/5">
                 <div className="flex items-center gap-2 mb-1">
                   <Label htmlFor="loan-amount" className="font-semibold text-red-600 dark:text-red-400">
@@ -720,6 +723,7 @@ function CollectionForm({
                 </div>
               )}
             </div>
+            )}
             
             {/* Advance Payment - Blue Border */}
             <div className="space-y-2 border-2 border-dashed border-blue-500/50 rounded-lg p-4 bg-blue-500/5">
@@ -969,6 +973,7 @@ function CollectionForm({
 }
 
 export function QuickCollections({ onBack }: QuickCollectionsProps) {
+  const { isSchoolFeesMode } = useSchoolFees();
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [groupMembers, setGroupMembers] = useState<MemberBalance[]>([]);
 

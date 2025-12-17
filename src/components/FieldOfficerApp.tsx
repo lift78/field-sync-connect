@@ -176,13 +176,15 @@ function LoginScreen({ onLogin }: LoginScreenProps) {
 }
 
 // Transition Screen Component
-function TransitionScreen({ message }: { message: string }) {
+function TransitionScreen({ isEntering }: { isEntering: boolean }) {
   return (
     <div className="fixed inset-0 z-[100] bg-gradient-to-br from-blue-600 via-blue-700 to-purple-800 flex flex-col items-center justify-center">
       <div className="animate-pulse">
         <GraduationCap className="h-20 w-20 text-white mb-6" />
       </div>
-      <h2 className="text-xl font-bold text-white mb-2">{message}</h2>
+      <h2 className="text-xl font-bold text-white mb-2">
+        {isEntering ? 'Entering School Fees Mode...' : 'Exiting School Fees Mode...'}
+      </h2>
       <div className="flex gap-1 mt-4">
         <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
         <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -207,16 +209,16 @@ function FullScreenMenu({
   const { theme } = useTheme();
   
   const allMenuItems = [
-    { id: 'cash' as const, title: 'Cash Collections', icon: Wallet, color: 'bg-emerald-500', description: 'Record member payments' },
-    { id: 'loan' as const, title: 'Loan Applications', icon: CreditCard, color: 'bg-blue-500', description: 'Process loan requests' },
-    { id: 'advance' as const, title: 'Advance Loans', icon: Zap, color: 'bg-amber-500', description: 'Quick loan advances' },
-    { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-purple-500', description: 'Synchronize records' },
-    { id: 'more' as const, title: 'More Options', icon: MoreHorizontal, color: 'bg-slate-500', description: 'Additional features' },
+    { id: 'cash' as const, title: 'Cash Collections', icon: Wallet, color: 'bg-emerald-500', description: 'Record member payments', showInSchoolFees: true },
+    { id: 'loan' as const, title: 'Loan Applications', icon: CreditCard, color: 'bg-blue-500', description: 'Process loan requests', showInSchoolFees: false },
+    { id: 'advance' as const, title: 'Advance Loans', icon: Zap, color: 'bg-amber-500', description: 'Quick loan advances', showInSchoolFees: true },
+    { id: 'sync' as const, title: 'Sync Data', icon: RefreshCw, color: 'bg-purple-500', description: 'Synchronize records', showInSchoolFees: true },
+    { id: 'more' as const, title: 'More Options', icon: MoreHorizontal, color: 'bg-slate-500', description: 'Additional features', showInSchoolFees: true },
   ];
 
-  // Filter menu items in school fees mode (no loans, no more)
+  // Filter menu items in school fees mode (no loans)
   const menuItems = isSchoolFeesMode 
-    ? allMenuItems.filter(item => item.id !== 'loan' && item.id !== 'more')
+    ? allMenuItems.filter(item => item.showInSchoolFees)
     : allMenuItems;
 
   const bgClass = theme === "dark" 
@@ -316,7 +318,7 @@ function FullScreenMenu({
 }
 
 function FieldOfficerAppContent() {
-  const { isSchoolFeesMode, setSchoolFeesMode, isTransitioning, setIsTransitioning } = useSchoolFees();
+  const { isSchoolFeesMode, setSchoolFeesMode, isTransitioning, setIsTransitioning, isEnteringSchoolFees } = useSchoolFees();
   // All navigation state
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
   const [fullScreenMenuOpen, setFullScreenMenuOpen] = useState(false);
@@ -418,9 +420,9 @@ function FieldOfficerAppContent() {
     { id: 'more' as const, title: 'More', icon: MoreHorizontal, color: 'bg-slate-500' },
   ];
 
-  // Filter sections in school fees mode (no loans, no more)
+  // Filter sections in school fees mode (no loans, keep more)
   const sections = isSchoolFeesMode 
-    ? allSections.filter(s => s.id !== 'loan' && s.id !== 'more')
+    ? allSections.filter(s => s.id !== 'loan')
     : allSections;
 
   const activeTitle = sections.find(s => s.id === activeSection)?.title || 'Field Officer';
@@ -597,7 +599,7 @@ function FieldOfficerAppContent() {
   }
 
   if (isTransitioning) {
-    return <TransitionScreen message="Entering School Fees Mode..." />;
+    return <TransitionScreen isEntering={isEnteringSchoolFees} />;
   }
 
   if (showQuickCollections) {
@@ -692,7 +694,8 @@ function FieldOfficerAppContent() {
 
       {shouldShowNavbar && (
         <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border/50 z-40 pb-[env(safe-area-inset-bottom)]">
-          <div className={`grid gap-0 ${isSchoolFeesMode ? 'grid-cols-3' : 'grid-cols-5'}`}>
+          <div className={`grid gap-0 ${isSchoolFeesMode ? 'grid-cols-4' : 'grid-cols-5'}`}>
+          
             {sections.map((section) => {
               const isActive = activeSection === section.id;
               return (

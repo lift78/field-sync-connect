@@ -21,25 +21,22 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
   const { isSchoolFeesMode, setSchoolFeesMode, setIsTransitioning } = useSchoolFees();
 
   const handleSchoolFeesToggle = (checked: boolean) => {
-    if (checked) {
-      setIsTransitioning(true);
-      setTimeout(() => {
-        setSchoolFeesMode(true);
-        setIsTransitioning(false);
-      }, 1500);
-    } else {
-      setSchoolFeesMode(false);
-    }
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setSchoolFeesMode(checked);
+      setIsTransitioning(false);
+    }, 1500);
   };
 
-  const menuItems = [
+  const allMenuItems = [
     {
       id: 'add-member',
       title: 'Add New Member',
       description: 'Register a new member to the system',
       icon: UserPlus,
       color: 'from-green-500 to-green-600',
-      action: () => onNavigate('add-member')
+      action: () => onNavigate('add-member'),
+      showInSchoolFees: false
     },
     {
       id: 'group-summary',
@@ -47,7 +44,8 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
       description: 'View group collection summaries',
       icon: Users,
       color: 'from-orange-500 to-orange-600',
-      action: () => onNavigate('group-summary')
+      action: () => onNavigate('group-summary'),
+      showInSchoolFees: false
     },
     {
       id: 'notifications',
@@ -55,7 +53,8 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
       description: 'View and manage your notifications',
       icon: Bell,
       color: 'from-purple-500 to-purple-600',
-      action: () => onNavigate('notifications')
+      action: () => onNavigate('notifications'),
+      showInSchoolFees: true
     },
     {
       id: 'account-offset',
@@ -63,7 +62,8 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
       description: 'Submit account offset requests',
       icon: ArrowLeftRight,
       color: 'from-cyan-500 to-cyan-600',
-      action: () => onNavigate('account-offset')
+      action: () => onNavigate('account-offset'),
+      showInSchoolFees: false
     },
     {
       id: 'savings-transfer',
@@ -71,7 +71,8 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
       description: 'Request savings account transfers',
       icon: PiggyBank,
       color: 'from-pink-500 to-pink-600',
-      action: () => onNavigate('savings-transfer')
+      action: () => onNavigate('savings-transfer'),
+      showInSchoolFees: false
     },
     {
       id: 'history',
@@ -79,7 +80,8 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
       description: 'View past transaction summaries',
       icon: History,
       color: 'from-amber-500 to-amber-600',
-      action: () => onNavigate('history')
+      action: () => onNavigate('history'),
+      showInSchoolFees: false
     },
     {
       id: 'performance',
@@ -87,9 +89,15 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
       description: 'View your performance metrics',
       icon: TrendingUp,
       color: 'from-indigo-500 to-indigo-600',
-      action: () => onNavigate('performance')
+      action: () => onNavigate('performance'),
+      showInSchoolFees: true
     }
   ];
+
+  // Filter menu items based on school fees mode
+  const menuItems = isSchoolFeesMode 
+    ? allMenuItems.filter(item => item.showInSchoolFees)
+    : allMenuItems;
 
   return (
     <div className="min-h-screen bg-background pb-20 overflow-x-hidden">
