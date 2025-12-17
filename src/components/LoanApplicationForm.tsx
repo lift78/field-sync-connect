@@ -560,10 +560,10 @@ export function LoanApplicationForm() {
         <div className="space-y-4 max-w-2xl mx-auto">
           <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Select Member for Loan Application
-            </CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <User className="h-5 w-5" />
+            Select Member for Loan Application
+          </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">

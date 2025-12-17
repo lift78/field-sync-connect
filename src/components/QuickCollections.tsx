@@ -309,6 +309,24 @@ function CollectionForm({
   const advanceCarryForward = currentBalances ? 
     toPreciseNumber(currentBalances.advance_loan_balance - advancePaymentSplit.pay_advance) : 0;
 
+    // Calculate minimum advance payment
+  const calculateMinimumAdvancePayment = (balance: number): number => {
+    if (balance <= 0) return 0;
+    
+    // Formula: (balance / 1.1 * 10%) + 10
+    const calculated = (balance / 1.1 * 0.1) + 10;
+    
+    // Round up to nearest 10 if it ends in 1-9
+    const lastDigit = Math.floor(calculated) % 10;
+    if (lastDigit === 0) {
+      return Math.floor(calculated);
+    }
+    return Math.ceil(calculated / 10) * 10;
+  };
+
+  const minimumAdvancePayment = currentBalances ? 
+    calculateMinimumAdvancePayment(currentBalances.advance_loan_balance) : 0;
+
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
@@ -617,7 +635,7 @@ function CollectionForm({
           {/* Core Allocation Fields - Always Visible */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Savings Allocation - Green Border */}
-            <div className="space-y-2 border-2 border-dashed border-green-500/50 rounded-lg p-3 bg-green-500/5">
+            <div className="space-y-2 border-2 border-dashed border-green-500/50 rounded-lg p-4 bg-green-500/5">
               <Label htmlFor="savings-amount" className="text-sm font-semibold text-green-600 dark:text-green-400">
                 💰 Allocate to Savings (KES)
               </Label>
@@ -658,7 +676,7 @@ function CollectionForm({
             </div>
             
             {/* Loan Payment - Red/Orange Border */}
-              <div className="space-y-2 border-2 border-dashed border-red-500/50 rounded-lg p-3 bg-red-500/5">
+            <div className="space-y-2 border-2 border-dashed border-red-500/50 rounded-lg p-4 bg-red-500/5">
                 <div className="flex items-center gap-2 mb-1">
                   <Label htmlFor="loan-amount" className="font-semibold text-red-600 dark:text-red-400">
                     🏦 Pay Loan (KES)
@@ -704,10 +722,17 @@ function CollectionForm({
             </div>
             
             {/* Advance Payment - Blue Border */}
-            <div className="space-y-2 border-2 border-dashed border-blue-500/50 rounded-lg p-3 bg-blue-500/5">
-              <Label htmlFor="advance-payment-amount" className="font-semibold text-blue-600 dark:text-blue-400">
-                ⚡ Advance Payments (KES)
-              </Label>
+            <div className="space-y-2 border-2 border-dashed border-blue-500/50 rounded-lg p-4 bg-blue-500/5">
+              <div className="flex items-center gap-2 mb-1">
+                <Label htmlFor="advance-payment-amount" className="font-semibold text-blue-600 dark:text-blue-400">
+                  ⚡ Pay Advance (KES)
+                </Label>
+                {currentBalances && currentBalances.advance_loan_balance > 0 && (
+                  <Badge variant="default" className="text-xs font-bold animate-pulse shadow-lg border-2 border-blue-600 bg-blue-600">
+                    Least: {formatAmount(minimumAdvancePayment)}
+                  </Badge>
+                )}
+              </div>
               <div className="relative">
                 <Input
                   id="advance-payment-amount"
