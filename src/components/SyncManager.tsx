@@ -103,40 +103,66 @@ export function SyncManager({ onEditRecord, viewingRecords: externalViewingRecor
           dbOperations.getUnsyncedNewMembers()
         ]);
 
+        // Filter records based on school fees mode
+        // In school fees mode: show only records with is_school_fees = true
+        // In normal mode: show all records except those with is_school_fees = true
+        const filteredCash = cash.filter(r => 
+          isSchoolFeesMode ? r.is_school_fees === true : r.is_school_fees !== true
+        );
+        const filteredAdvances = advances.filter(r => 
+          isSchoolFeesMode ? r.is_school_fees === true : r.is_school_fees !== true
+        );
+        const filteredGroups = groups.filter(r => 
+          isSchoolFeesMode ? r.is_school_fees === true : r.is_school_fees !== true
+        );
+        const filteredNewMembers = newMembers.filter(r => 
+          isSchoolFeesMode ? r.is_school_fees === true : r.is_school_fees !== true
+        );
+
+        // Loans and disbursements are not available in school fees mode
+        const filteredLoans = isSchoolFeesMode ? [] : loans;
+        const filteredDisbursements = isSchoolFeesMode ? [] : disbursements;
+
         const offlineDataArray: SyncData[] = [
           { 
             type: 'cash', 
-            count: cash.length, 
-            lastUpdated: cash.length > 0 ? cash[0].timestamp.toISOString() : new Date().toISOString()
-          },
-          { 
-            type: 'loan', 
-            count: loans.length, 
-            lastUpdated: loans.length > 0 ? loans[0].timestamp.toISOString() : new Date().toISOString()
+            count: filteredCash.length, 
+            lastUpdated: filteredCash.length > 0 ? filteredCash[0].timestamp.toISOString() : new Date().toISOString()
           },
           { 
             type: 'advance', 
-            count: advances.length, 
-            lastUpdated: advances.length > 0 ? advances[0].timestamp.toISOString() : new Date().toISOString()
-          },
-          { 
-            type: 'disbursement', 
-            count: disbursements.length, 
-            lastUpdated: disbursements.length > 0 ? disbursements[0].timestamp.toISOString() : new Date().toISOString()
+            count: filteredAdvances.length, 
+            lastUpdated: filteredAdvances.length > 0 ? filteredAdvances[0].timestamp.toISOString() : new Date().toISOString()
           },
           { 
             type: 'group', 
-            count: groups.length, 
-            lastUpdated: groups.length > 0 ? groups[0].timestamp.toISOString() : new Date().toISOString()
+            count: filteredGroups.length, 
+            lastUpdated: filteredGroups.length > 0 ? filteredGroups[0].timestamp.toISOString() : new Date().toISOString()
           },
         ];
 
+        // Only add loans and disbursements in normal mode
+        if (!isSchoolFeesMode) {
+          offlineDataArray.push(
+            { 
+              type: 'loan', 
+              count: filteredLoans.length, 
+              lastUpdated: filteredLoans.length > 0 ? filteredLoans[0].timestamp.toISOString() : new Date().toISOString()
+            },
+            { 
+              type: 'disbursement', 
+              count: filteredDisbursements.length, 
+              lastUpdated: filteredDisbursements.length > 0 ? filteredDisbursements[0].timestamp.toISOString() : new Date().toISOString()
+            }
+          );
+        }
+
         // Only add new members if there are any unsynced
-        if (newMembers.length > 0) {
+        if (filteredNewMembers.length > 0) {
           offlineDataArray.push({
             type: 'newmember',
-            count: newMembers.length,
-            lastUpdated: newMembers[0].timestamp.toISOString()
+            count: filteredNewMembers.length,
+            lastUpdated: filteredNewMembers[0].timestamp.toISOString()
           });
         }
 
