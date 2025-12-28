@@ -276,6 +276,7 @@ export class SyncService {
                   : new Date(record.timestamp).toISOString(),
               allocation_id: record.allocationId,
               other_items: [],
+              ...(record.is_school_fees && { is_school_fees: true }),
             };
   
             for (const alloc of record.allocations) {
@@ -533,7 +534,8 @@ export class SyncService {
           loan_type: 'advance',
           timestamp: record.timestamp instanceof Date 
             ? record.timestamp.toISOString() 
-            : new Date(record.timestamp).toISOString()
+            : new Date(record.timestamp).toISOString(),
+          ...(record.is_school_fees && { is_school_fees: true }),
         };
 
         console.log("📤 Syncing advance loan:", payload);
