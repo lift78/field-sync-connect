@@ -15,9 +15,10 @@ import { useSchoolFees } from "@/contexts/SchoolFeesContext";
 interface MoreMenuProps {
   onBack: () => void;
   onNavigate: (page: string) => void;
+  onNavigateToSection?: (section: string) => void;
 }
 
-export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
+export function MoreMenu({ onBack, onNavigate, onNavigateToSection }: MoreMenuProps) {
   const { isSchoolFeesMode, setSchoolFeesMode, startTransition, endTransition } = useSchoolFees();
 
   const handleSchoolFeesToggle = (checked: boolean) => {
@@ -25,6 +26,10 @@ export function MoreMenu({ onBack, onNavigate }: MoreMenuProps) {
     setTimeout(() => {
       setSchoolFeesMode(checked);
       endTransition();
+      // Navigate to cash section after mode switch
+      if (onNavigateToSection) {
+        onNavigateToSection('cash');
+      }
     }, 1500);
   };
 

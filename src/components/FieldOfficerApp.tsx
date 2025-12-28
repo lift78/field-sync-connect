@@ -318,7 +318,7 @@ function FullScreenMenu({
 }
 
 function FieldOfficerAppContent() {
-  const { isSchoolFeesMode, setSchoolFeesMode, isTransitioning, transitionDirection } = useSchoolFees();
+  const { isSchoolFeesMode, setSchoolFeesMode, isTransitioning, transitionDirection, startTransition, endTransition } = useSchoolFees();
   // All navigation state
   const [activeSection, setActiveSection] = useState<AppSection>('cash');
   const [fullScreenMenuOpen, setFullScreenMenuOpen] = useState(false);
@@ -518,7 +518,7 @@ function FieldOfficerAppContent() {
     }
 
     if (showMoreMenu) {
-      return <MoreMenu onBack={navigationControl.handleBack} onNavigate={handleMoreNavigate} />;
+      return <MoreMenu onBack={navigationControl.handleBack} onNavigate={handleMoreNavigate} onNavigateToSection={(section) => setActiveSection(section as AppSection)} />;
     }
 
     if (morePage) {
@@ -581,7 +581,7 @@ function FieldOfficerAppContent() {
       case 'sync':
         return <SyncManager onEditRecord={handleEditRecord} viewingRecords={syncViewingRecords} onViewingRecordsChange={setSyncViewingRecords} />;
       case 'more':
-        return <MoreMenu onBack={navigationControl.handleBack} onNavigate={handleMoreNavigate} />;
+        return <MoreMenu onBack={navigationControl.handleBack} onNavigate={handleMoreNavigate} onNavigateToSection={(section) => setActiveSection(section as AppSection)} />;
       default:
         return (
           <CashCollectionForm 
@@ -648,7 +648,14 @@ function FieldOfficerAppContent() {
           <div className="flex items-center gap-2 flex-shrink-0">
             {isSchoolFeesMode && (
               <button
-                onClick={() => setSchoolFeesMode(false)}
+                onClick={() => {
+                  startTransition(false); // exiting
+                  setTimeout(() => {
+                    setSchoolFeesMode(false);
+                    endTransition();
+                    setActiveSection('cash');
+                  }, 1500);
+                }}
                 className="p-2 transition-all duration-200 hover:scale-110 active:scale-95 group"
                 title="Exit School Fees Mode"
               >
