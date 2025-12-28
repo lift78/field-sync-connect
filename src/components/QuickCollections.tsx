@@ -435,7 +435,8 @@ function CollectionForm({
         cashAmount: cashAmountNum,
         mpesaAmount: mpesaAmountNum,
         allocations: formattedAllocations,
-        timestamp: new Date()
+        timestamp: new Date(),
+        is_school_fees: isSchoolFeesMode
       });
       
       toast({

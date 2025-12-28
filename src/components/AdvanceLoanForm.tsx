@@ -18,6 +18,7 @@ import { Plus, Trash2, Save, Zap, Banknote, Smartphone, AlertTriangle } from "lu
 import { dbOperations, MemberBalance } from "@/lib/database";
 import { useToast } from "@/hooks/use-toast";
 import { getMemberLoanQualifications } from "@/lib/qualificationCalculator";
+import { useSchoolFees } from "@/contexts/SchoolFeesContext";
 // import { Keyboard } from "@capacitor/keyboard";
 
 
@@ -41,6 +42,7 @@ interface AdvanceLoanApplication {
 }
 
 export function AdvanceLoanForm() {
+  const { isSchoolFeesMode } = useSchoolFees();
   const [applications, setApplications] = useState<AdvanceLoanApplication[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState('');
@@ -260,7 +262,8 @@ export function AdvanceLoanForm() {
             memberId: application.memberId,
             memberName: application.memberName,
             amount: application.advanceAmount,
-            timestamp: new Date()
+            timestamp: new Date(),
+            is_school_fees: isSchoolFeesMode
           });
         }
       }
